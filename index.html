@@ -361,9 +361,18 @@ const PRECISION = [["","Any"],["precise","Exact only"]];
 const STYLES  = [["auto","Auto"],["points","Points"],["grid","Grid"],["heat","Heat"],["accuracy","Accuracy"]];
 const BASES   = [["dark","Dark"],["light","Light"],["sat","Satellite"]];
 
+function defaultD1(){
+  const d = new Date();
+  d.setMonth(d.getMonth() - 3);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const day = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
+
 const state = {
   taxon:null, tname:"", iconic:[], user:"", quality:"",
-  d1:"", d2:"", style:"auto", base:"dark", unobs:"", precise:""
+  d1:defaultD1(), d2:"", style:"auto", base:"dark", unobs:"", precise:"precise"
 };
 
 let map, overlay, accLayer, probeMark, probeRing, meRing, sheetView = null;
@@ -496,8 +505,8 @@ function writeHash(){
   if(state.user)    p.set("user", state.user);
   if(state.unobs)   p.set("unobs", state.unobs);
   if(state.quality) p.set("q", state.quality);
-  if(state.precise) p.set("precise", state.precise);
-  if(state.d1)      p.set("d1", state.d1);
+  p.set("precise", state.precise);
+  p.set("d1", state.d1);
   if(state.d2)      p.set("d2", state.d2);
   if(state.style !== "auto") p.set("s", state.style);
   if(state.base !== "dark")  p.set("b", state.base);
@@ -512,8 +521,8 @@ function readHash(){
   state.user    = p.get("user") || "";
   state.unobs   = p.get("unobs") || "";
   state.quality = p.get("q") || "";
-  state.precise = p.get("precise") || "";
-  state.d1      = p.get("d1") || "";
+  state.precise = p.has("precise") ? p.get("precise") : "precise";
+  state.d1      = p.has("d1") ? p.get("d1") : defaultD1();
   state.d2      = p.get("d2") || "";
   state.style   = p.get("s") || "auto";
   state.base    = p.get("b") || "dark";
@@ -757,7 +766,7 @@ function wireFilters(){
   $("doneBtn").addEventListener("click", closeSheet);
 
   $("reset").addEventListener("click", () => {
-    Object.assign(state, { taxon:null, tname:"", iconic:[], user:"", quality:"", d1:"", d2:"", unobs:"", precise:"" });
+    Object.assign(state, { taxon:null, tname:"", iconic:[], user:"", quality:"", d1:defaultD1(), d2:"", unobs:"", precise:"precise" });
     commit();
     openFilters();
   });
