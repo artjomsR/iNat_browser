@@ -376,7 +376,7 @@ const state = {
   d1:defaultD1(), d2:"", style:"accuracy", base:"dark", unobs:"", precise:"precise"
 };
 
-let map, overlay, accLayer, probeMark, probeRing, meRing, sheetView = null;
+let map, overlay, accLayer, probeAccLayer, probeMark, probeRing, meRing, sheetView = null;
 
 /* ---------------- query building ---------------- */
 
@@ -582,6 +582,7 @@ function closeSheet(){
   sheetView = null;
   if(probeMark){ map.removeLayer(probeMark); probeMark = null; }
   if(probeRing){ map.removeLayer(probeRing); probeRing = null; }
+  if(probeAccLayer) probeAccLayer.clearLayers();
 }
 document.getElementById("handle").addEventListener("click", closeSheet);
 
@@ -928,11 +929,29 @@ function resultsHtml(list, km){
     <button class="linkish" id="toFilters">Filters</button></div>${rows}`;
 }
 
+function drawAccuracyCircles(list){
+  probeAccLayer.clearLayers();
+  if(!list.length || list.length > 3) return;
+  list.forEach(o => {
+    if(!o.location) return;
+    const [lat, lng] = o.location.split(",").map(Number);
+    if(!isFinite(lat) || !isFinite(lng)) return;
+    const acc = o.public_positional_accuracy != null ? o.public_positional_accuracy : o.positional_accuracy;
+    if(acc == null || !isFinite(acc) || acc <= 0) return;
+    const col = accuracyColor(acc);
+    L.circle([lat, lng], {
+      radius: acc, color: col, weight: 1.5, opacity: .85,
+      fillColor: col, fillOpacity: .12, interactive: false
+    }).addTo(probeAccLayer);
+  });
+}
+
 async function probe(latlng){
   const km = probeRadiusKm(latlng.lat, map.getZoom());
 
   if(probeMark) map.removeLayer(probeMark);
   if(probeRing) map.removeLayer(probeRing);
+  probeAccLayer.clearLayers();
   probeRing = L.circle(latlng, {
     radius: km * 1000, color: MARK, weight: 1, opacity: .7,
     fillColor: MARK, fillOpacity: .07, interactive: false
@@ -959,6 +978,7 @@ async function probe(latlng){
     if(sheetView !== "results") return;
     openSheet("results", resultsHtml(d.results || [], km));
     wireResults();
+    drawAccuracyCircles(d.results || []);
   }catch(err){
     openSheet("results", `<div class="eyebrow"><span>Not loaded</span></div>
       <div class="state">
@@ -1017,6 +1037,7 @@ document.getElementById("locate").addEventListener("click", function(){
     crossOrigin: true
   });
   accLayer = L.layerGroup().addTo(map);
+  probeAccLayer = L.layerGroup().addTo(map);
   accBar.style.background = legendGradientCss();
   applyStyle();
 
