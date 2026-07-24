@@ -162,6 +162,7 @@ body{
   font:inherit;color:var(--mark);letter-spacing:.14em;
 }
 .linkish:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+.eyebrow-actions{display:flex;align-items:baseline;gap:14px;flex:0 0 auto}
 
 .field{margin-bottom:15px}
 .field > label,.field-label{
@@ -892,7 +893,16 @@ function fmtDate(iso){
   return `${+m[3]} ${MONTHS[+m[2]-1]} ${m[1]}`;
 }
 
-function resultsHtml(list, km){
+function speciesUrl(latlng, km){
+  const p = obsParams();
+  p.set("lat", latlng.lat.toFixed(6));
+  p.set("lng", latlng.lng.toFixed(6));
+  p.set("radius", km.toFixed(3));
+  p.set("view", "species");
+  return "https://www.inaturalist.org/observations?" + p.toString();
+}
+
+function resultsHtml(list, km, latlng){
   if(!list.length){
     return `<div class="eyebrow"><span>Nothing here</span></div>
       <div class="state">
@@ -926,7 +936,10 @@ function resultsHtml(list, km){
     </button>`;
   }).join("");
   return `<div class="eyebrow"><span>${list.length} nearby &middot; ${km.toFixed(1)} km</span>
-    <button class="linkish" id="toFilters">Filters</button></div>${rows}`;
+    <span class="eyebrow-actions">
+      <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">Show as species</button>
+      <button class="linkish" id="toFilters">Filters</button>
+    </span></div>${rows}`;
 }
 
 function drawAccuracyCircles(list){
@@ -976,7 +989,7 @@ async function probe(latlng){
     if(!r.ok) throw new Error(r.status);
     const d = await r.json();
     if(sheetView !== "results") return;
-    openSheet("results", resultsHtml(d.results || [], km));
+    openSheet("results", resultsHtml(d.results || [], km, latlng));
     wireResults();
     drawAccuracyCircles(d.results || []);
   }catch(err){
@@ -991,6 +1004,10 @@ async function probe(latlng){
 function wireResults(){
   const toF = document.getElementById("toFilters");
   if(toF) toF.addEventListener("click", openFilters);
+  const toS = document.getElementById("toSpecies");
+  if(toS) toS.addEventListener("click", () => {
+    window.open(toS.dataset.url, "_blank", "noopener");
+  });
   sheetBody.querySelectorAll(".result").forEach(b => {
     b.addEventListener("click", () => {
       window.open("https://www.inaturalist.org/observations/" + b.dataset.id, "_blank", "noopener");
