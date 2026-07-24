@@ -55,6 +55,41 @@ body{
 .leaflet-control-attribution a{color:var(--mute)}
 .leaflet-control-zoom{display:none}
 .leaflet-bottom.leaflet-right{margin-bottom:var(--safe-b)}
+.leaflet-tooltip{
+  background:rgba(20,33,29,.95);color:var(--text);
+  border:1px solid var(--rule);border-radius:6px;
+  font-family:var(--ui);font-size:11px;padding:4px 8px;box-shadow:none;
+}
+.leaflet-tooltip-top:before{border-top-color:rgba(20,33,29,.95)}
+
+/* ---------- accuracy legend ---------- */
+.acc-legend{
+  position:absolute;z-index:600;left:12px;
+  bottom:calc(var(--safe-b) + 22px);
+  width:168px;padding:10px 11px 11px;
+  background:rgba(20,33,29,.92);border:1px solid var(--rule);border-radius:10px;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+}
+.acc-legend[hidden]{display:none}
+.acc-legend-title{
+  font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--mute);margin-bottom:7px;
+}
+.acc-legend-bar{height:8px;border-radius:4px;margin-bottom:4px}
+.acc-legend-ticks{
+  display:flex;justify-content:space-between;
+  font-size:8.5px;color:var(--mute);letter-spacing:.02em;margin-bottom:9px;
+}
+.acc-legend-unknown{
+  display:flex;align-items:center;gap:6px;
+  font-size:9.5px;color:var(--mute);margin-bottom:7px;
+}
+.acc-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.acc-dot-unknown{background:#fff;border:1.5px solid #101613}
+.acc-legend-status{
+  font-size:9.5px;color:var(--mute);line-height:1.4;
+  padding-top:7px;border-top:1px solid var(--rule);
+}
 
 /* ---------- specimen label bar (signature) ---------- */
 .label-bar{
@@ -296,6 +331,14 @@ body{
   </svg>
 </button>
 
+<div class="acc-legend" id="accLegend" hidden>
+  <div class="acc-legend-title">Location accuracy</div>
+  <div class="acc-legend-bar" id="accBar"></div>
+  <div class="acc-legend-ticks"><span>&le;1m</span><span>10m</span><span>150m</span><span>1km+</span></div>
+  <div class="acc-legend-unknown"><span class="acc-dot acc-dot-unknown"></span>No accuracy recorded</div>
+  <div class="acc-legend-status" id="accStatus"></div>
+</div>
+
 <div class="sheet" id="sheet" data-open="0" role="dialog" aria-label="Panel">
   <button class="handle" id="handle" aria-label="Close panel"><span></span></button>
   <div class="sheet-body" id="sheetBody"></div>
@@ -315,7 +358,7 @@ const ICONIC = [
 ];
 const QUALITY = [["","Any"],["research","Research"],["needs_id","Needs ID"],["casual","Casual"]];
 const PRECISION = [["","Any"],["precise","Exact only"]];
-const STYLES  = [["auto","Auto"],["points","Points"],["grid","Grid"],["heat","Heat"]];
+const STYLES  = [["auto","Auto"],["points","Points"],["grid","Grid"],["heat","Heat"],["accuracy","Accuracy"]];
 const BASES   = [["dark","Dark"],["light","Light"],["sat","Satellite"]];
 
 const state = {
@@ -323,7 +366,7 @@ const state = {
   d1:"", d2:"", style:"auto", base:"dark", unobs:"", precise:""
 };
 
-let map, overlay, probeMark, probeRing, meRing, sheetView = null;
+let map, overlay, accLayer, probeMark, probeRing, meRing, sheetView = null;
 
 /* ---------------- query building ---------------- */
 
@@ -358,6 +401,63 @@ function tileUrl(){
 function refreshOverlay(){
   const url = tileUrl();
   if(overlay._url !== url) overlay.setUrl(url);
+}
+
+/* ---------------- accuracy color scale ---------------- */
+
+const ACC_STOPS = [        // [meters, hex] — log-scale interpolated between stops
+  [0,    "#FF2D2D"],
+  [1,    "#FF2D2D"],
+  [10,   "#FF8C00"],
+  [50,   "#FFD400"],
+  [150,  "#7ED321"],
+  [400,  "#2D9CFF"],
+  [1000, "#6A2DFF"]
+];
+const ACC_MAX_COLOR    = "#160026";  // beyond 1km, deepening toward black/purple
+const ACC_UNKNOWN_FILL = "#FFFFFF";
+const ACC_UNKNOWN_RING = "#101613";
+
+function hexToRgb(hex){
+  const n = hex.replace("#","");
+  return [parseInt(n.slice(0,2),16), parseInt(n.slice(2,4),16), parseInt(n.slice(4,6),16)];
+}
+function rgbToHex(r,g,b){
+  return "#" + [r,g,b].map(v => Math.round(Math.max(0,Math.min(255,v))).toString(16).padStart(2,"0")).join("");
+}
+function lerpColor(a,b,t){
+  const [r1,g1,b1] = hexToRgb(a), [r2,g2,b2] = hexToRgb(b);
+  return rgbToHex(r1+(r2-r1)*t, g1+(g2-g1)*t, b1+(b2-b1)*t);
+}
+
+function accuracyColor(m){
+  const last = ACC_STOPS[ACC_STOPS.length - 1];
+  if(m >= last[0]){
+    const t = Math.min(1, Math.log(m / last[0]) / Math.log(5));
+    return lerpColor(last[1], ACC_MAX_COLOR, t);
+  }
+  for(let i=0;i<ACC_STOPS.length-1;i++){
+    const [m0,c0] = ACC_STOPS[i], [m1,c1] = ACC_STOPS[i+1];
+    if(m <= m1){
+      const lo = Math.max(m0, 0.1), hi = Math.max(m1, 0.2);
+      const mm = Math.max(m, lo);
+      const t = Math.min(1, Math.max(0, (Math.log(mm) - Math.log(lo)) / (Math.log(hi) - Math.log(lo))));
+      return lerpColor(c0, c1, t);
+    }
+  }
+  return last[1];
+}
+
+function legendGradientCss(){
+  const stops = ACC_STOPS.map(s => s[1]).concat([ACC_MAX_COLOR]);
+  const n = stops.length - 1;
+  return "linear-gradient(to right, " + stops.map((c,i) => `${c} ${(i/n*100).toFixed(1)}%`).join(", ") + ")";
+}
+
+function fmtAcc(m){
+  if(m == null || !isFinite(m)) return "No accuracy data";
+  if(m < 1000) return Math.round(m) + " m";
+  return (m/1000).toFixed(1) + " km";
 }
 
 /* ---------------- basemaps ---------------- */
@@ -556,7 +656,98 @@ function openFilters(){
   wireFilters();
 }
 
-function commit(){ refreshOverlay(); renderLabel(); writeHash(); }
+/* ---------------- accuracy pin layer ---------------- */
+
+const accLegend = document.getElementById("accLegend");
+const accStatus = document.getElementById("accStatus");
+const accBar = document.getElementById("accBar");
+const ACC_MIN_ZOOM = 9;
+
+let accSeq = 0, accTimer = null;
+
+function scheduleAccRefresh(){
+  clearTimeout(accTimer);
+  accTimer = setTimeout(refreshAccuracyLayer, 300);
+}
+
+async function refreshAccuracyLayer(){
+  if(state.style !== "accuracy") return;
+  const zoom = map.getZoom();
+  if(zoom < ACC_MIN_ZOOM){
+    accLayer.clearLayers();
+    accStatus.textContent = `Zoom in to load pins (zoom ${zoom} of ${ACC_MIN_ZOOM}+)`;
+    return;
+  }
+  const mine = ++accSeq;
+  accStatus.textContent = "Loading…";
+  const b = map.getBounds();
+  const p = obsParams();
+  p.set("swlat", b.getSouth().toFixed(6));
+  p.set("swlng", b.getWest().toFixed(6));
+  p.set("nelat", b.getNorth().toFixed(6));
+  p.set("nelng", b.getEast().toFixed(6));
+  p.set("per_page", "200");
+  p.set("order_by", "id");
+  p.set("order", "desc");
+
+  try{
+    const r = await fetch(`${API}/observations?${p.toString()}`);
+    if(!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    if(mine !== accSeq || state.style !== "accuracy") return;
+
+    accLayer.clearLayers();
+    (d.results || []).forEach(o => {
+      if(!o.location) return;
+      const [lat, lng] = o.location.split(",").map(Number);
+      if(!isFinite(lat) || !isFinite(lng)) return;
+
+      const acc = o.public_positional_accuracy != null ? o.public_positional_accuracy : o.positional_accuracy;
+      const known = acc != null && isFinite(acc);
+      const t = o.taxon || {};
+
+      const marker = L.circleMarker([lat, lng], {
+        radius: 6, weight: 1.5,
+        color: known ? "rgba(255,255,255,.85)" : ACC_UNKNOWN_RING,
+        fillColor: known ? accuracyColor(acc) : ACC_UNKNOWN_FILL,
+        fillOpacity: .9
+      });
+      marker.bindTooltip(
+        `${esc(t.preferred_common_name || t.name || "Unidentified")} — ${fmtAcc(known ? acc : null)}`,
+        { direction: "top", offset: [0,-4], opacity: .95 }
+      );
+      marker.on("click", e => {
+        L.DomEvent.stopPropagation(e);
+        window.open("https://www.inaturalist.org/observations/" + o.id, "_blank", "noopener");
+      });
+      marker.addTo(accLayer);
+    });
+
+    const shown = d.results ? d.results.length : 0;
+    const total = d.total_results || 0;
+    accStatus.textContent = total > shown
+      ? `${shown} of ${total.toLocaleString()} in view — zoom in for more`
+      : `${shown} in view`;
+  }catch(err){
+    if(mine !== accSeq) return;
+    accStatus.textContent = "Couldn't load pins — pan or zoom to retry.";
+  }
+}
+
+function applyStyle(){
+  if(state.style === "accuracy"){
+    if(map.hasLayer(overlay)) map.removeLayer(overlay);
+    accLegend.hidden = false;
+    refreshAccuracyLayer();
+  }else{
+    accLegend.hidden = true;
+    accLayer.clearLayers();
+    if(!map.hasLayer(overlay)) overlay.addTo(map);
+    refreshOverlay();
+  }
+}
+
+function commit(){ applyStyle(); renderLabel(); writeHash(); }
 
 function wireFilters(){
   const $ = id => document.getElementById(id);
@@ -789,10 +980,16 @@ document.getElementById("locate").addEventListener("click", function(){
     maxZoom: 19,
     opacity: 0.85,
     crossOrigin: true
-  }).addTo(map);
+  });
+  accLayer = L.layerGroup().addTo(map);
+  accBar.style.background = legendGradientCss();
+  applyStyle();
 
   map.on("zoomend", () => { if(state.style === "auto") refreshOverlay(); });
-  map.on("moveend", writeHash);
+  map.on("moveend", () => {
+    writeHash();
+    if(state.style === "accuracy") scheduleAccRefresh();
+  });
   map.on("click", e => probe(e.latlng));
 
   renderLabel();
