@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Field">
+<meta name="theme-color" content="#0D1714">
+<title>Field — iNaturalist observations</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --ink:#0D1714;
+  --panel:#14211D;
+  --raise:#1B2C26;
+  --rule:#26382F;
+  --text:#E8F0EB;
+  --mute:#7C9389;
+  --mark:#FF3E7C;
+  --verified:#6FD3A8;
+
+  --ui:"Archivo Narrow","Helvetica Neue",Arial,sans-serif;
+  --lit:"Newsreader",Georgia,"Times New Roman",serif;
+
+  --peek:0px;
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  position:fixed;inset:0;overflow:hidden;
+  background:var(--ink);color:var(--text);
+  font-family:var(--ui);
+  -webkit-font-smoothing:antialiased;
+  -webkit-tap-highlight-color:transparent;
+}
+
+/* ---------- map ---------- */
+#map{position:absolute;inset:0;background:var(--ink)}
+.leaflet-container{background:var(--ink);font-family:var(--ui)}
+.leaflet-control-attribution{
+  background:rgba(13,23,20,.82);color:var(--mute);
+  font-family:var(--ui);font-size:9px;letter-spacing:.02em;
+  padding:2px 6px;border-radius:3px 0 0 0;
+}
+.leaflet-control-attribution a{color:var(--mute)}
+.leaflet-control-zoom{display:none}
+.leaflet-bottom.leaflet-right{margin-bottom:var(--safe-b)}
+
+/* ---------- specimen label bar (signature) ---------- */
+.label-bar{
+  position:absolute;top:0;left:0;right:0;z-index:600;
+  padding:calc(var(--safe-t) + 8px) 12px 9px;
+  background:linear-gradient(180deg,rgba(13,23,20,.96) 0%,rgba(13,23,20,.88) 62%,rgba(13,23,20,0) 100%);
+  border:0;width:100%;text-align:left;
+  font:inherit;color:inherit;cursor:pointer;
+  display:flex;align-items:center;gap:9px;
+}
+.label-bar:focus-visible{outline:2px solid var(--mark);outline-offset:-2px}
+.lozenge{flex:0 0 auto;width:11px;height:11px;transform:rotate(45deg);border:1.5px solid var(--mark)}
+.label-text{
+  flex:1 1 auto;min-width:0;
+  font-size:11.5px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.label-text .sci{
+  font-family:var(--lit);font-style:italic;font-weight:400;
+  font-size:14px;letter-spacing:.01em;text-transform:none;color:var(--text);
+}
+.label-text .sep{color:var(--rule);margin:0 6px}
+.label-text .dim{color:var(--mute)}
+.label-chevron{flex:0 0 auto;color:var(--mute);font-size:10px;letter-spacing:.1em}
+
+/* ---------- locate ---------- */
+.locate{
+  position:absolute;z-index:600;right:12px;
+  bottom:calc(var(--safe-b) + 22px);
+  width:46px;height:46px;border-radius:50%;
+  background:rgba(20,33,29,.92);border:1px solid var(--rule);
+  color:var(--text);display:grid;place-items:center;cursor:pointer;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  transition:transform .16s ease,border-color .16s ease;
+}
+.locate:active{transform:scale(.93)}
+.locate[data-busy="1"]{border-color:var(--mark)}
+.locate svg{width:19px;height:19px}
+.locate:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+
+/* ---------- sheet ---------- */
+.sheet{
+  position:absolute;left:0;right:0;bottom:0;z-index:700;
+  max-height:82vh;display:flex;flex-direction:column;
+  background:var(--panel);
+  border-top:1px solid var(--rule);
+  border-radius:14px 14px 0 0;
+  transform:translateY(101%);
+  transition:transform .26s cubic-bezier(.32,.72,0,1);
+  box-shadow:0 -18px 44px rgba(0,0,0,.5);
+}
+.sheet[data-open="1"]{transform:translateY(0)}
+.handle{
+  flex:0 0 auto;padding:9px 0 5px;border:0;background:none;width:100%;cursor:pointer;
+}
+.handle span{display:block;width:34px;height:3px;border-radius:2px;background:var(--rule);margin:0 auto}
+.handle:focus-visible{outline:2px solid var(--mark);outline-offset:-4px}
+.sheet-body{
+  flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding:2px 14px calc(var(--safe-b) + 16px);
+}
+
+.eyebrow{
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--mute);padding:8px 0 10px;
+}
+.linkish{
+  background:none;border:0;padding:2px 0;cursor:pointer;
+  font:inherit;color:var(--mark);letter-spacing:.14em;
+}
+.linkish:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+
+.field{margin-bottom:15px}
+.field > label,.field-label{
+  display:block;font-size:9.5px;font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--mute);margin-bottom:6px;
+}
+.input{
+  width:100%;padding:11px 12px;font:inherit;font-size:15px;
+  color:var(--text);background:var(--raise);
+  border:1px solid var(--rule);border-radius:7px;
+  -webkit-appearance:none;appearance:none;
+}
+.input::placeholder{color:var(--mute)}
+.input:focus{outline:none;border-color:var(--mark)}
+.field-hint{
+  margin:6px 2px 0;font-size:11px;line-height:1.45;color:var(--mute);
+  font-family:var(--lit);
+}
+
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+
+/* segmented */
+.seg{display:flex;gap:5px;flex-wrap:wrap}
+.seg button{
+  flex:1 1 auto;padding:9px 6px;cursor:pointer;
+  font:inherit;font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--mute);background:var(--raise);
+  border:1px solid var(--rule);border-radius:6px;
+  transition:color .14s,border-color .14s;
+}
+.seg button[aria-pressed="true"]{color:var(--ink);background:var(--mark);border-color:var(--mark)}
+.seg button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+
+/* iconic chips */
+.chips{
+  display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;
+}
+.chips::-webkit-scrollbar{display:none}
+.chips button{
+  flex:0 0 auto;padding:8px 13px;cursor:pointer;white-space:nowrap;
+  font:inherit;font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--mute);background:var(--raise);
+  border:1px solid var(--rule);border-radius:20px;
+}
+.chips button[aria-pressed="true"]{color:var(--ink);background:var(--mark);border-color:var(--mark)}
+.chips button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+
+/* taxon autocomplete */
+.ac-wrap{position:relative}
+.ac{
+  position:absolute;top:calc(100% + 5px);left:0;right:0;z-index:20;
+  background:var(--raise);border:1px solid var(--rule);border-radius:8px;
+  overflow:hidden;max-height:264px;overflow-y:auto;
+}
+.ac[hidden]{display:none}
+.ac button{
+  display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:9px 11px;border:0;border-bottom:1px solid var(--rule);
+  background:none;color:var(--text);font:inherit;cursor:pointer;
+}
+.ac button:last-child{border-bottom:0}
+.ac button:hover,.ac button:focus-visible{background:var(--panel);outline:none}
+.ac img{width:32px;height:32px;border-radius:4px;object-fit:cover;flex:0 0 auto;background:var(--panel)}
+.ac .ac-nophoto{width:32px;height:32px;border-radius:4px;flex:0 0 auto;background:var(--panel);border:1px solid var(--rule)}
+.ac-name{flex:1 1 auto;min-width:0}
+.ac-common{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ac-sci{
+  font-family:var(--lit);font-style:italic;font-size:12.5px;color:var(--mute);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.ac-rank{
+  flex:0 0 auto;font-size:9px;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--mute);
+}
+
+.selected{
+  display:flex;align-items:center;gap:9px;margin-top:7px;padding:9px 11px;
+  background:var(--raise);border:1px solid var(--mark);border-radius:7px;
+}
+.selected[hidden]{display:none}
+.selected .s-sci{flex:1 1 auto;font-family:var(--lit);font-style:italic;font-size:15px;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.selected button{
+  flex:0 0 auto;width:24px;height:24px;border-radius:50%;cursor:pointer;
+  background:none;border:1px solid var(--rule);color:var(--mute);
+  font:inherit;font-size:13px;line-height:1;display:grid;place-items:center;
+}
+.selected button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+
+.divider{height:1px;background:var(--rule);margin:20px 0 16px}
+
+.done{
+  width:100%;padding:13px;margin-top:4px;cursor:pointer;
+  font:inherit;font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink);background:var(--mark);border:0;border-radius:8px;
+}
+.done:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+
+/* ---------- results ---------- */
+.result{
+  display:flex;gap:11px;align-items:flex-start;width:100%;text-align:left;
+  padding:11px 0;border:0;border-bottom:1px solid var(--rule);
+  background:none;color:var(--text);font:inherit;cursor:pointer;
+}
+.result:last-child{border-bottom:0}
+.result:focus-visible{outline:2px solid var(--mark);outline-offset:-2px}
+.result-photo{
+  width:54px;height:54px;flex:0 0 auto;border-radius:5px;object-fit:cover;
+  background:var(--raise);border:1px solid var(--rule);
+}
+.result-nophoto{
+  width:54px;height:54px;flex:0 0 auto;border-radius:5px;
+  background:var(--raise);border:1px solid var(--rule);
+  display:grid;place-items:center;color:var(--rule);font-size:17px;
+}
+.result-main{flex:1 1 auto;min-width:0;padding-top:1px}
+.result-common{
+  font-size:15px;line-height:1.25;margin-bottom:1px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.result-sci{
+  font-family:var(--lit);font-style:italic;font-size:13px;color:var(--mute);
+  line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.result-meta{
+  margin-top:5px;font-size:9.5px;font-weight:600;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--mute);display:flex;flex-wrap:wrap;align-items:center;gap:7px;
+}
+.badge{
+  padding:2px 5px;border-radius:3px;border:1px solid currentColor;
+  font-size:8.5px;letter-spacing:.1em;
+}
+.badge-rg{color:var(--verified)}
+.badge-ob{color:var(--mark)}
+
+.state{padding:26px 4px 30px;text-align:center;color:var(--mute)}
+.state-lede{font-family:var(--lit);font-size:17px;color:var(--text);margin-bottom:7px}
+.state-hint{font-size:11.5px;letter-spacing:.06em;line-height:1.6}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+}
+@media (min-width:720px){
+  .sheet{left:auto;right:14px;bottom:14px;width:380px;border-radius:14px;max-height:calc(100vh - 100px)}
+  .sheet{transform:translateY(calc(100% + 20px))}
+  .sheet[data-open="1"]{transform:translateY(0)}
+  .label-bar{max-width:640px}
+  .locate{right:410px}
+}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<button class="label-bar" id="labelBar" aria-label="Change filters">
+  <span class="lozenge" aria-hidden="true"></span>
+  <span class="label-text" id="labelText">All observations</span>
+  <span class="label-chevron" aria-hidden="true">EDIT</span>
+</button>
+
+<button class="locate" id="locate" aria-label="Go to my location">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+    <circle cx="12" cy="12" r="3.4"/><circle cx="12" cy="12" r="7.6" opacity=".45"/>
+    <path d="M12 1.6v3M12 19.4v3M1.6 12h3M19.4 12h3"/>
+  </svg>
+</button>
+
+<div class="sheet" id="sheet" data-open="0" role="dialog" aria-label="Panel">
+  <button class="handle" id="handle" aria-label="Close panel"><span></span></button>
+  <div class="sheet-body" id="sheetBody"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+"use strict";
+
+const API  = "https://api.inaturalist.org/v1";
+const MARK = "#FF3E7C";
+
+const ICONIC = [
+  ["Plantae","Plants"],["Aves","Birds"],["Insecta","Insects"],["Fungi","Fungi"],
+  ["Arachnida","Arachnids"],["Mammalia","Mammals"],["Reptilia","Reptiles"],
+  ["Amphibia","Amphibians"],["Actinopterygii","Fish"],["Mollusca","Molluscs"]
+];
+const QUALITY = [["","Any"],["research","Research"],["needs_id","Needs ID"],["casual","Casual"]];
+const STYLES  = [["auto","Auto"],["points","Points"],["grid","Grid"],["heat","Heat"]];
+const BASES   = [["dark","Dark"],["light","Light"],["sat","Satellite"]];
+
+const state = {
+  taxon:null, tname:"", iconic:"", user:"", quality:"",
+  d1:"", d2:"", style:"auto", base:"dark", unobs:""
+};
+
+let map, overlay, probeMark, probeRing, meRing, sheetView = null;
+
+/* ---------------- query building ---------------- */
+
+function obsParams(){
+  const p = new URLSearchParams();
+  if(state.taxon)   p.set("taxon_id", state.taxon);
+  if(state.iconic)  p.set("iconic_taxa", state.iconic);
+  if(state.user)    p.set("user_id", state.user);
+  if(state.unobs)   p.set("unobserved_by_user_id", state.unobs);
+  if(state.quality) p.set("quality_grade", state.quality);
+  if(state.d1)      p.set("d1", state.d1);
+  if(state.d2)      p.set("d2", state.d2);
+  return p;
+}
+
+function activeStyle(){
+  if(state.style === "heat")   return "colored_heatmap";
+  if(state.style === "points") return "points";
+  if(state.style === "grid")   return "grid";
+  return map.getZoom() < 10 ? "grid" : "points";
+}
+
+function tileUrl(){
+  const style = activeStyle();
+  const p = obsParams();
+  if(style === "points" || style === "grid") p.set("color", MARK);
+  const qs = p.toString();
+  return `${API}/${style}/{z}/{x}/{y}.png` + (qs ? "?" + qs : "");
+}
+
+function refreshOverlay(){
+  const url = tileUrl();
+  if(overlay._url !== url) overlay.setUrl(url);
+}
+
+/* ---------------- basemaps ---------------- */
+
+const OSM_ATTR = '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+const INAT_ATTR = 'Observations &copy; <a href="https://www.inaturalist.org">iNaturalist</a>';
+
+function makeBase(kind){
+  if(kind === "sat"){
+    return L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom:19, attribution:'Imagery &copy; Esri, Maxar, Earthstar Geographics &middot; ' + INAT_ATTR });
+  }
+  const slug = kind === "light" ? "light_all" : "dark_all";
+  return L.tileLayer(`https://{s}.basemaps.cartocdn.com/${slug}/{z}/{x}/{y}{r}.png`,
+    { maxZoom:20, subdomains:"abcd", attribution: OSM_ATTR + " &middot; " + INAT_ATTR });
+}
+
+let baseLayer;
+function setBase(kind){
+  state.base = kind;
+  if(baseLayer) map.removeLayer(baseLayer);
+  baseLayer = makeBase(kind).addTo(map);
+  baseLayer.bringToBack();
+}
+
+/* ---------------- url hash ---------------- */
+
+function writeHash(){
+  const c = map.getCenter();
+  const p = new URLSearchParams();
+  p.set("z", map.getZoom());
+  p.set("lat", c.lat.toFixed(5));
+  p.set("lng", c.lng.toFixed(5));
+  if(state.taxon){ p.set("taxon", state.taxon); if(state.tname) p.set("tname", state.tname); }
+  if(state.iconic)  p.set("iconic", state.iconic);
+  if(state.user)    p.set("user", state.user);
+  if(state.unobs)   p.set("unobs", state.unobs);
+  if(state.quality) p.set("q", state.quality);
+  if(state.d1)      p.set("d1", state.d1);
+  if(state.d2)      p.set("d2", state.d2);
+  if(state.style !== "auto") p.set("s", state.style);
+  if(state.base !== "dark")  p.set("b", state.base);
+  history.replaceState(null, "", "#" + p.toString());
+}
+
+function readHash(){
+  const p = new URLSearchParams(location.hash.replace(/^#/, ""));
+  state.taxon   = p.get("taxon") || null;
+  state.tname   = p.get("tname") || "";
+  state.iconic  = p.get("iconic") || "";
+  state.user    = p.get("user") || "";
+  state.unobs   = p.get("unobs") || "";
+  state.quality = p.get("q") || "";
+  state.d1      = p.get("d1") || "";
+  state.d2      = p.get("d2") || "";
+  state.style   = p.get("s") || "auto";
+  state.base    = p.get("b") || "dark";
+  return {
+    z:   p.has("z")   ? +p.get("z")   : 4,
+    lat: p.has("lat") ? +p.get("lat") : 20,
+    lng: p.has("lng") ? +p.get("lng") : 8
+  };
+}
+
+/* ---------------- specimen label ---------------- */
+
+function fmtYear(d){ return d ? d.slice(0,4) : ""; }
+
+function renderLabel(){
+  const bits = [];
+  if(state.taxon){
+    bits.push(`<span class="sci">${esc(state.tname || "Taxon " + state.taxon)}</span>`);
+  } else if(state.iconic){
+    const hit = ICONIC.find(i => i[0] === state.iconic);
+    bits.push(esc(hit ? hit[1] : state.iconic));
+  }
+  if(state.quality){
+    const hit = QUALITY.find(q => q[0] === state.quality);
+    bits.push(esc(hit ? hit[1] + " grade" : state.quality));
+  }
+  if(state.user) bits.push("@" + esc(state.user));
+  if(state.unobs) bits.push("new for @" + esc(state.unobs));
+  if(state.d1 || state.d2){
+    bits.push(esc(fmtYear(state.d1) + " – " + (fmtYear(state.d2) || "now")));
+  }
+  document.getElementById("labelText").innerHTML =
+    bits.length ? bits.join('<span class="sep">/</span>')
+                : '<span class="dim">All observations</span>';
+}
+
+/* ---------------- sheet plumbing ---------------- */
+
+const sheet = document.getElementById("sheet");
+const sheetBody = document.getElementById("sheetBody");
+
+function openSheet(view, html){
+  sheetView = view;
+  sheetBody.innerHTML = html;
+  sheet.dataset.open = "1";
+  sheetBody.scrollTop = 0;
+}
+function closeSheet(){
+  sheet.dataset.open = "0";
+  sheetView = null;
+  if(probeMark){ map.removeLayer(probeMark); probeMark = null; }
+  if(probeRing){ map.removeLayer(probeRing); probeRing = null; }
+}
+document.getElementById("handle").addEventListener("click", closeSheet);
+
+function esc(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+    ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+/* ---------------- filters panel ---------------- */
+
+function segHtml(id, opts, current){
+  return `<div class="seg" id="${id}">` + opts.map(([v,l]) =>
+    `<button type="button" data-v="${esc(v)}" aria-pressed="${v===current}">${esc(l)}</button>`
+  ).join("") + `</div>`;
+}
+
+function filtersHtml(){
+  return `
+  <div class="eyebrow"><span>Filters</span><button class="linkish" id="reset">Reset all</button></div>
+
+  <div class="field ac-wrap">
+    <label for="taxonInput">Species or group</label>
+    <input class="input" id="taxonInput" type="search" autocomplete="off"
+           placeholder="Search any taxon…" enterkeyhint="search">
+    <div class="ac" id="ac" hidden></div>
+    <div class="selected" id="taxonSel" ${state.taxon ? "" : "hidden"}>
+      <span class="s-sci">${esc(state.tname || "")}</span>
+      <button type="button" id="taxonClear" aria-label="Clear species">&times;</button>
+    </div>
+  </div>
+
+  <div class="field">
+    <span class="field-label">Quick groups</span>
+    <div class="chips" id="iconicRow">${ICONIC.map(([v,l]) =>
+      `<button type="button" data-v="${v}" aria-pressed="${state.iconic===v}">${l}</button>`).join("")}</div>
+  </div>
+
+  <div class="field">
+    <span class="field-label">Identification quality</span>
+    ${segHtml("qualityRow", QUALITY, state.quality)}
+  </div>
+
+  <div class="field">
+    <label for="userInput">Observer</label>
+    <input class="input" id="userInput" type="text" autocapitalize="none" autocorrect="off"
+           spellcheck="false" placeholder="iNaturalist username" value="${esc(state.user)}">
+  </div>
+
+  <div class="field">
+    <label for="unobsInput">New species for</label>
+    <input class="input" id="unobsInput" type="text" autocapitalize="none" autocorrect="off"
+           spellcheck="false" placeholder="Username — only taxa they've never seen" value="${esc(state.unobs)}">
+    <p class="field-hint">Shows only observations of species this user hasn't observed yet — a lifer finder.</p>
+  </div>
+
+  <div class="field">
+    <span class="field-label">Observed between</span>
+    <div class="row2">
+      <input class="input" id="d1Input" type="date" value="${esc(state.d1)}">
+      <input class="input" id="d2Input" type="date" value="${esc(state.d2)}">
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="field">
+    <span class="field-label">Observation layer</span>
+    ${segHtml("styleRow", STYLES, state.style)}
+  </div>
+
+  <div class="field">
+    <span class="field-label">Base map</span>
+    ${segHtml("baseRow", BASES, state.base)}
+  </div>
+
+  <button class="done" id="doneBtn">Show on map</button>`;
+}
+
+function openFilters(){
+  openSheet("filters", filtersHtml());
+  wireFilters();
+}
+
+function commit(){ refreshOverlay(); renderLabel(); writeHash(); }
+
+function wireFilters(){
+  const $ = id => document.getElementById(id);
+
+  $("doneBtn").addEventListener("click", closeSheet);
+
+  $("reset").addEventListener("click", () => {
+    Object.assign(state, { taxon:null, tname:"", iconic:"", user:"", quality:"", d1:"", d2:"", unobs:"" });
+    commit();
+    openFilters();
+  });
+
+  // taxon autocomplete
+  const input = $("taxonInput"), ac = $("ac");
+  let timer = null, seq = 0;
+
+  input.addEventListener("input", () => {
+    const q = input.value.trim();
+    clearTimeout(timer);
+    if(q.length < 2){ ac.hidden = true; ac.innerHTML = ""; return; }
+    timer = setTimeout(async () => {
+      const mine = ++seq;
+      try{
+        const r = await fetch(`${API}/taxa/autocomplete?per_page=8&q=${encodeURIComponent(q)}`);
+        const d = await r.json();
+        if(mine !== seq) return;
+        if(!d.results || !d.results.length){ ac.hidden = true; return; }
+        ac.innerHTML = d.results.map(t => {
+          const thumb = t.default_photo && t.default_photo.square_url;
+          return `<button type="button" data-id="${t.id}" data-name="${esc(t.name)}">
+            ${thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy">` : `<span class="ac-nophoto"></span>`}
+            <span class="ac-name">
+              <span class="ac-common">${esc(t.preferred_common_name || t.name)}</span>
+              <span class="ac-sci">${esc(t.name)}</span>
+            </span>
+            <span class="ac-rank">${esc(t.rank || "")}</span>
+          </button>`;
+        }).join("");
+        ac.hidden = false;
+      }catch(e){ ac.hidden = true; }
+    }, 280);
+  });
+
+  ac.addEventListener("click", e => {
+    const b = e.target.closest("button[data-id]");
+    if(!b) return;
+    state.taxon  = b.dataset.id;
+    state.tname  = b.dataset.name;
+    state.iconic = "";
+    ac.hidden = true; input.value = "";
+    commit();
+    openFilters();
+  });
+
+  $("taxonClear").addEventListener("click", () => {
+    state.taxon = null; state.tname = "";
+    commit();
+    openFilters();
+  });
+
+  $("iconicRow").addEventListener("click", e => {
+    const b = e.target.closest("button[data-v]");
+    if(!b) return;
+    state.iconic = (state.iconic === b.dataset.v) ? "" : b.dataset.v;
+    if(state.iconic){ state.taxon = null; state.tname = ""; }
+    commit();
+    openFilters();
+  });
+
+  const seg = (id, key) => $(id).addEventListener("click", e => {
+    const b = e.target.closest("button[data-v]");
+    if(!b) return;
+    state[key] = b.dataset.v;
+    [...$(id).children].forEach(c => c.setAttribute("aria-pressed", c === b));
+    if(key === "base") setBase(b.dataset.v); else commit();
+    if(key === "base") writeHash();
+  });
+  seg("qualityRow","quality");
+  seg("styleRow","style");
+  seg("baseRow","base");
+
+  const debounced = (el, key) => {
+    let t = null;
+    el.addEventListener("input", () => {
+      clearTimeout(t);
+      t = setTimeout(() => { state[key] = el.value.trim(); commit(); }, 420);
+    });
+  };
+  debounced($("userInput"), "user");
+  debounced($("unobsInput"), "unobs");
+  debounced($("d1Input"), "d1");
+  debounced($("d2Input"), "d2");
+}
+
+document.getElementById("labelBar").addEventListener("click", () => {
+  if(sheetView === "filters") closeSheet(); else openFilters();
+});
+
+/* ---------------- probe: what's at this point ---------------- */
+
+function probeRadiusKm(lat, zoom){
+  const mPerPx = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
+  return Math.min(60, Math.max(0.05, mPerPx * 28 / 1000));
+}
+
+const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+function fmtDate(iso){
+  if(!iso) return "No date";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if(!m) return iso;
+  return `${+m[3]} ${MONTHS[+m[2]-1]} ${m[1]}`;
+}
+
+function resultsHtml(list, km){
+  if(!list.length){
+    return `<div class="eyebrow"><span>Nothing here</span></div>
+      <div class="state">
+        <div class="state-lede">No observations within ${km.toFixed(1)} km.</div>
+        <div class="state-hint">Zoom out and tap again, or loosen the filters.</div>
+      </div>`;
+  }
+  const rows = list.map(o => {
+    const t = o.taxon || {};
+    const photo = o.photos && o.photos[0] && o.photos[0].url ? o.photos[0].url.replace("square","small") : null;
+    const meta = [];
+    meta.push(fmtDate(o.observed_on));
+    if(o.user && o.user.login) meta.push("@" + esc(o.user.login));
+    let badges = "";
+    if(o.quality_grade === "research") badges += `<span class="badge badge-rg">Research</span>`;
+    if(o.obscured) badges += `<span class="badge badge-ob">Obscured</span>`;
+    return `<button class="result" data-id="${o.id}">
+      ${photo ? `<img class="result-photo" src="${esc(photo)}" alt="" loading="lazy">`
+              : `<span class="result-nophoto">&#9673;</span>`}
+      <span class="result-main">
+        <span class="result-common">${esc(t.preferred_common_name || t.name || "Unidentified")}</span>
+        ${t.name ? `<span class="result-sci">${esc(t.name)}</span>` : ""}
+        <span class="result-meta">${meta.join(" &middot; ")}${badges}</span>
+      </span>
+    </button>`;
+  }).join("");
+  return `<div class="eyebrow"><span>${list.length} nearby &middot; ${km.toFixed(1)} km</span>
+    <button class="linkish" id="toFilters">Filters</button></div>${rows}`;
+}
+
+async function probe(latlng){
+  const km = probeRadiusKm(latlng.lat, map.getZoom());
+
+  if(probeMark) map.removeLayer(probeMark);
+  if(probeRing) map.removeLayer(probeRing);
+  probeRing = L.circle(latlng, {
+    radius: km * 1000, color: MARK, weight: 1, opacity: .7,
+    fillColor: MARK, fillOpacity: .07, interactive: false
+  }).addTo(map);
+  probeMark = L.circleMarker(latlng, {
+    radius: 4, color: MARK, weight: 2, fillColor: MARK, fillOpacity: 1, interactive: false
+  }).addTo(map);
+
+  openSheet("results", `<div class="eyebrow"><span>Reading&hellip;</span></div>
+    <div class="state"><div class="state-hint">Fetching observations.</div></div>`);
+
+  const p = obsParams();
+  p.set("lat", latlng.lat.toFixed(6));
+  p.set("lng", latlng.lng.toFixed(6));
+  p.set("radius", km.toFixed(3));
+  p.set("per_page", "20");
+  p.set("order_by", "observed_on");
+  p.set("order", "desc");
+
+  try{
+    const r = await fetch(`${API}/observations?${p.toString()}`);
+    if(!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    if(sheetView !== "results") return;
+    openSheet("results", resultsHtml(d.results || [], km));
+    wireResults();
+  }catch(err){
+    openSheet("results", `<div class="eyebrow"><span>Not loaded</span></div>
+      <div class="state">
+        <div class="state-lede">The request didn't come back.</div>
+        <div class="state-hint">Check the connection and tap the map again.</div>
+      </div>`);
+  }
+}
+
+function wireResults(){
+  const toF = document.getElementById("toFilters");
+  if(toF) toF.addEventListener("click", openFilters);
+  sheetBody.querySelectorAll(".result").forEach(b => {
+    b.addEventListener("click", () => {
+      window.open("https://www.inaturalist.org/observations/" + b.dataset.id, "_blank", "noopener");
+    });
+  });
+}
+
+/* ---------------- locate ---------------- */
+
+document.getElementById("locate").addEventListener("click", function(){
+  if(!navigator.geolocation) return;
+  this.dataset.busy = "1";
+  navigator.geolocation.getCurrentPosition(pos => {
+    this.dataset.busy = "0";
+    const ll = [pos.coords.latitude, pos.coords.longitude];
+    if(meRing) map.removeLayer(meRing);
+    meRing = L.circleMarker(ll, {
+      radius: 6, color: "#fff", weight: 2, fillColor: MARK, fillOpacity: 1
+    }).addTo(map);
+    map.setView(ll, Math.max(map.getZoom(), 14));
+  }, () => {
+    this.dataset.busy = "0";
+  }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+});
+
+/* ---------------- boot ---------------- */
+
+(function init(){
+  const v = readHash();
+
+  map = L.map("map", {
+    center: [v.lat, v.lng],
+    zoom: v.z,
+    zoomControl: false,
+    worldCopyJump: true,
+    tap: false
+  });
+
+  setBase(state.base);
+
+  overlay = L.tileLayer(tileUrl(), {
+    maxZoom: 19,
+    opacity: 0.85,
+    crossOrigin: true
+  }).addTo(map);
+
+  map.on("zoomend", () => { if(state.style === "auto") refreshOverlay(); });
+  map.on("moveend", writeHash);
+  map.on("click", e => probe(e.latlng));
+
+  renderLabel();
+  writeHash();
+})();
+</script>
+</body>
+</html>
