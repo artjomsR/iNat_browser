@@ -887,8 +887,14 @@ function resultsHtml(list, km){
   const rows = list.map(o => {
     const t = o.taxon || {};
     const photo = o.photos && o.photos[0] && o.photos[0].url ? o.photos[0].url.replace("square","small") : null;
+    const acc = o.public_positional_accuracy != null ? o.public_positional_accuracy : o.positional_accuracy;
+    const accKnown = acc != null && isFinite(acc);
+    const accDot = accKnown
+      ? `<span class="acc-dot" style="background:${accuracyColor(acc)}"></span>`
+      : `<span class="acc-dot acc-dot-unknown"></span>`;
     const meta = [];
     meta.push(fmtDate(o.observed_on));
+    meta.push(`${accDot}${esc(fmtAcc(accKnown ? acc : null))}`);
     if(o.user && o.user.login) meta.push("@" + esc(o.user.login));
     let badges = "";
     if(o.quality_grade === "research") badges += `<span class="badge badge-rg">Research</span>`;
