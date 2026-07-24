@@ -195,6 +195,8 @@ body{
 }
 .seg button[aria-pressed="true"]{color:var(--ink);background:var(--mark);border-color:var(--mark)}
 .seg button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+.seg button:disabled{opacity:.4;cursor:not-allowed}
+.input + .seg{margin-top:8px}
 
 /* iconic chips */
 .chips{
@@ -629,10 +631,15 @@ function filtersHtml(){
   </div>
 
   <div class="field">
-    <label for="unobsInput">New species for</label>
+    <label for="unobsInput">Desired species for</label>
     <input class="input" id="unobsInput" type="text" autocapitalize="none" autocorrect="off"
-           spellcheck="false" placeholder="Username — only taxa they've never seen" value="${esc(state.unobs)}">
-    <p class="field-hint">Shows only observations of species this user hasn't observed yet — a lifer finder.</p>
+           spellcheck="false" placeholder="Username — only desired taxa" value="${esc(state.unobs)}">
+    <div class="seg" id="unobsModeRow">
+      <button type="button" data-mode="s2" disabled>Lvl A +</button>
+      <button type="button" data-mode="s3" disabled>Lvl B +</button>
+      <button type="button" data-mode="s4" disabled>Lvl C +</button>
+      <button type="button" data-mode="unobserved" aria-pressed="true">Unobserved</button>
+    </div>
   </div>
 
   <div class="field">
