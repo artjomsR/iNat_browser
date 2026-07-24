@@ -372,7 +372,7 @@ function defaultD1(){
 
 const state = {
   taxon:null, tname:"", iconic:[], user:"", quality:"",
-  d1:defaultD1(), d2:"", style:"auto", base:"dark", unobs:"", precise:"precise"
+  d1:defaultD1(), d2:"", style:"accuracy", base:"dark", unobs:"", precise:"precise"
 };
 
 let map, overlay, accLayer, probeMark, probeRing, meRing, sheetView = null;
@@ -508,7 +508,7 @@ function writeHash(){
   p.set("precise", state.precise);
   p.set("d1", state.d1);
   if(state.d2)      p.set("d2", state.d2);
-  if(state.style !== "auto") p.set("s", state.style);
+  if(state.style !== "accuracy") p.set("s", state.style);
   if(state.base !== "dark")  p.set("b", state.base);
   history.replaceState(null, "", "#" + p.toString());
 }
@@ -524,7 +524,7 @@ function readHash(){
   state.precise = p.has("precise") ? p.get("precise") : "precise";
   state.d1      = p.has("d1") ? p.get("d1") : defaultD1();
   state.d2      = p.get("d2") || "";
-  state.style   = p.get("s") || "auto";
+  state.style   = p.get("s") || "accuracy";
   state.base    = p.get("b") || "dark";
   return {
     z:   p.has("z")   ? +p.get("z")   : 4,
