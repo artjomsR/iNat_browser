@@ -90,6 +90,8 @@ body{
   font-size:9.5px;color:var(--mute);line-height:1.4;
   padding-top:7px;border-top:1px solid var(--rule);
 }
+.acc-legend-radius{padding-top:8px;margin-top:8px;border-top:1px solid var(--rule)}
+.acc-legend-radius .seg button{padding:6px 4px;font-size:9px;letter-spacing:.08em}
 
 /* ---------- specimen label bar (signature) ---------- */
 .label-bar{
@@ -339,6 +341,13 @@ body{
   <div class="acc-legend-ticks"><span>&le;1m</span><span>10m</span><span>150m</span><span>1km+</span></div>
   <div class="acc-legend-unknown"><span class="acc-dot acc-dot-unknown"></span>No accuracy recorded</div>
   <div class="acc-legend-status" id="accStatus"></div>
+  <div class="acc-legend-radius">
+    <div class="acc-legend-title">Tap radius</div>
+    <div class="seg" id="cursorRow">
+      <button type="button" data-v="precise" aria-pressed="true">Precise</button>
+      <button type="button" data-v="large" aria-pressed="false">Large</button>
+    </div>
+  </div>
 </div>
 
 <div class="sheet" id="sheet" data-open="0" role="dialog" aria-label="Panel">
@@ -376,7 +385,7 @@ function defaultQuality(){ return ["research","needs_id"]; }
 const state = {
   taxon:null, tname:"", iconic:[], user:"", quality:defaultQuality(),
   d1:defaultD1(), d2:"", style:"accuracy", base:"dark", unobs:"", precise:"precise",
-  dmode:"unobserved", lvlExclude:null
+  dmode:"unobserved", lvlExclude:null, cursor:"precise"
 };
 
 let map, overlay, accLayer, probeAccLayer, probeMark, probeRing, meRing, sheetView = null;
@@ -573,6 +582,7 @@ function writeHash(){
   if(state.d2)      p.set("d2", state.d2);
   if(state.style !== "accuracy") p.set("s", state.style);
   if(state.base !== "dark")  p.set("b", state.base);
+  if(state.cursor !== "precise") p.set("cur", state.cursor);
   history.replaceState(null, "", "#" + p.toString());
 }
 
@@ -590,6 +600,7 @@ function readHash(){
   state.d2      = p.get("d2") || "";
   state.style   = p.get("s") || "accuracy";
   state.base    = p.get("b") || "dark";
+  state.cursor  = p.get("cur") || "precise";
   return {
     z:   p.has("z")   ? +p.get("z")   : 4,
     lat: p.has("lat") ? +p.get("lat") : 20,
@@ -752,6 +763,20 @@ const accBar = document.getElementById("accBar");
 const ACC_MIN_ZOOM = 9;
 
 let accSeq = 0, accTimer = null;
+
+// Tap radius sits in the legend, which is static DOM — so it is wired once here rather
+// than on every sheet render. It only changes the next tap, so no refetch is needed.
+const cursorRow = document.getElementById("cursorRow");
+function renderCursorRow(){
+  [...cursorRow.children].forEach(c => c.setAttribute("aria-pressed", c.dataset.v === state.cursor));
+}
+cursorRow.addEventListener("click", e => {
+  const b = e.target.closest("button[data-v]");
+  if(!b) return;
+  state.cursor = b.dataset.v;
+  renderCursorRow();
+  writeHash();
+});
 
 function scheduleAccRefresh(){
   clearTimeout(accTimer);
@@ -927,8 +952,8 @@ function wireFilters(){
     if(!b) return;
     state[key] = b.dataset.v;
     [...$(id).children].forEach(c => c.setAttribute("aria-pressed", c === b));
-    if(key === "base") setBase(b.dataset.v); else commit();
-    if(key === "base") writeHash();
+    if(key === "base"){ setBase(b.dataset.v); writeHash(); }
+    else commit();
   });
   seg("preciseRow","precise");
   seg("styleRow","style");
@@ -969,9 +994,16 @@ document.getElementById("labelBar").addEventListener("click", () => {
 
 /* ---------------- probe: what's at this point ---------------- */
 
+// Tap radius, in km. "precise" keeps a fixed 28px reach; "large" scales with the
+// viewport so the circle spans ~80% of its shorter edge (0.4 = 80% diameter), which
+// keeps the whole ring on screen at any zoom.
 function probeRadiusKm(lat, zoom){
   const mPerPx = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
-  return Math.min(60, Math.max(0.05, mPerPx * 28 / 1000));
+  const big = state.cursor === "large";
+  const size = map.getSize();
+  const px  = big ? Math.min(size.x, size.y) * 0.4 : 28;
+  const cap = big ? 5000 : 60;
+  return Math.min(cap, Math.max(0.05, mPerPx * px / 1000));
 }
 
 const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
@@ -1145,6 +1177,7 @@ document.getElementById("locate").addEventListener("click", function(){
   accLayer = L.layerGroup().addTo(map);
   probeAccLayer = L.layerGroup().addTo(map);
   accBar.style.background = legendGradientCss();
+  renderCursorRow();
   applyStyle();
 
   map.on("zoomend", () => { if(state.style === "auto") refreshOverlay(); });
