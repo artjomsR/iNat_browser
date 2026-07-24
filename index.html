@@ -356,7 +356,7 @@ const ICONIC = [
   ["Arachnida","Arachnids"],["Mammalia","Mammals"],["Reptilia","Reptiles"],
   ["Amphibia","Amphibians"],["Actinopterygii","Fish"],["Mollusca","Molluscs"]
 ];
-const QUALITY = [["","Any"],["research","Research"],["needs_id","Needs ID"],["casual","Casual"]];
+const QUALITY = [["research","Research"],["needs_id","Needs ID"],["casual","Casual"]];
 const PRECISION = [["","Any"],["precise","Exact only"]];
 const STYLES  = [["auto","Auto"],["points","Points"],["grid","Grid"],["heat","Heat"],["accuracy","Accuracy"]];
 const BASES   = [["dark","Dark"],["light","Light"],["sat","Satellite"]];
@@ -369,9 +369,10 @@ function defaultD1(){
   const day = String(d.getDate()).padStart(2,"0");
   return `${y}-${m}-${day}`;
 }
+function defaultQuality(){ return ["research","needs_id"]; }
 
 const state = {
-  taxon:null, tname:"", iconic:[], user:"", quality:"",
+  taxon:null, tname:"", iconic:[], user:"", quality:defaultQuality(),
   d1:defaultD1(), d2:"", style:"accuracy", base:"dark", unobs:"", precise:"precise"
 };
 
@@ -385,7 +386,7 @@ function obsParams(){
   if(state.iconic.length) p.set("iconic_taxa", state.iconic.join(","));
   if(state.user)    p.set("user_id", state.user);
   if(state.unobs)   p.set("unobserved_by_user_id", state.unobs);
-  if(state.quality) p.set("quality_grade", state.quality);
+  if(state.quality.length) p.set("quality_grade", state.quality.join(","));
   if(state.precise){ p.set("geoprivacy", "open"); p.set("taxon_geoprivacy", "open"); }
   if(state.d1)      p.set("d1", state.d1);
   if(state.d2)      p.set("d2", state.d2);
@@ -504,7 +505,7 @@ function writeHash(){
   if(state.iconic.length) p.set("iconic", state.iconic.join(","));
   if(state.user)    p.set("user", state.user);
   if(state.unobs)   p.set("unobs", state.unobs);
-  if(state.quality) p.set("q", state.quality);
+  p.set("q", state.quality.join(","));
   p.set("precise", state.precise);
   p.set("d1", state.d1);
   if(state.d2)      p.set("d2", state.d2);
@@ -520,7 +521,7 @@ function readHash(){
   state.iconic  = (p.get("iconic") || "").split(",").filter(Boolean);
   state.user    = p.get("user") || "";
   state.unobs   = p.get("unobs") || "";
-  state.quality = p.get("q") || "";
+  state.quality = p.has("q") ? p.get("q").split(",").filter(Boolean) : defaultQuality();
   state.precise = p.has("precise") ? p.get("precise") : "precise";
   state.d1      = p.has("d1") ? p.get("d1") : defaultD1();
   state.d2      = p.get("d2") || "";
@@ -547,9 +548,12 @@ function renderLabel(){
       return esc(hit ? hit[1] : v);
     }).join(" + "));
   }
-  if(state.quality){
-    const hit = QUALITY.find(q => q[0] === state.quality);
-    bits.push(esc(hit ? hit[1] + " grade" : state.quality));
+  if(state.quality.length){
+    const names = state.quality.map(v => {
+      const hit = QUALITY.find(q => q[0] === v);
+      return esc(hit ? hit[1] : v);
+    });
+    bits.push(names.join(" + ") + " grade");
   }
   if(state.user) bits.push("@" + esc(state.user));
   if(state.unobs) bits.push("new for @" + esc(state.unobs));
@@ -589,8 +593,9 @@ function esc(s){
 /* ---------------- filters panel ---------------- */
 
 function segHtml(id, opts, current){
+  const isActive = v => Array.isArray(current) ? current.includes(v) : v === current;
   return `<div class="seg" id="${id}">` + opts.map(([v,l]) =>
-    `<button type="button" data-v="${esc(v)}" aria-pressed="${v===current}">${esc(l)}</button>`
+    `<button type="button" data-v="${esc(v)}" aria-pressed="${isActive(v)}">${esc(l)}</button>`
   ).join("") + `</div>`;
 }
 
@@ -766,7 +771,7 @@ function wireFilters(){
   $("doneBtn").addEventListener("click", closeSheet);
 
   $("reset").addEventListener("click", () => {
-    Object.assign(state, { taxon:null, tname:"", iconic:[], user:"", quality:"", d1:defaultD1(), d2:"", unobs:"", precise:"precise" });
+    Object.assign(state, { taxon:null, tname:"", iconic:[], user:"", quality:defaultQuality(), d1:defaultD1(), d2:"", unobs:"", precise:"precise" });
     commit();
     openFilters();
   });
@@ -831,6 +836,17 @@ function wireFilters(){
     openFilters();
   });
 
+  $("qualityRow").addEventListener("click", e => {
+    const b = e.target.closest("button[data-v]");
+    if(!b) return;
+    const v = b.dataset.v;
+    state.quality = state.quality.includes(v)
+      ? state.quality.filter(x => x !== v)
+      : [...state.quality, v];
+    commit();
+    openFilters();
+  });
+
   const seg = (id, key) => $(id).addEventListener("click", e => {
     const b = e.target.closest("button[data-v]");
     if(!b) return;
@@ -839,7 +855,6 @@ function wireFilters(){
     if(key === "base") setBase(b.dataset.v); else commit();
     if(key === "base") writeHash();
   });
-  seg("qualityRow","quality");
   seg("preciseRow","precise");
   seg("styleRow","style");
   seg("baseRow","base");
