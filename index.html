@@ -195,7 +195,6 @@ body{
 }
 .seg button[aria-pressed="true"]{color:var(--ink);background:var(--mark);border-color:var(--mark)}
 .seg button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
-.seg button:disabled{opacity:.4;cursor:not-allowed}
 .input + .seg{margin-top:8px}
 
 /* iconic chips */
@@ -408,36 +407,47 @@ function obsParams(){
   return p;
 }
 
-// For a level mode, fetch the species the "Desired species for" user has tagged with
-// this level (search_on=tags), scoped to the current taxon filter, and cache their ids
-// in state.lvlExclude so obsParams can drop them via without_taxon_id. Clears the cache
+// Desired-species levels, best first: [mode, observation tag]. The priority stacks —
+// picking a level hides species already tagged at that level *or better*, so the
+// exclusion set for level i is the union of every tag from 0..i.
+// The top tier's tag is "s", not "a": iNat's search index treats "a" as an English
+// stopword and silently drops it (search_on=tags&q=a matches nothing, site-wide).
+const LEVELS = [["a","s"],["b","b"],["c","c"]];
+
+// Fetch the species the "Desired species for" user has tagged at the selected level or
+// better (search_on=tags), scoped to the current taxon filter, and cache their ids in
+// state.lvlExclude so obsParams can drop them via without_taxon_id. Clears the cache
 // (no-op) for Unobserved mode or when no user is set.
-// To wire another level button: set its data-mode to the tag string it matches and
-// remove `disabled` (the placeholders "Lvl A +"/"Lvl C +" are otherwise inert).
 let lvlSeq = 0;
 async function syncLvlExclude(){
   if(state.dmode === "unobserved" || !state.unobs){ state.lvlExclude = null; return; }
+  const idx = LEVELS.findIndex(l => l[0] === state.dmode);
+  if(idx < 0){ state.lvlExclude = null; return; }
+  const tags = LEVELS.slice(0, idx + 1).map(l => l[1]);
   const mine = ++lvlSeq;
   const ids = [];
   try{
-    for(let page = 1; page <= 8; page++){
-      const p = new URLSearchParams();
-      p.set("user_id", state.unobs);
-      p.set("search_on", "tags");
-      p.set("q", state.dmode);              // the mode's value doubles as the tag
-      if(state.taxon) p.set("taxon_id", state.taxon);
-      if(state.iconic.length) p.set("iconic_taxa", state.iconic.join(","));
-      p.set("per_page", "500");
-      p.set("page", String(page));
-      const r = await fetch(`${API}/observations/species_counts?${p.toString()}`);
-      if(!r.ok) throw new Error(r.status);
-      const d = await r.json();
-      if(mine !== lvlSeq) return;           // a newer sync superseded this one
-      (d.results || []).forEach(x => { if(x.taxon && x.taxon.id) ids.push(x.taxon.id); });
-      if(page * 500 >= (d.total_results || 0)) break;
+    // One request per tier: the tags index matches a single term, so "s b" ORs nothing.
+    for(const tag of tags){
+      for(let page = 1; page <= 8; page++){
+        const p = new URLSearchParams();
+        p.set("user_id", state.unobs);
+        p.set("search_on", "tags");
+        p.set("q", tag);
+        if(state.taxon) p.set("taxon_id", state.taxon);
+        if(state.iconic.length) p.set("iconic_taxa", state.iconic.join(","));
+        p.set("per_page", "500");
+        p.set("page", String(page));
+        const r = await fetch(`${API}/observations/species_counts?${p.toString()}`);
+        if(!r.ok) throw new Error(r.status);
+        const d = await r.json();
+        if(mine !== lvlSeq) return;         // a newer sync superseded this one
+        (d.results || []).forEach(x => { if(x.taxon && x.taxon.id) ids.push(x.taxon.id); });
+        if(page * 500 >= (d.total_results || 0)) break;
+      }
     }
     if(mine !== lvlSeq) return;
-    state.lvlExclude = ids;
+    state.lvlExclude = [...new Set(ids)];    // a species may be tagged at several tiers
   }catch(e){
     if(mine !== lvlSeq) return;
     state.lvlExclude = [];                   // fail open: exclude nothing on error
@@ -688,9 +698,9 @@ function filtersHtml(){
     <input class="input" id="unobsInput" type="text" autocapitalize="none" autocorrect="off"
            spellcheck="false" placeholder="Username — only desired taxa" value="${esc(state.unobs)}">
     <div class="seg" id="unobsModeRow">
-      <button type="button" data-mode="s2" disabled>Lvl A +</button>
+      <button type="button" data-mode="a" aria-pressed="${state.dmode === "a"}">Lvl A +</button>
       <button type="button" data-mode="b" aria-pressed="${state.dmode === "b"}">Lvl B +</button>
-      <button type="button" data-mode="s4" disabled>Lvl C +</button>
+      <button type="button" data-mode="c" aria-pressed="${state.dmode === "c"}">Lvl C +</button>
       <button type="button" data-mode="unobserved" aria-pressed="${state.dmode === "unobserved"}">Unobserved</button>
     </div>
   </div>
@@ -926,12 +936,10 @@ function wireFilters(){
 
   // Desired-species mode (Unobserved vs a level). Selecting a level re-derives its exclude set.
   $("unobsModeRow").addEventListener("click", e => {
-    const b = e.target.closest("button[data-mode]:not([disabled])");
+    const b = e.target.closest("button[data-mode]");
     if(!b) return;
     state.dmode = b.dataset.mode;
-    [...$("unobsModeRow").children].forEach(c => {
-      if(!c.hasAttribute("disabled")) c.setAttribute("aria-pressed", c === b);
-    });
+    [...$("unobsModeRow").children].forEach(c => c.setAttribute("aria-pressed", c === b));
     syncLvlExclude().then(commit);
   });
 
