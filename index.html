@@ -407,12 +407,12 @@ function obsParams(){
   return p;
 }
 
-// Desired-species levels, best first: [mode, observation tag]. The priority stacks —
-// picking a level hides species already tagged at that level *or better*, so the
-// exclusion set for level i is the union of every tag from 0..i.
-// The top tier's tag is "s", not "a": iNat's search index treats "a" as an English
+// Desired-species levels, best first — each value is both the button's mode and the
+// observation tag it matches. The priority stacks: picking a level hides species already
+// tagged at that level *or better*, so the exclusion set for level i is tags 0..i.
+// Note the top tier is "s", not "a": iNat's search index treats "a" as an English
 // stopword and silently drops it (search_on=tags&q=a matches nothing, site-wide).
-const LEVELS = [["a","s"],["b","b"],["c","c"]];
+const LEVELS = ["s","b","c"];
 
 // Fetch the species the "Desired species for" user has tagged at the selected level or
 // better (search_on=tags), scoped to the current taxon filter, and cache their ids in
@@ -421,9 +421,9 @@ const LEVELS = [["a","s"],["b","b"],["c","c"]];
 let lvlSeq = 0;
 async function syncLvlExclude(){
   if(state.dmode === "unobserved" || !state.unobs){ state.lvlExclude = null; return; }
-  const idx = LEVELS.findIndex(l => l[0] === state.dmode);
+  const idx = LEVELS.indexOf(state.dmode);
   if(idx < 0){ state.lvlExclude = null; return; }
-  const tags = LEVELS.slice(0, idx + 1).map(l => l[1]);
+  const tags = LEVELS.slice(0, idx + 1);
   const mine = ++lvlSeq;
   const ids = [];
   try{
@@ -698,7 +698,7 @@ function filtersHtml(){
     <input class="input" id="unobsInput" type="text" autocapitalize="none" autocorrect="off"
            spellcheck="false" placeholder="Username — only desired taxa" value="${esc(state.unobs)}">
     <div class="seg" id="unobsModeRow">
-      <button type="button" data-mode="a" aria-pressed="${state.dmode === "a"}">Lvl A +</button>
+      <button type="button" data-mode="s" aria-pressed="${state.dmode === "s"}">Lvl S +</button>
       <button type="button" data-mode="b" aria-pressed="${state.dmode === "b"}">Lvl B +</button>
       <button type="button" data-mode="c" aria-pressed="${state.dmode === "c"}">Lvl C +</button>
       <button type="button" data-mode="unobserved" aria-pressed="${state.dmode === "unobserved"}">Unobserved</button>
