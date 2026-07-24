@@ -282,6 +282,12 @@ body{
   background:var(--raise);border:1px solid var(--rule);
   display:grid;place-items:center;color:var(--rule);font-size:17px;
 }
+.result-nophoto svg{width:26px;height:26px}
+.result-audio{color:var(--mute)}          /* sound-only: readable, not a dim placeholder */
+
+/* audio-only map pin */
+.snd-pin{background:none;border:0}
+.snd-pin svg{width:19px;height:19px;display:block;filter:drop-shadow(0 0 1.5px rgba(0,0,0,.6))}
 .result-main{flex:1 1 auto;min-width:0;padding-top:1px}
 .result-common{
   font-size:15px;line-height:1.25;margin-bottom:1px;
@@ -481,6 +487,25 @@ function tileUrl(){
 function refreshOverlay(){
   const url = tileUrl();
   if(overlay._url !== url) overlay.setUrl(url);
+}
+
+/* ---------------- audio-only observations ---------------- */
+
+// A sound recording with no photo. Both the map pins and the tap results swap their
+// usual dot for a speaker so these read as listen-not-look records at a glance.
+function isAudioOnly(o){
+  return (o.sounds || []).length > 0 && !(o.photos || []).length;
+}
+
+// fill paints the cone, ring the outline and waves — pass the same colour for a flat
+// monochrome icon (the results list), or contrasting ones for a map pin.
+function speakerSvg(fill, ring){
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M3.5 9.5H6.7L11.5 6V18L6.7 14.5H3.5Z"
+          fill="${fill}" stroke="${ring}" stroke-width="1.6" stroke-linejoin="round"/>
+    <path d="M14.6 9.6a4.2 4.2 0 010 4.8M17.6 7.6a8 8 0 010 8.8"
+          fill="none" stroke="${ring}" stroke-width="1.7" stroke-linecap="round"/>
+  </svg>`;
 }
 
 /* ---------------- accuracy color scale ---------------- */
@@ -819,14 +844,22 @@ async function refreshAccuracyLayer(){
       const known = acc != null && isFinite(acc);
       const t = o.taxon || {};
 
-      const marker = L.circleMarker([lat, lng], {
-        radius: 6, weight: 1.5,
-        color: known ? "rgba(255,255,255,.85)" : ACC_UNKNOWN_RING,
-        fillColor: known ? accuracyColor(acc) : ACC_UNKNOWN_FILL,
-        fillOpacity: .9
-      });
+      const ring = known ? "rgba(255,255,255,.85)" : ACC_UNKNOWN_RING;
+      const fill = known ? accuracyColor(acc) : ACC_UNKNOWN_FILL;
+      const audio = isAudioOnly(o);
+
+      const marker = audio
+        ? L.marker([lat, lng], {
+            icon: L.divIcon({
+              className: "snd-pin", html: speakerSvg(fill, ring),
+              iconSize: [19,19], iconAnchor: [9.5,9.5]
+            })
+          })
+        : L.circleMarker([lat, lng], {
+            radius: 6, weight: 1.5, color: ring, fillColor: fill, fillOpacity: .9
+          });
       marker.bindTooltip(
-        `${esc(t.preferred_common_name || t.name || "Unidentified")} — ${fmtAcc(known ? acc : null)}`,
+        `${esc(t.preferred_common_name || t.name || "Unidentified")} — ${fmtAcc(known ? acc : null)}${audio ? " &middot; sound only" : ""}`,
         { direction: "top", offset: [0,-4], opacity: .95 }
       );
       marker.on("click", e => {
@@ -1048,7 +1081,9 @@ function resultsHtml(list, km, latlng){
     if(o.obscured) badges += `<span class="badge badge-ob">Obscured</span>`;
     return `<button class="result" data-id="${o.id}">
       ${photo ? `<img class="result-photo" src="${esc(photo)}" alt="" loading="lazy">`
-              : `<span class="result-nophoto">&#9673;</span>`}
+              : isAudioOnly(o)
+                ? `<span class="result-nophoto result-audio" title="Sound only">${speakerSvg("currentColor","currentColor")}</span>`
+                : `<span class="result-nophoto">&#9673;</span>`}
       <span class="result-main">
         <span class="result-common">${esc(t.preferred_common_name || t.name || "Unidentified")}</span>
         ${t.name ? `<span class="result-sci">${esc(t.name)}</span>` : ""}
