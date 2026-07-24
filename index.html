@@ -314,12 +314,13 @@ const ICONIC = [
   ["Amphibia","Amphibians"],["Actinopterygii","Fish"],["Mollusca","Molluscs"]
 ];
 const QUALITY = [["","Any"],["research","Research"],["needs_id","Needs ID"],["casual","Casual"]];
+const PRECISION = [["","Any"],["precise","Exact only"]];
 const STYLES  = [["auto","Auto"],["points","Points"],["grid","Grid"],["heat","Heat"]];
 const BASES   = [["dark","Dark"],["light","Light"],["sat","Satellite"]];
 
 const state = {
   taxon:null, tname:"", iconic:"", user:"", quality:"",
-  d1:"", d2:"", style:"auto", base:"dark", unobs:""
+  d1:"", d2:"", style:"auto", base:"dark", unobs:"", precise:""
 };
 
 let map, overlay, probeMark, probeRing, meRing, sheetView = null;
@@ -333,6 +334,7 @@ function obsParams(){
   if(state.user)    p.set("user_id", state.user);
   if(state.unobs)   p.set("unobserved_by_user_id", state.unobs);
   if(state.quality) p.set("quality_grade", state.quality);
+  if(state.precise){ p.set("geoprivacy", "open"); p.set("taxon_geoprivacy", "open"); }
   if(state.d1)      p.set("d1", state.d1);
   if(state.d2)      p.set("d2", state.d2);
   return p;
@@ -394,6 +396,7 @@ function writeHash(){
   if(state.user)    p.set("user", state.user);
   if(state.unobs)   p.set("unobs", state.unobs);
   if(state.quality) p.set("q", state.quality);
+  if(state.precise) p.set("precise", state.precise);
   if(state.d1)      p.set("d1", state.d1);
   if(state.d2)      p.set("d2", state.d2);
   if(state.style !== "auto") p.set("s", state.style);
@@ -409,6 +412,7 @@ function readHash(){
   state.user    = p.get("user") || "";
   state.unobs   = p.get("unobs") || "";
   state.quality = p.get("q") || "";
+  state.precise = p.get("precise") || "";
   state.d1      = p.get("d1") || "";
   state.d2      = p.get("d2") || "";
   state.style   = p.get("s") || "auto";
@@ -438,6 +442,7 @@ function renderLabel(){
   }
   if(state.user) bits.push("@" + esc(state.user));
   if(state.unobs) bits.push("new for @" + esc(state.unobs));
+  if(state.precise) bits.push("exact locations");
   if(state.d1 || state.d2){
     bits.push(esc(fmtYear(state.d1) + " – " + (fmtYear(state.d2) || "now")));
   }
@@ -505,6 +510,12 @@ function filtersHtml(){
   </div>
 
   <div class="field">
+    <span class="field-label">Location precision</span>
+    ${segHtml("preciseRow", PRECISION, state.precise)}
+    <p class="field-hint">Excludes observations with fuzzed or hidden coordinates (obscured for privacy or sensitive species).</p>
+  </div>
+
+  <div class="field">
     <label for="userInput">Observer</label>
     <input class="input" id="userInput" type="text" autocapitalize="none" autocorrect="off"
            spellcheck="false" placeholder="iNaturalist username" value="${esc(state.user)}">
@@ -553,7 +564,7 @@ function wireFilters(){
   $("doneBtn").addEventListener("click", closeSheet);
 
   $("reset").addEventListener("click", () => {
-    Object.assign(state, { taxon:null, tname:"", iconic:"", user:"", quality:"", d1:"", d2:"", unobs:"" });
+    Object.assign(state, { taxon:null, tname:"", iconic:"", user:"", quality:"", d1:"", d2:"", unobs:"", precise:"" });
     commit();
     openFilters();
   });
@@ -624,6 +635,7 @@ function wireFilters(){
     if(key === "base") writeHash();
   });
   seg("qualityRow","quality");
+  seg("preciseRow","precise");
   seg("styleRow","style");
   seg("baseRow","base");
 
