@@ -801,7 +801,7 @@ function filtersHtml(){
     </label>
     <div class="seg act" id="missingRow">
       <button type="button" id="missingBtn"
-              title="List every species this user has recorded that still wants a Lvl tag, tier by tier"
+              title="List every species this user has recorded, banded by its best Lvl tag"
               >List missing species</button>
     </div>
     <p class="field-hint" id="missingHint" hidden></p>
@@ -848,10 +848,10 @@ function openFilters(){
 
 /* ---------------- missing-species report ---------------- */
 
-// Every species a user has recorded that still wants a Lvl tag, banded into tiers by what
-// is missing. iNat has no view for "my species minus a tag", so the sets are differenced
-// here and written into a plain standalone page in a new tab. The report ignores the
-// panel's mode row — it always reports all four tiers.
+// Every species a user has recorded, banded by the best Lvl tag it carries. iNat has no
+// view for "my species by tag", so the sets are crossed here and written into a plain
+// standalone page in a new tab. The report ignores the panel's mode row — it always
+// reports all four tiers.
 
 function missingUrl(taxonId, user){
   return "https://www.inaturalist.org/observations?taxon_id=" + encodeURIComponent(taxonId)
@@ -875,21 +875,21 @@ function isSpeciesRow(x){ return !(x.taxon.rank_level > 10); }
 // The name the list sorts and labels by — common where iNat has one, binomial otherwise.
 function sortName(t){ return (t.preferred_common_name || t.name || "").toLowerCase(); }
 
-// The report's sections, most wanting first: nothing tagged at all, then each tag that is
-// missing, working up from the easiest tier. Every species lands in exactly one of these.
+// The report's sections, weakest first. A species sits at the best tag it carries, so
+// these read as where it stands rather than what it lacks.
 const TIERS = [
-  ["Untagged",      "Not one observation carries a Lvl tag."],
-  ["Missing Lvl C", "Tagged somewhere, but nothing tagged C."],
-  ["Missing Lvl B", "Has a C tag, nothing tagged B."],
-  ["Missing Lvl S", "Has B and C, nothing tagged S."]
+  ["Untagged", "Not one observation carries a Lvl tag."],
+  ["Lvl C",    "C is the best tag on it — nothing tagged B or S."],
+  ["Lvl B",    "B is the best tag on it — nothing tagged S."],
+  ["Lvl S",    "Carries an S tag, the top tier."]
 ];
 
-// Split every species the user has recorded across those tiers. The tiers are disjoint —
-// a species falls into the first one it answers to, so a Lvl C-only species is listed
-// under "Missing Lvl B" and not again under "Missing Lvl S". Species holding all three
-// tags drop out entirely. Takes one request per tag plus the user's full species list,
-// so the report reads the same whatever the panel's level buttons say.
-async function missingByTier(user){
+// Band every species the user has recorded by its best tag. The tiers override downwards,
+// S over B over C, so a species tagged both S and C counts as Lvl S and appears once.
+// Nothing drops out — the four tiers together are everything recorded in scope. Takes one
+// request per tag plus the user's full species list, so the report reads the same whatever
+// the panel's level buttons say.
+async function speciesByLvl(user){
   const have = {};
   for(const tag of LEVELS) have[tag] = await speciesIdsWithTag(user, tag);
   const all = await speciesCounts(userScope(user));
@@ -897,12 +897,7 @@ async function missingByTier(user){
   for(const x of all){
     if(!isSpeciesRow(x)) continue;
     const has = tag => have[tag].has(x.taxon.id);
-    const i = !has("s") && !has("b") && !has("c") ? 0
-            : !has("c") ? 1
-            : !has("b") ? 2
-            : !has("s") ? 3
-            : -1;                            // all three tags — nothing left to shoot
-    if(i >= 0) buckets[i].push(x);
+    buckets[has("s") ? 3 : has("b") ? 2 : has("c") ? 1 : 0].push(x);
   }
   // Heaviest-recorded first inside each tier: the species you already have the most shots
   // of are the ones most likely to hold a taggable frame. The page can flip to A–Z
@@ -985,20 +980,21 @@ li img,.nophoto{width:78px;height:78px;flex:0 0 auto;border-radius:5px;object-fi
 
 function reportPage(user, sub, main, busy){
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<title>Missing Lvl tags &mdash; @${esc(user)}</title>
+<title>Lvl tags &mdash; @${esc(user)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
 <style>${REPORT_CSS}</style></head><body><div class="wrap">
 <header>
-  <h1><span class="lozenge"></span>Species missing Lvl tags
+  <h1><span class="lozenge"></span>Species by Lvl tag
     <button type="button" class="refresh" id="refresh"${busy ? " disabled" : ""}>${
       busy ? "Reading&hellip;" : "Refresh"}</button></h1>
   <p class="sub"><b>@${esc(user)}</b> &middot; ${esc(scopeLabel())} &middot; ${sub}</p>
-  <p class="note">Every species this user has recorded that still wants a Lvl tag, grouped by
-     what is missing and listed most wanting first. A species appears once, in the earliest
-     tier it answers to. IDs left coarser than species are not counted. Each link opens their
-     observations of that species, casual ones included.</p>
+  <p class="note">Every species this user has recorded, banded by the best Lvl tag it carries
+     and listed weakest first. The tiers override downwards &mdash; S beats B beats C &mdash; so a
+     species tagged S counts as Lvl S whatever else sits on it, and appears once. IDs left
+     coarser than species are not counted. Each link opens their observations of that species,
+     casual ones included.</p>
 </header>
 ${main}
 </div>
@@ -1100,8 +1096,8 @@ function missingRowHtml(x, i, user){
 function missingListHtml(buckets, user, sortBy){
   if(!buckets.some(rows => rows.length)){
     return `<div class="state">
-      <div class="state-lede">Nothing missing.</div>
-      <div class="state-hint">Every species in this scope already carries S, B and C.</div>
+      <div class="state-lede">Nothing to show.</div>
+      <div class="state-hint">This user has no species recorded in this scope.</div>
     </div>`;
   }
   const byName = sortBy === "name";
@@ -1147,7 +1143,7 @@ async function openMissingReport(user){
       <div class="state-hint">Reading every species @${esc(user)} has recorded, then sorting them by the tags they carry.</div>
     </div>`, true);
     try{
-      const buckets = await missingByTier(user);
+      const buckets = await speciesByLvl(user);
       const total = buckets.reduce((n, rows) => n + rows.length, 0);
       draw(`${total} species`, missingListHtml(buckets, user, sortBy));
     }catch(e){
