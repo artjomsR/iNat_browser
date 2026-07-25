@@ -455,6 +455,10 @@ function obsParams(){
     // "Only subspecies" swaps it for a ceiling, leaving nothing but infraspecific taxa.
     if(state.ssp === "only") p.set("hrank", "subspecies");
     else if(!state.ssp)      p.set("lrank", "species");
+    // Never show them their own shots. Redundant under Unobserved — a species they have
+    // recorded is already gone whole — but in a level mode their untagged species are on
+    // the map, and those pins lead back to ground they have already walked.
+    p.set("not_user_id", state.unobs);
   }
   if(state.quality.length) p.set("quality_grade", state.quality.join(","));
   if(state.precise){ p.set("geoprivacy", "open"); p.set("taxon_geoprivacy", "open"); }
