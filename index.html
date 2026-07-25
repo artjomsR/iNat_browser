@@ -207,9 +207,10 @@ body{
 .seg.act button[disabled]{opacity:.35;cursor:default}
 .seg.act button[disabled]:hover{color:var(--text);border-color:var(--mute)}
 
-/* tickbox */
-.check{
-  display:flex;align-items:center;gap:9px;margin-top:8px;cursor:pointer;
+/* tickbox — `label.check` matches the specificity of the `.field > label` rule above,
+   which would otherwise blockify the row and drop the caption below the box. */
+label.check{
+  display:flex;align-items:center;gap:9px;margin:8px 0 5px;cursor:pointer;
   font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
   color:var(--mute);transition:color .14s;
 }
