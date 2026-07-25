@@ -799,12 +799,12 @@ function filtersHtml(){
     <label class="check">
       <input type="checkbox" id="sspBox" ${state.ssp ? "checked" : ""}>Include subspecies?
     </label>
-    <div class="seg act" id="missingRow">
-      <button type="button" id="missingBtn"
+    <div class="seg act" id="lvlListRow">
+      <button type="button" id="lvlListBtn"
               title="List every species this user has recorded, banded by its best Lvl tag"
-              >List missing species</button>
+              >List species by Lvl</button>
     </div>
-    <p class="field-hint" id="missingHint" hidden></p>
+    <p class="field-hint" id="lvlListHint" hidden></p>
   </div>
 
   <div class="field">
@@ -846,14 +846,14 @@ function openFilters(){
   wireFilters();
 }
 
-/* ---------------- missing-species report ---------------- */
+/* ---------------- Lvl tag report ---------------- */
 
 // Every species a user has recorded, banded by the best Lvl tag it carries. iNat has no
 // view for "my species by tag", so the sets are crossed here and written into a plain
 // standalone page in a new tab. The report ignores the panel's mode row — it always
 // reports all four tiers.
 
-function missingUrl(taxonId, user){
+function taxonObsUrl(taxonId, user){
   return "https://www.inaturalist.org/observations?taxon_id=" + encodeURIComponent(taxonId)
        + "&user_id=" + encodeURIComponent(user) + "&verifiable=any";
 }
@@ -1069,9 +1069,9 @@ ${main}
 </body></html>`;
 }
 
-function missingRowHtml(x, i, user){
+function lvlRowHtml(x, i, user){
   const t = x.taxon;
-  const url = missingUrl(t.id, user);
+  const url = taxonObsUrl(t.id, user);
   const photo = t.default_photo && (t.default_photo.medium_url || t.default_photo.square_url);
   // Plenty of taxa have no English name; those lead with the binomial instead of
   // printing it twice, set in the same italic serif the second line would have used.
@@ -1093,7 +1093,7 @@ function missingRowHtml(x, i, user){
 
 // `sortBy` carries the reader's choice through a refresh — the buckets arrive ordered by
 // count, so only "name" needs a re-sort here.
-function missingListHtml(buckets, user, sortBy){
+function lvlListHtml(buckets, user, sortBy){
   if(!buckets.some(rows => rows.length)){
     return `<div class="state">
       <div class="state-lede">Nothing to show.</div>
@@ -1116,7 +1116,7 @@ function missingListHtml(buckets, user, sortBy){
     return `<section class="tier" id="tier-${i}">
       <h2>${esc(title)}<span class="n">${rows.length}</span></h2>
       <p class="blurb">${esc(blurb)}</p>
-      ${rows.length ? "<ul>" + rows.map((x, n) => missingRowHtml(x, n, user)).join("") + "</ul>"
+      ${rows.length ? "<ul>" + rows.map((x, n) => lvlRowHtml(x, n, user)).join("") + "</ul>"
                     : `<p class="clear">All clear.</p>`}
     </section>`;
   }).join("");
@@ -1127,7 +1127,7 @@ function missingListHtml(buckets, user, sortBy){
 // repaints it once the difference resolves. Returns false only if the popup was blocked.
 // The report's Refresh button reaches back through `win.__refresh`, so the query code
 // lives here only — the scope it reads is whatever the panel holds at the time.
-async function openMissingReport(user){
+async function openLvlReport(user){
   const win = window.open("", "_blank");
   if(!win) return false;
   const draw = (sub, main, busy) => {
@@ -1145,7 +1145,7 @@ async function openMissingReport(user){
     try{
       const buckets = await speciesByLvl(user);
       const total = buckets.reduce((n, rows) => n + rows.length, 0);
-      draw(`${total} species`, missingListHtml(buckets, user, sortBy));
+      draw(`${total} species`, lvlListHtml(buckets, user, sortBy));
     }catch(e){
       draw("failed", `<div class="state">
         <div class="state-lede">The list didn't come back.</div>
@@ -1399,13 +1399,13 @@ function wireFilters(){
   // Reads the username straight off the field rather than state.unobs, which the 420ms
   // debounce below may not have committed yet. The report covers every tier regardless of
   // the mode row, so the username is all it needs.
-  $("missingBtn").addEventListener("click", async function(){
-    const hint = $("missingHint"), user = $("unobsInput").value.trim();
+  $("lvlListBtn").addEventListener("click", async function(){
+    const hint = $("lvlListHint"), user = $("unobsInput").value.trim();
     const say = msg => { hint.textContent = msg; hint.hidden = false; };
     if(!user){ say("Enter an iNaturalist username above first."); $("unobsInput").focus(); return; }
     hint.hidden = true;
     this.dataset.busy = "1";
-    const opened = await openMissingReport(user);
+    const opened = await openLvlReport(user);
     this.dataset.busy = "0";
     if(!opened) say("Allow pop-ups for this page to open the list.");
   });
