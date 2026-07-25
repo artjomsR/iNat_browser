@@ -203,6 +203,8 @@ body{
 .seg.act button{color:var(--text);border-color:var(--mute)}
 .seg.act button:hover{color:var(--mark);border-color:var(--mark)}
 .seg.act button[data-busy="1"]{color:var(--mute);border-color:var(--mark)}
+.seg.act button[disabled]{opacity:.35;cursor:default}
+.seg.act button[disabled]:hover{color:var(--text);border-color:var(--mute)}
 
 /* iconic chips */
 .chips{
@@ -729,6 +731,15 @@ function segHtml(id, opts, current){
   ).join("") + `</div>`;
 }
 
+// The report reads the selected level, so Unobserved leaves it nothing to check against —
+// there is no tag tier to be missing from. Shared by the initial render and the mode row,
+// which repaints the button in place rather than rebuilding the whole panel.
+function missingBtnAttrs(){
+  return LEVELS.indexOf(state.dmode) < 0        // Unobserved, or junk from a shared link
+    ? ` disabled title="Pick Lvl S, B or C first"`
+    : ` title="List species with no Lvl ${esc(state.dmode.toUpperCase())} tag or better"`;
+}
+
 function filtersHtml(){
   return `
   <div class="eyebrow"><span>Filters</span><button class="linkish" id="reset">Reset all</button></div>
@@ -761,7 +772,7 @@ function filtersHtml(){
       <button type="button" data-mode="unobserved" aria-pressed="${state.dmode === "unobserved"}">Unobserved</button>
     </div>
     <div class="seg act" id="missingRow">
-      <button type="button" id="missingBtn">List missing species</button>
+      <button type="button" id="missingBtn"${missingBtnAttrs()}>List missing species</button>
     </div>
     <p class="field-hint" id="missingHint" hidden></p>
   </div>
@@ -888,16 +899,19 @@ li img,.nophoto{width:78px;height:78px;flex:0 0 auto;border-radius:5px;object-fi
 `;
 
 function reportPage(user, level, sub, main){
-  const tiers = LEVELS.slice(0, LEVELS.indexOf(level) + 1).map(t => t.toUpperCase()).join(" / ");
+  // "S", "S or B", "S, B or C" — the tiers stack, so a level covers everything above it.
+  const names = LEVELS.slice(0, LEVELS.indexOf(level) + 1).map(t => t.toUpperCase());
+  const tiers = names.length < 2 ? names[0]
+              : names.slice(0, -1).join(", ") + " or " + names[names.length - 1];
   const tier = level.toUpperCase();
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<title>Missing ${esc(tier)} &mdash; @${esc(user)}</title>
+<title>Missing Lvl ${esc(tier)} &mdash; @${esc(user)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
 <style>${REPORT_CSS}</style></head><body><div class="wrap">
 <header>
-  <h1><span class="lozenge"></span>Species missing a ${esc(tier)} tag</h1>
+  <h1><span class="lozenge"></span>Species missing Lvl ${esc(tier)}</h1>
   <p class="sub"><b>@${esc(user)}</b> &middot; ${esc(scopeLabel())} &middot; ${sub}</p>
   <p class="note">Species this user has recorded with no observation tagged ${esc(tiers)}.
      IDs left coarser than species are not counted. Each link opens their observations of
@@ -1226,21 +1240,30 @@ function wireFilters(){
     if(!b) return;
     state.dmode = b.dataset.mode;
     [...$("unobsModeRow").children].forEach(c => c.setAttribute("aria-pressed", c === b));
+    // The report follows the level, so the button greys out under Unobserved.
+    $("missingRow").innerHTML = `<button type="button" id="missingBtn"${missingBtnAttrs()}>List missing species for LVL</button>`;
+    wireMissingBtn();
+    $("missingHint").hidden = true;
     syncLvlExclude().then(commit);
   });
 
   // Reads the username straight off the field rather than state.unobs, which the 420ms
-  // debounce below may not have committed yet.
-  $("missingBtn").addEventListener("click", async function(){
-    const hint = $("missingHint"), user = $("unobsInput").value.trim();
-    const say = msg => { hint.textContent = msg; hint.hidden = false; };
-    if(!user){ say("Enter an iNaturalist username above first."); $("unobsInput").focus(); return; }
-    hint.hidden = true;
-    this.dataset.busy = "1";
-    const opened = await openMissingReport(user, "c");
-    this.dataset.busy = "0";
-    if(!opened) say("Allow pop-ups for this page to open the list.");
-  });
+  // debounce below may not have committed yet. The level comes from state.dmode, which
+  // the mode row commits synchronously.
+  function wireMissingBtn(){
+    $("missingBtn").addEventListener("click", async function(){
+      const hint = $("missingHint"), user = $("unobsInput").value.trim();
+      const say = msg => { hint.textContent = msg; hint.hidden = false; };
+      if(LEVELS.indexOf(state.dmode) < 0) return;   // belt and braces; the button is disabled
+      if(!user){ say("Enter an iNaturalist username above first."); $("unobsInput").focus(); return; }
+      hint.hidden = true;
+      this.dataset.busy = "1";
+      const opened = await openMissingReport(user, state.dmode);
+      this.dataset.busy = "0";
+      if(!opened) say("Allow pop-ups for this page to open the list.");
+    });
+  }
+  wireMissingBtn();
 
   const debounced = (el, key) => {
     let t = null;
