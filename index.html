@@ -199,12 +199,35 @@ body{
 .seg button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
 .input + .seg{margin-top:8px}
 .seg + .seg{margin-top:6px}
+.field-hint + .seg{margin-top:9px}
 /* a lone action inside a seg row — reads as a button to press, not a toggle to hold */
 .seg.act button{color:var(--text);border-color:var(--mute)}
 .seg.act button:hover{color:var(--mark);border-color:var(--mark)}
 .seg.act button[data-busy="1"]{color:var(--mute);border-color:var(--mark)}
 .seg.act button[disabled]{opacity:.35;cursor:default}
 .seg.act button[disabled]:hover{color:var(--text);border-color:var(--mute)}
+
+/* tickbox */
+.check{
+  display:flex;align-items:center;gap:9px;margin-top:8px;cursor:pointer;
+  font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--mute);transition:color .14s;
+}
+.check input{
+  flex:0 0 auto;width:16px;height:16px;margin:0;cursor:pointer;
+  display:grid;place-content:center;
+  background:var(--raise);border:1px solid var(--rule);border-radius:5px;
+  -webkit-appearance:none;appearance:none;transition:background .14s,border-color .14s;
+}
+.check input::after{
+  content:"";width:4px;height:8px;margin-top:-2px;
+  border:solid var(--ink);border-width:0 2px 2px 0;
+  transform:rotate(45deg) scale(0);transition:transform .14s;
+}
+.check input:checked{background:var(--mark);border-color:var(--mark)}
+.check input:checked::after{transform:rotate(45deg) scale(1)}
+.check input:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+.check:has(input:checked){color:var(--text)}
 
 /* iconic chips */
 .chips{
@@ -406,7 +429,7 @@ function defaultQuality(){ return ["research","needs_id"]; }
 const state = {
   taxon:null, tname:"", iconic:[], quality:defaultQuality(),
   d1:defaultD1(), d2:"", style:"accuracy", base:"dark", unobs:"", precise:"precise",
-  dmode:"unobserved", lvlExclude:null, cursor:"precise"
+  dmode:"unobserved", lvlExclude:null, cursor:"precise", ssp:false
 };
 
 let map, overlay, accLayer, probeAccLayer, probeMark, probeRing, meRing, sheetView = null;
@@ -426,8 +449,9 @@ function obsParams(){
     }
     // Floor the results at species: iNat treats a subspecies as its own leaf taxon, so
     // without this a ssp. of an already-recorded species still reads as "desired".
-    // Keeps genus-and-coarser IDs; only drops subspecies/variety/form.
-    p.set("lrank", "species");
+    // Keeps genus-and-coarser IDs; only drops subspecies/variety/form. The "Show
+    // subspecies?" tickbox lifts the floor for anyone hunting infraspecific taxa.
+    if(!state.ssp) p.set("lrank", "species");
   }
   if(state.quality.length) p.set("quality_grade", state.quality.join(","));
   if(state.precise){ p.set("geoprivacy", "open"); p.set("taxon_geoprivacy", "open"); }
@@ -632,6 +656,7 @@ function writeHash(){
   if(state.iconic.length) p.set("iconic", state.iconic.join(","));
   if(state.unobs)   p.set("unobs", state.unobs);
   if(state.dmode !== "unobserved") p.set("dmode", state.dmode);
+  if(state.ssp)     p.set("ssp", "1");
   p.set("q", state.quality.join(","));
   p.set("precise", state.precise);
   p.set("d1", state.d1);
@@ -649,6 +674,7 @@ function readHash(){
   state.iconic  = (p.get("iconic") || "").split(",").filter(Boolean);
   state.unobs   = p.get("unobs") || "";
   state.dmode   = p.get("dmode") || "unobserved";
+  state.ssp     = p.get("ssp") === "1";
   state.quality = p.has("q") ? p.get("q").split(",").filter(Boolean) : defaultQuality();
   state.precise = p.has("precise") ? p.get("precise") : "precise";
   state.d1      = p.has("d1") ? p.get("d1") : defaultD1();
@@ -687,6 +713,7 @@ function renderLabel(){
   if(state.unobs){
     if(state.dmode === "unobserved") bits.push("new for @" + esc(state.unobs));
     else bits.push("@" + esc(state.unobs) + " missing Lvl " + esc(state.dmode.toUpperCase()));
+    if(state.ssp) bits.push("incl. subspecies");
   }
   if(state.precise) bits.push("exact locations");
   if(state.d1 || state.d2){
@@ -771,6 +798,9 @@ function filtersHtml(){
       <button type="button" data-mode="c" aria-pressed="${state.dmode === "c"}">Lvl C +</button>
       <button type="button" data-mode="unobserved" aria-pressed="${state.dmode === "unobserved"}">Unobserved</button>
     </div>
+    <label class="check">
+      <input type="checkbox" id="sspBox" ${state.ssp ? "checked" : ""}>Include subspecies?
+    </label>
     <div class="seg act" id="missingRow">
       <button type="button" id="missingBtn"${missingBtnAttrs()}>List missing species</button>
     </div>
@@ -1129,7 +1159,7 @@ function wireFilters(){
   $("doneBtn").addEventListener("click", closeSheet);
 
   $("reset").addEventListener("click", () => {
-    Object.assign(state, { taxon:null, tname:"", iconic:[], quality:defaultQuality(), d1:defaultD1(), d2:"", unobs:"", precise:"precise", dmode:"unobserved", lvlExclude:null });
+    Object.assign(state, { taxon:null, tname:"", iconic:[], quality:defaultQuality(), d1:defaultD1(), d2:"", unobs:"", precise:"precise", dmode:"unobserved", lvlExclude:null, ssp:false });
     commit();
     openFilters();
   });
@@ -1233,6 +1263,10 @@ function wireFilters(){
   seg("preciseRow","precise");
   seg("styleRow","style");
   seg("baseRow","base");
+
+  // Rank floor for the desired-species query. Only the map layer reads it, so no refetch
+  // of the level exclusions is needed — commit() alone repaints.
+  $("sspBox").addEventListener("change", e => { state.ssp = e.target.checked; commit(); });
 
   // Desired-species mode (Unobserved vs a level). Selecting a level re-derives its exclude set.
   $("unobsModeRow").addEventListener("click", e => {
