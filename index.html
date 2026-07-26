@@ -428,6 +428,9 @@ function defaultD1(){
   const day = String(d.getDate()).padStart(2,"0");
   return `${y}-${m}-${day}`;
 }
+// Fallback centre when the browser won't give us a position.
+const LISBON = [38.7223, -9.1393];
+
 function defaultQuality(){ return ["research","needs_id"]; }
 function isDefaultQuality(){
   const d = defaultQuality();
@@ -702,10 +705,12 @@ function readHash(){
   state.style   = p.get("s") || "accuracy";
   state.base    = p.get("b") || "dark";
   state.cursor  = p.get("cur") || "precise";
+  const pinned = p.has("lat") && p.has("lng");
   return {
-    z:   p.has("z")   ? +p.get("z")   : 4,
-    lat: p.has("lat") ? +p.get("lat") : 20,
-    lng: p.has("lng") ? +p.get("lng") : 8
+    z:   p.has("z")   ? +p.get("z")   : ACC_MIN_ZOOM,   // start where accuracy pins load
+    lat: pinned ? +p.get("lat") : LISBON[0],
+    lng: pinned ? +p.get("lng") : LISBON[1],
+    pinned                                              // a shared link — don't auto-locate over it
   };
 }
 
@@ -1681,6 +1686,18 @@ document.getElementById("locate").addEventListener("click", function(){
 
   renderLabel();
   writeHash();
+
+  // Fresh load with no coords in the hash: try for the real position, staying on Lisbon
+  // if it's denied, unavailable, or slow. moveend does the rest (hash + pin refresh).
+  if(!v.pinned && navigator.geolocation){
+    let moved = false;                 // never yank the map out from under a user gesture
+    map.on("dragstart", () => { moved = true; });
+    map.on("zoomstart", () => { moved = true; });
+    navigator.geolocation.getCurrentPosition(pos => {
+      if(moved) return;
+      map.setView([pos.coords.latitude, pos.coords.longitude], map.getZoom());
+    }, () => {}, { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
+  }
 
   // If a shared link lands in a level mode, resolve its exclude set then refresh.
   if(state.dmode !== "unobserved" && state.unobs) syncLvlExclude().then(commit);
