@@ -1220,13 +1220,24 @@ function fmtDate(iso){
   return `${+m[3]} ${MONTHS[+m[2]-1]} ${m[1]}`;
 }
 
+// The tapped circle, as a species list on our own page — the pin and its radius are the
+// area, and the panel's username rides along so the list can tick off what it already has.
 function speciesUrl(latlng, km){
-  const p = obsParams();
-  p.set("lat", latlng.lat.toFixed(6));
-  p.set("lng", latlng.lng.toFixed(6));
-  p.set("radius", km.toFixed(3));
-  p.set("view", "species");
-  return "https://www.inaturalist.org/observations?" + p.toString();
+  const p = new URLSearchParams({
+    tab: "place",
+    lat: latlng.lat.toFixed(6),
+    lng: latlng.lng.toFixed(6),
+    radius: km.toFixed(3)
+  });
+  if(state.unobs) p.set("u", state.unobs);
+  if(state.taxon){
+    p.set("taxon", state.taxon);
+    if(state.tname) p.set("tname", state.tname);
+  }
+  if(state.iconic.length) p.set("iconic", state.iconic.join(","));
+  const hash = location.hash.replace(/^#/, "");
+  if(hash) p.set("back", hash);
+  return "species.html?" + p.toString();
 }
 
 function resultsHtml(list, km, latlng){

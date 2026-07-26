@@ -12,6 +12,7 @@
 
 <style>
 :root{--ink:#0D1714;--raise:#1B2C26;--rule:#26382F;--text:#E8F0EB;--mute:#7C9389;--mark:#FF3E7C;
+  --verified:#6FD3A8;
   --ui:"Archivo Narrow","Helvetica Neue",Arial,sans-serif;--lit:"Newsreader",Georgia,"Times New Roman",serif}
 *{box-sizing:border-box}
 body{margin:0;background:var(--ink);color:var(--text);font-family:var(--ui);-webkit-font-smoothing:antialiased}
@@ -26,15 +27,43 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
 .act button:hover,.act a:hover{color:var(--mark);border-color:var(--mark)}
 .act button[disabled]{opacity:.45;cursor:default;color:var(--mute);border-color:var(--rule)}
 .lozenge{width:11px;height:11px;flex:0 0 auto;transform:rotate(45deg);border:1.5px solid var(--mark)}
+/* tab strip — each tab is a real address, so switching keeps the scope in the URL */
+.tabs{display:flex;gap:6px;margin:0 0 13px}
+.tabs a{padding:8px 14px;text-decoration:none;border-radius:6px;
+  font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--mute);background:var(--raise);border:1px solid var(--rule)}
+.tabs a:hover{color:var(--text);border-color:var(--mute)}
+.tabs a.on{color:var(--ink);background:var(--mark);border-color:var(--mark)}
 .sub{margin:0;font-family:var(--lit);font-size:17px;color:var(--mute)}
 .sub b{color:var(--text);font-weight:600}
 .note{margin:9px 0 0;font-size:11px;letter-spacing:.05em;line-height:1.5;color:var(--mute)}
+/* place finder */
+.finder{position:relative;margin-top:14px;max-width:420px}
+.finder input{width:100%;padding:10px 13px;font:inherit;font-size:14px;color:var(--text);
+  background:var(--raise);border:1px solid var(--rule);border-radius:7px}
+.finder input:focus{outline:none;border-color:var(--mark)}
+.hits{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:20;max-height:270px;
+  overflow-y:auto;background:var(--raise);border:1px solid var(--rule);border-radius:7px}
+.hits button{display:block;width:100%;padding:10px 13px;text-align:left;cursor:pointer;
+  font:inherit;font-size:13.5px;color:var(--text);background:none;border:0;
+  border-bottom:1px solid var(--rule)}
+.hits button:last-child{border-bottom:0}
+.hits button:hover{background:var(--ink);color:var(--mark)}
+.hits button span{display:block;margin-top:2px;font-size:9.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--mute)}
 .sortbar{display:flex;align-items:center;gap:7px;margin:15px 0 4px;
   font-size:9.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--mute)}
 .sortbar button{padding:6px 12px;cursor:pointer;font:inherit;letter-spacing:.1em;
   color:var(--mute);background:var(--raise);border:1px solid var(--rule);border-radius:5px}
 .sortbar button:hover{color:var(--text);border-color:var(--mute)}
 .sortbar button.on{color:var(--ink);background:var(--mark);border-color:var(--mark)}
+.sortbar .thresh{display:flex;align-items:center;gap:6px;margin-left:auto;
+  letter-spacing:.12em;color:var(--mute)}
+.sortbar .thresh input{width:64px;padding:5px 8px;font:inherit;font-size:12px;
+  letter-spacing:.04em;color:var(--text);background:var(--raise);
+  border:1px solid var(--rule);border-radius:5px;font-variant-numeric:tabular-nums}
+.sortbar .thresh input:focus{outline:none;border-color:var(--mark)}
+@media (max-width:520px){ .sortbar{flex-wrap:wrap} .sortbar .thresh{margin-left:0} }
 /* index rail — sticky beside the tiers on a wide window, a wrapping strip on a narrow one */
 .cols{display:grid;grid-template-columns:186px minmax(0,1fr);gap:34px;align-items:start;margin-top:14px}
 .index{position:sticky;top:22px;display:flex;flex-direction:column;gap:3px}
@@ -62,8 +91,13 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
 ul{margin:0;padding:0;list-style:none}
 li{display:flex;align-items:flex-start;gap:14px;padding:13px 2px;border-bottom:1px solid var(--rule)}
 li:last-child{border-bottom:0}
+li[hidden]{display:none}   /* the flex above outruns the built-in [hidden] rule */
 .num{flex:0 0 34px;padding-top:5px;text-align:right;font-size:11px;color:var(--rule);
   font-variant-numeric:tabular-nums}
+/* family band, taxonomic order only */
+li.fam{display:block;padding:22px 2px 7px;border-bottom:1px solid var(--rule)}
+li.fam b{font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--text)}
+li.fam span{margin-left:9px;font-family:var(--lit);font-size:13px;color:var(--mute)}
 /* the thumbnail is a second handle on the same link — hidden from the reading order, since
    the name right beside it already carries it */
 .shot{flex:0 0 auto;display:block;line-height:0}
@@ -79,6 +113,12 @@ li img,.nophoto{width:78px;height:78px;border-radius:5px;object-fit:cover;
 .common.as-sci a{font-family:var(--lit);font-style:italic;font-size:17px}
 .sci{margin-top:1px;font-family:var(--lit);font-style:italic;font-size:14.5px;color:var(--mute)}
 .meta{margin-top:6px;font-size:9.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+/* already-recorded badge, place tab only — a filled disc, so a row reads as ticked off at
+   a glance down the column rather than needing the name to be read first */
+.common .tick{display:inline-grid;place-items:center;vertical-align:2px;
+  width:21px;height:21px;margin-left:9px;border-radius:50%;
+  background:var(--verified);color:var(--ink);font-size:12px;font-weight:700;line-height:1}
+li.seen .num{color:var(--verified)}
 .url{margin-top:5px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;
   color:var(--mute);word-break:break-all}
 .url a{color:inherit;text-decoration:none}
@@ -95,17 +135,28 @@ li img,.nophoto{width:78px;height:78px;border-radius:5px;object-fit:cover;
 <body>
 <div class="wrap">
 <header>
-  <h1><span class="lozenge"></span>Species by Lvl tag
+  <h1><span class="lozenge"></span><span id="title">Species</span>
     <span class="act">
-      <button type="button" id="refresh">Refresh</button>
+      <button type="button" id="refresh" hidden>Refresh</button>
       <a id="backLink" href="index.html">Map</a>
     </span></h1>
+  <nav class="tabs" id="tabs">
+    <a data-tab="lvl" href="#">By Lvl tag</a>
+    <a data-tab="place" href="#">Species here</a>
+  </nav>
   <p class="sub"><b id="who">&mdash;</b> &middot; <span id="scope">all taxa</span> &middot; <span id="count">reading&hellip;</span></p>
-  <p class="note">Every species this user has recorded, banded by the best Lvl tag it carries
-     and listed weakest first. The tiers override downwards &mdash; S beats B beats C &mdash; so a
-     species tagged S counts as Lvl S whatever else sits on it, and appears once. IDs left
-     coarser than species are not counted. Each link opens their observations of that species,
-     casual ones included.</p>
+  <p class="note" id="note"></p>
+  <div id="placebar" hidden>
+    <div class="finder">
+      <input id="placeInput" type="text" placeholder="Search a place &mdash; Portugal, Manchester&hellip;"
+             autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
+      <div class="hits" id="placeHits" hidden></div>
+    </div>
+    <div class="finder" id="userBar" hidden>
+      <input id="userQuick" type="text" placeholder="Your iNaturalist username &mdash; for the ticks"
+             autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
+    </div>
+  </div>
 </header>
 <main id="main"></main>
 </div>
@@ -117,9 +168,16 @@ li img,.nophoto{width:78px;height:78px;border-radius:5px;object-fit:cover;
    bookmarked, shared, and reloaded on its own:
 
      species.html?u=USER&taxon=ID&tname=NAME&iconic=Aves,Insecta&sort=name#tier-3
+     species.html?tab=place&place_id=7122&pname=Portugal&u=USER&sort=taxo
+     species.html?tab=place&lat=38.72&lng=-9.14&radius=12&u=USER
+
+   Two tabs over the same rows. `lvl` is about one person: their species banded by the Lvl
+   tag they carry. `place` is about one patch of ground: every species recorded there, with
+   the ones that person has already recorded ticked off. Both are addresses, so either can
+   be bookmarked and the tab strip is just two links.
 
    `tname` is only a label — the taxon id is what scopes the query — so a stale or missing
-   name costs nothing but a prettier heading.
+   name costs nothing but a prettier heading. `pname` is the same for a place.
 
    `back` holds the map's own hash, added by the map when it opens this page. It is never
    read here, only handed straight back to the Map link, so the reader returns to the
@@ -135,25 +193,43 @@ const ICONIC = [
 
 const q = new URLSearchParams(location.search);
 const view = {
+  tab:    q.get("tab") === "place" ? "place" : "lvl",
   user:   (q.get("u") || "").trim(),
   taxon:  q.get("taxon") || "",
   tname:  q.get("tname") || "",
   iconic: (q.get("iconic") || "").split(",").filter(Boolean),
-  sort:   q.get("sort") === "name" ? "name" : "count",
-  back:   q.get("back") || ""
+  sort:   ["name","taxo"].includes(q.get("sort")) ? q.get("sort") : "count",
+  min:    Math.max(0, Math.floor(+q.get("min") || 0)),
+  back:   q.get("back") || "",
+  place:  q.get("place_id") || "",
+  pname:  q.get("pname") || "",
+  lat:    q.get("lat") || "",
+  lng:    q.get("lng") || "",
+  radius: q.get("radius") || ""
 };
+// A pin needs both halves to mean anything; a bare lat with no lng is no location at all.
+const hasPin = !!(view.lat && view.lng && view.radius);
+const hasArea = !!view.place || hasPin;
+
+// Rebuild this page's address with a few keys changed — how the tabs, the place picker and
+// the sort control all move around without losing the rest of the scope.
+function selfUrl(over){
+  const p = new URLSearchParams(location.search);
+  Object.entries(over).forEach(([k, v]) => { if(v === null || v === "") p.delete(k); else p.set(k, v); });
+  return "species.html?" + p.toString();
+}
 
 function esc(s){
   return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
     ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 }
 
-// Sort choice belongs in the address too, so a link carries the order it was read in.
-// replaceState, not a reload — the rows are already in the DOM and only get reordered.
-function writeSort(by){
-  view.sort = by;
+// Sort and threshold belong in the address too, so a link carries the list as it was read.
+// replaceState, not a reload — the rows are already in the DOM and only get reordered or
+// hidden.
+function writeState(over){
   const p = new URLSearchParams(location.search);
-  if(by === "name") p.set("sort", "name"); else p.delete("sort");
+  Object.entries(over).forEach(([k, v]) => { if(!v) p.delete(k); else p.set(k, v); });
   history.replaceState(null, "", location.pathname + (p.toString() ? "?" + p : "") + location.hash);
 }
 
@@ -162,6 +238,24 @@ function writeSort(by){
 function taxonObsUrl(taxonId, user){
   return "https://www.inaturalist.org/observations?taxon_id=" + encodeURIComponent(taxonId)
        + "&user_id=" + encodeURIComponent(user) + "&verifiable=any";
+}
+
+// One species inside the area, on iNat — where a place-tab row points.
+function taxonAreaUrl(taxonId){
+  const p = new URLSearchParams({ taxon_id: taxonId, verifiable: "any" });
+  if(view.place) p.set("place_id", view.place);
+  else if(hasPin){ p.set("lat", view.lat); p.set("lng", view.lng); p.set("radius", view.radius); }
+  return "https://www.inaturalist.org/observations?" + p.toString();
+}
+
+// The whole area on iNat's own species view — the page this tab is modelled on.
+function areaSpeciesUrl(){
+  const p = new URLSearchParams({ view: "species", verifiable: "any" });
+  if(view.place) p.set("place_id", view.place);
+  else if(hasPin){ p.set("lat", view.lat); p.set("lng", view.lng); p.set("radius", view.radius); }
+  if(view.taxon) p.set("taxon_id", view.taxon);
+  if(view.iconic.length) p.set("iconic_taxa", view.iconic.join(","));
+  return "https://www.inaturalist.org/observations?" + p.toString();
 }
 
 // Everything this user has tagged at one tier, on iNat itself — the tier headings link here.
@@ -211,6 +305,59 @@ async function speciesIdsWithTag(user, tag){
   return new Set(rows.map(x => x.taxon.id));
 }
 
+/* ---------------- place scope ----------------
+
+   The place tab reads a patch of ground, either an iNat place or the map's own pin and
+   radius. Deliberately unfiltered by date or quality grade: the question is what has been
+   recorded here, ever, and the map's default three-month window would quietly answer a
+   much smaller one. Taxon and quick-group scope still apply — those are the reader's. */
+
+function areaScope(){
+  const o = {};
+  if(view.place) o.place_id = view.place;
+  else if(hasPin){ o.lat = view.lat; o.lng = view.lng; o.radius = view.radius; }
+  if(view.taxon) o.taxon_id = view.taxon;
+  if(view.iconic.length) o.iconic_taxa = view.iconic.join(",");
+  return o;
+}
+
+function areaLabel(){
+  if(view.place) return view.pname || ("place " + view.place);
+  if(hasPin) return `${(+view.radius).toFixed(1)} km around ${(+view.lat).toFixed(3)}, ${(+view.lng).toFixed(3)}`;
+  return "nowhere yet";
+}
+
+// Every species recorded in the area, heaviest first — the same count iNat's own species
+// view leads with.
+async function speciesHere(){
+  const rows = (await speciesCounts(areaScope())).filter(isSpeciesRow);
+  rows.sort((a, b) => b.count - a.count || sortName(a.taxon).localeCompare(sortName(b.taxon)));
+  return rows;
+}
+
+// What this user has already recorded, anywhere — so the tick reads as "I have seen this
+// species", not "I have seen it in this square". Scoped to the taxon/quick-group filters
+// only, which keeps a bird list from paging through someone's entire life list.
+async function speciesSeenBy(user){
+  const o = { user_id: user };
+  if(view.taxon) o.taxon_id = view.taxon;
+  if(view.iconic.length) o.iconic_taxa = view.iconic.join(",");
+  return new Set((await speciesCounts(o)).map(x => x.taxon.id));
+}
+
+// iNat's own place search, the one behind the place field on their observation pages.
+async function findPlaces(text){
+  const p = new URLSearchParams({ q: text, per_page: "8" });
+  const r = await fetch(`${API}/places/autocomplete?${p}`);
+  if(!r.ok) throw new Error(r.status);
+  const d = await r.json();
+  return (d.results || []).map(x => ({
+    id: x.id,
+    name: x.display_name || x.name,
+    kind: [x.place_type_name, x.bbox_area ? null : "point"].filter(Boolean).join(" · ")
+  }));
+}
+
 // species_counts groups by leaf taxon, so an observation left at genus or family lands
 // here as its own row — drop anything coarser than species so the list reads as species.
 // rank_level: species and hybrid 10, subspecies 5. Absent rank_level fails open.
@@ -218,6 +365,47 @@ function isSpeciesRow(x){ return !(x.taxon.rank_level > 10); }
 
 // The name the list sorts and labels by — common where iNat has one, binomial otherwise.
 function sortName(t){ return (t.preferred_common_name || t.name || "").toLowerCase(); }
+
+/* ---------------- taxonomic order ----------------
+
+   Every row arrives with `ancestor_ids`, its path down iNat's tree, so the tree order is
+   already in hand — no extra request to sort by. Comparing those paths sorts the list the
+   way a field guide runs: classes, then orders, then families, genera together at the end.
+   Each id is zero-padded so a plain string compare stays numeric per level.
+
+   Within a family the sequence is by taxon id rather than any published checklist order —
+   iNat exposes no ordering key of its own — so read it as "grouped taxonomically", not as
+   a Clements or IOC sequence. */
+
+function ancestorsOf(t){ return (t.ancestor_ids || []).filter(id => id !== t.id); }
+function taxoKey(t){ return ancestorsOf(t).map(n => String(n).padStart(9, "0")).join("."); }
+
+// Family names for the headings. Ranks aren't in the species rows, only bare ancestor ids,
+// so the ancestors have to be looked up to find which one is the family. One pass over the
+// whole list's distinct ancestors, 100 per request; a big list is a handful of requests.
+// Everything here fails soft — no families means no headings, and the order still holds.
+const familyOf = new Map();     // species taxon id -> {name, common}
+let familiesReady = null;
+
+async function loadFamilies(buckets){
+  const rows = buckets.flat();
+  const ids = new Set();
+  rows.forEach(x => ancestorsOf(x.taxon).forEach(id => ids.add(id)));
+  const list = [...ids];
+  if(!list.length || list.length > 1200) return;      // absurdly wide scope: skip headings
+  const rank = new Map();
+  for(let i = 0; i < list.length; i += 100){
+    const p = new URLSearchParams({ id: list.slice(i, i + 100).join(","), per_page: "100" });
+    const r = await fetch(`${API}/taxa?${p}`);
+    if(!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    (d.results || []).forEach(t => rank.set(t.id, t));
+  }
+  rows.forEach(x => {
+    const fam = ancestorsOf(x.taxon).map(id => rank.get(id)).find(t => t && t.rank === "family");
+    if(fam) familyOf.set(x.taxon.id, { name: fam.name, common: fam.preferred_common_name || "" });
+  });
+}
 
 // The report's sections, weakest first. A species sits at the best tag it carries, so
 // these read as where it stands rather than what it lacks.
@@ -257,27 +445,83 @@ const main = document.getElementById("main");
 const refreshBtn = document.getElementById("refresh");
 const countEl = document.getElementById("count");
 
-function rowHtml(x, i, user){
+// `seen` is the place tab's tick: null on the Lvl tab, where every row is by definition the
+// user's own, and a boolean on the place tab once their species set is in hand.
+function rowHtml(x, i, user, seen){
   const t = x.taxon;
-  const url = taxonObsUrl(t.id, user);
+  // On the place tab the link has to show the species in the area, not this user's takes
+  // on it — the whole point is the ones they have never recorded.
+  const url = seen == null ? taxonObsUrl(t.id, user) : taxonAreaUrl(t.id);
   const photo = t.default_photo && (t.default_photo.medium_url || t.default_photo.square_url);
   // Plenty of taxa have no English name; those lead with the binomial instead of
   // printing it twice, set in the same italic serif the second line would have used.
   const common = t.preferred_common_name || "";
-  return `<li data-count="${x.count}" data-name="${esc(sortName(t))}">
+  const tick = seen
+    ? ` <span class="tick" title="@${esc(user)} has already recorded this species"
+          aria-label="already recorded">&#10003;</span>`
+    : "";
+  return `<li class="${seen ? "seen" : ""}" data-count="${x.count}" data-name="${esc(sortName(t))}"
+      data-taxo="${esc(taxoKey(t))}" data-taxon="${t.id}" data-seen="${seen ? 1 : 0}">
     <span class="num">${i + 1}</span>
     <a class="shot" href="${esc(url)}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">${
       photo ? `<img src="${esc(photo)}" alt="" loading="lazy">`
             : `<span class="nophoto">&#9673;</span>`}</a>
     <span class="body">
       <span class="common${common ? "" : " as-sci"}"><a href="${esc(url)}" target="_blank" rel="noopener">${
-        esc(common || t.name || "Unnamed")}</a></span>
+        esc(common || t.name || "Unnamed")}</a>${tick}</span>
       ${common && t.name ? `<span class="sci">${esc(t.name)}</span>` : ""}
       <span class="meta">${x.count} observation${x.count === 1 ? "" : "s"}${
         t.rank ? " &middot; " + esc(t.rank) : ""}</span>
       <span class="url"><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></span>
     </span>
   </li>`;
+}
+
+// One sortbar per list, shared by both tabs: it re-sorts what is already rendered, so
+// flipping order never costs a refetch. On the Lvl tab it drives every tier at once.
+function sortbarHtml(sortBy){
+  const on = by => sortBy === by ? ` class="on"` : "";
+  return `<div class="sortbar">Sort
+    <button type="button" data-by="count"${on("count")}>Most observed</button>
+    <button type="button" data-by="name"${on("name")}>A&ndash;Z</button>
+    <button type="button" data-by="taxo"${on("taxo")}>Taxonomic</button>
+    <label class="thresh">Hide under
+      <input type="number" class="minObs" min="0" step="1" value="${view.min || ""}"
+             placeholder="0" inputmode="numeric"> obs</label>
+  </div>`;
+}
+
+// Order the rows for the first paint. Afterwards the sortbar shuffles the DOM instead.
+function sortRows(rows, sortBy){
+  if(sortBy === "count") return rows;
+  return rows.slice().sort(sortBy === "taxo"
+    ? (a, b) => taxoKey(a.taxon).localeCompare(taxoKey(b.taxon)) ||
+                sortName(a.taxon).localeCompare(sortName(b.taxon))
+    : (a, b) => sortName(a.taxon).localeCompare(sortName(b.taxon)));
+}
+
+// The place tab: one flat list, every species recorded in the area, ticked where the
+// reader has already recorded it themselves.
+function placeListHtml(rows, seen, sortBy){
+  if(!rows.length){
+    return `<div class="state">
+      <div class="state-lede">Nothing recorded here.</div>
+      <div class="state-hint">No species inside this area under the current scope.
+        Try a wider place, or drop the quick-group filter.</div>
+    </div>`;
+  }
+  const tally = seen
+    ? `<p class="blurb">${rows.filter(x => !seen.has(x.taxon.id)).length} of these
+         ${rows.length} are unticked for @${esc(view.user)}.</p>`
+    : `<p class="blurb">Add a username to tick off the ones you have already recorded.</p>`;
+  return `<section class="tier" id="here">
+    <h2><a href="${esc(areaSpeciesUrl())}" target="_blank" rel="noopener"
+          title="The same area on iNaturalist">${esc(areaLabel())}</a><span class="n">${rows.length}</span></h2>
+    ${tally}
+    ${sortbarHtml(sortBy)}
+    <ul>${sortRows(rows, sortBy).map((x, n) =>
+      rowHtml(x, n, view.user, seen ? seen.has(x.taxon.id) : false)).join("")}</ul>
+  </section>`;
 }
 
 function listHtml(buckets, user, sortBy){
@@ -287,19 +531,12 @@ function listHtml(buckets, user, sortBy){
       <div class="state-hint">This user has no species recorded in this scope.</div>
     </div>`;
   }
-  const byName = sortBy === "name";
-  // One sortbar for the page: it re-sorts each tier in place, so the tiers hold their order.
-  const sortbar = `<div class="sortbar">Sort
-    <button type="button" data-by="count"${byName ? "" : ` class="on"`}>Most observed</button>
-    <button type="button" data-by="name"${byName ? ` class="on"` : ""}>A&ndash;Z</button>
-  </div>`;
+  const sortbar = sortbarHtml(sortBy);
   const index = `<nav class="index">` + TIERS.map(([title], i) =>
     `<a href="#tier-${i}">${esc(title)}<span class="n">${buckets[i].length}</span></a>`
   ).join("") + `</nav>`;
   const sections = TIERS.map(([title, blurb, tag], i) => {
-    const rows = byName
-      ? buckets[i].slice().sort((a, b) => sortName(a.taxon).localeCompare(sortName(b.taxon)))
-      : buckets[i];
+    const rows = sortRows(buckets[i], sortBy);
     // A tagged tier heads out to that tag search on iNat; Untagged has nothing to point at.
     const head = tag
       ? `<a href="${esc(tagObsUrl(tag, user))}" target="_blank" rel="noopener"
@@ -318,25 +555,92 @@ function listHtml(buckets, user, sortBy){
 // Re-sorts by shuffling the rendered rows, so flipping order costs no refetch and needs
 // no second copy of the row markup. The one sortbar drives every tier, each sorted and
 // renumbered within itself.
-function wireSort(){
-  const lists = [...document.querySelectorAll("#main ul")];
-  if(!lists.length) return;
-  const btns = [...document.querySelectorAll(".sortbar button")];
-  btns.forEach(b => b.addEventListener("click", () => {
-    btns.forEach(x => { x.className = x === b ? "on" : ""; });
-    const byCount = b.dataset.by === "count";
-    writeSort(b.dataset.by);
-    lists.forEach(ul => {
-      [...ul.children].sort((p, r) => {
-        const pn = p.dataset.name, rn = r.dataset.name;
-        if(!byCount) return pn.localeCompare(rn);
-        return (+r.dataset.count) - (+p.dataset.count) || pn.localeCompare(rn);
-      }).forEach((li, i) => {
-        li.firstElementChild.textContent = i + 1;   // .num
-        ul.appendChild(li);                          // moves, does not clone
-      });
+function comparator(by){
+  if(by === "count") return (p, r) =>
+    (+r.dataset.count) - (+p.dataset.count) || p.dataset.name.localeCompare(r.dataset.name);
+  if(by === "taxo") return (p, r) =>
+    p.dataset.taxo.localeCompare(r.dataset.taxo) || p.dataset.name.localeCompare(r.dataset.name);
+  return (p, r) => p.dataset.name.localeCompare(r.dataset.name);
+}
+
+// Family bands, drawn only for the taxonomic order — under the other two the rows would
+// jump between families and a heading every second row says nothing. Hidden rows are
+// skipped, so a threshold that empties a family takes its band with it.
+function drawFamilies(ul, on){
+  [...ul.querySelectorAll("li.fam")].forEach(li => li.remove());
+  if(!on || !familyOf.size) return;
+  let last = null;
+  [...ul.children].forEach(li => {
+    if(li.hidden) return;
+    const fam = familyOf.get(+li.dataset.taxon);
+    const key = fam ? fam.name : "";
+    if(key === last) return;
+    last = key;
+    const head = document.createElement("li");
+    head.className = "fam";
+    head.innerHTML = fam
+      ? `<b>${esc(fam.name)}</b>${fam.common ? " <span>" + esc(fam.common) + "</span>" : ""}`
+      : `<b>Family not recorded</b>`;
+    ul.insertBefore(head, li);
+  });
+}
+
+// Every count on the page follows what is actually listed, so a threshold doesn't leave a
+// heading claiming 925 above a list of 40.
+function retally(ul, shown){
+  const sec = ul.closest("section");
+  if(!sec) return;
+  const n = sec.querySelector("h2 .n");
+  if(n) n.textContent = shown;
+  const rail = document.querySelector(`.index a[href="#${sec.id}"] .n`);
+  if(rail) rail.textContent = shown;
+}
+
+// One pass over the rendered rows: order, threshold, renumber, band. Everything the two
+// controls do goes through here, so they can never disagree about the list.
+function relist(){
+  const cmp = comparator(view.sort);
+  document.querySelectorAll("#main ul").forEach(ul => {
+    [...ul.querySelectorAll("li.fam")].forEach(li => li.remove());
+    let shown = 0;
+    [...ul.children].sort(cmp).forEach(li => {
+      ul.appendChild(li);                          // moves, does not clone
+      li.hidden = (+li.dataset.count) < view.min;
+      if(!li.hidden) li.firstElementChild.textContent = ++shown;   // .num
     });
+    retally(ul, shown);
+    drawFamilies(ul, view.sort === "taxo");
+  });
+}
+
+function wireSort(){
+  const btns = [...document.querySelectorAll(".sortbar button")];
+  const nums = [...document.querySelectorAll(".sortbar .minObs")];
+  if(!btns.length) return;
+
+  btns.forEach(b => b.addEventListener("click", async () => {
+    view.sort = b.dataset.by;
+    btns.forEach(x => { x.className = x === b ? "on" : ""; });
+    writeState({ sort: view.sort === "count" ? "" : view.sort });
+    relist();
     scrollTo(0, 0);
+    // Headings may still be in flight on the first taxonomic click; redraw when they land.
+    if(view.sort === "taxo" && familiesReady){
+      await familiesReady;
+      if(view.sort === "taxo") document.querySelectorAll("#main ul").forEach(ul => drawFamilies(ul, true));
+    }
+  }));
+
+  // Typed, not submitted — the list narrows as the number is entered.
+  let timer = null;
+  nums.forEach(input => input.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      view.min = Math.max(0, Math.floor(+input.value || 0));
+      nums.forEach(other => { if(other !== input) other.value = view.min || ""; });
+      writeState({ min: view.min || "" });
+      relist();
+    }, 250);
   }));
 }
 
@@ -367,7 +671,25 @@ function paint(html, sub, busy){
   refreshBtn.innerHTML = busy ? "Reading&hellip;" : "Refresh";
 }
 
-async function run(){
+function failed(hint){
+  paint(`<div class="state">
+    <div class="state-lede">The list didn't come back.</div>
+    <div class="state-hint">${hint}</div>
+  </div>`, "failed");
+}
+
+// Family names cost their own requests, so they are fetched behind the finished list
+// rather than in front of it. The headings appear when they land.
+function afterPaint(buckets){
+  wireSort();
+  if(view.min) relist();       // a threshold arriving in the address applies to first paint
+  familiesReady = loadFamilies(buckets).catch(() => {});
+  familiesReady.then(() => {
+    if(view.sort === "taxo") document.querySelectorAll("#main ul").forEach(ul => drawFamilies(ul, true));
+  });
+}
+
+async function runLvl(){
   paint(`<div class="state">
     <div class="state-lede">Compiling the list&hellip;</div>
     <div class="state-hint">Reading every species @${esc(view.user)} has recorded, then sorting them by the tags they carry.</div>
@@ -376,19 +698,106 @@ async function run(){
     const buckets = await speciesByLvl(view.user);
     const total = buckets.reduce((n, rows) => n + rows.length, 0);
     paint(listHtml(buckets, view.user, view.sort), `${total} species`);
-    wireSort();
+    afterPaint(buckets);
     wireIndex();
   }catch(e){
-    paint(`<div class="state">
-      <div class="state-lede">The list didn't come back.</div>
-      <div class="state-hint">iNaturalist may be rate-limiting, or that username may not exist.</div>
-    </div>`, "failed");
+    failed("iNaturalist may be rate-limiting, or that username may not exist.");
   }
+}
+
+async function runPlace(){
+  paint(`<div class="state">
+    <div class="state-lede">Reading the area&hellip;</div>
+    <div class="state-hint">Every species recorded in ${esc(areaLabel())}${
+      view.user ? `, then checking them against @${esc(view.user)}'s own species` : ""}.</div>
+  </div>`, "reading&hellip;", true);
+  try{
+    // Both lists at once — neither depends on the other, and the area list is usually the
+    // slower of the two.
+    const [rows, seen] = await Promise.all([
+      speciesHere(),
+      view.user ? speciesSeenBy(view.user) : Promise.resolve(null)
+    ]);
+    const fresh = seen ? rows.filter(x => !seen.has(x.taxon.id)).length : 0;
+    paint(placeListHtml(rows, seen, view.sort),
+      `${rows.length} species` + (seen ? ` &middot; ${fresh} unticked` : ""));
+    afterPaint([rows]);
+  }catch(e){
+    failed("iNaturalist may be rate-limiting, or that place may be too large to tally.");
+  }
+}
+
+/* ---------------- place finder ---------------- */
+
+// iNat's place search, debounced. Picking a hit is a navigation, not a state change: the
+// place lands in the address, so the list it produces can be linked to like any other.
+function wirePlaceFinder(){
+  const input = document.getElementById("placeInput");
+  const hits = document.getElementById("placeHits");
+  let timer = null, seq = 0;
+
+  const close = () => { hits.hidden = true; hits.innerHTML = ""; };
+
+  const show = list => {
+    if(!list.length){ close(); return; }
+    hits.innerHTML = list.map(p =>
+      `<button type="button" data-id="${p.id}" data-name="${esc(p.name)}">${esc(p.name)}${
+        p.kind ? `<span>${esc(p.kind)}</span>` : ""}</button>`).join("");
+    hits.hidden = false;
+  };
+
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    const text = input.value.trim();
+    if(text.length < 2){ close(); return; }
+    timer = setTimeout(async () => {
+      const mine = ++seq;
+      try{
+        const list = await findPlaces(text);
+        if(mine === seq) show(list);
+      }catch(e){ close(); }
+    }, 300);
+  });
+
+  hits.addEventListener("click", e => {
+    const b = e.target.closest("button[data-id]");
+    if(!b) return;
+    // A named place replaces any pin the map handed over — one area at a time.
+    location.href = selfUrl({
+      tab: "place", place_id: b.dataset.id, pname: b.dataset.name,
+      lat: null, lng: null, radius: null
+    });
+  });
+
+  document.addEventListener("click", e => {
+    if(!e.target.closest(".finder")) close();
+  });
 }
 
 /* ---------------- boot ---------------- */
 
+const NOTES = {
+  lvl: `Every species this user has recorded, banded by the best Lvl tag it carries
+     and listed weakest first. The tiers override downwards &mdash; S beats B beats C &mdash; so a
+     species tagged S counts as Lvl S whatever else sits on it, and appears once. IDs left
+     coarser than species are not counted. Each link opens their observations of that species,
+     casual ones included.`,
+  place: `Every species recorded inside this area, with the ones the named user has already
+     recorded &mdash; anywhere, not just here &mdash; ticked off. Counts are iNaturalist's own
+     observation totals for the area, so the default order is the same one their species view
+     leads with. Dates and quality grade are deliberately not filtered here: this answers what
+     has been found in this place, ever.`
+};
+
 (function init(){
+  // The tabs are two addresses over one scope, so switching carries the scope across and
+  // drops only what cannot apply.
+  document.querySelectorAll("#tabs a").forEach(a => {
+    const tab = a.dataset.tab;
+    a.href = selfUrl({ tab: tab === "lvl" ? null : tab });
+    if(tab === view.tab) a.className = "on";
+  });
+
   document.getElementById("scope").textContent = scopeLabel();
   // Straight back to the map the reader came from. Bookmarked or shared links carry no
   // `back`, so those rebuild what this page does know — the username and the scope.
@@ -404,29 +813,72 @@ async function run(){
     back = p.toString();
   }
   document.getElementById("backLink").href = "index.html" + (back ? "#" + back : "");
+  document.getElementById("note").innerHTML = NOTES[view.tab];
+  document.getElementById("who").textContent = view.user ? "@" + view.user : "no user";
 
-  if(!view.user){
-    document.title = "Species by Lvl tag";
-    document.getElementById("who").textContent = "no user";
+  // A username input, used by whichever tab is missing one. On the Lvl tab it is the whole
+  // question; on the place tab it only decides whether the ticks can be drawn.
+  const askUser = (lede, hint, sub) => {
     paint(`<div class="state">
-      <div class="state-lede">Which user?</div>
-      <div class="state-hint">This page reports one iNaturalist account's species by Lvl tag.
+      <div class="state-lede">${lede}</div>
+      <div class="state-hint">${hint}
         <br><input id="userInput" type="text" placeholder="iNaturalist username"
-             autocapitalize="none" autocorrect="off" spellcheck="false"></div>
-    </div>`, "nothing to read yet");
+             value="${esc(view.user)}" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
+    </div>`, sub);
     const input = document.getElementById("userInput");
     input.focus();
     input.addEventListener("keydown", e => {
       if(e.key !== "Enter" || !input.value.trim()) return;
-      location.search = "?u=" + encodeURIComponent(input.value.trim());
+      location.href = selfUrl({ u: input.value.trim() });
     });
+  };
+
+  if(view.tab === "place"){
+    document.getElementById("title").textContent = "Species here";
+    document.title = hasArea ? "Species — " + areaLabel() : "Species here";
+    document.getElementById("scope").textContent =
+      (hasArea ? areaLabel() : "no area") + " · " + scopeLabel();
+    document.getElementById("placebar").hidden = false;
+    wirePlaceFinder();
+
+    // No username, no ticks — so offer the field rather than silently dropping the column.
+    if(!view.user){
+      document.getElementById("userBar").hidden = false;
+      const uq = document.getElementById("userQuick");
+      uq.addEventListener("keydown", e => {
+        if(e.key !== "Enter" || !uq.value.trim()) return;
+        location.href = selfUrl({ u: uq.value.trim() });
+      });
+    }
+
+    if(!hasArea){
+      paint(`<div class="state">
+        <div class="state-lede">Which place?</div>
+        <div class="state-hint">Search a place above &mdash; a country, a city, a park &mdash;
+          or tap the map and open a pin's species list from there.</div>
+      </div>`, "nothing to read yet");
+      document.getElementById("placeInput").focus();
+      return;
+    }
+    runPlace();
     return;
   }
 
-  document.title = "Lvl tags — @" + view.user;
-  document.getElementById("who").textContent = "@" + view.user;
-  refreshBtn.addEventListener("click", run);
-  run();
+  document.getElementById("title").textContent = "Species by Lvl tag";
+  document.title = view.user ? "Lvl tags — @" + view.user : "Species by Lvl tag";
+  // Refresh belongs to this tab only: the place tab's answer is a place's, not a person's,
+  // and it changes on the timescale of other people's uploads.
+  refreshBtn.hidden = false;
+
+  if(!view.user){
+    askUser("Which user?",
+      "This tab reports one iNaturalist account's species by Lvl tag.",
+      "nothing to read yet");
+    return;
+  }
+
+  refreshBtn.addEventListener("click", runLvl);
+  runLvl();
 })();
 </script>
 </body>
