@@ -95,10 +95,13 @@ body{
 
 /* ---------- specimen label bar (signature) ---------- */
 .label-bar{
-  position:absolute;top:0;left:0;right:0;z-index:600;
-  padding:calc(var(--safe-t) + 8px) 12px 9px;
-  background:linear-gradient(180deg,rgba(13,23,20,.96) 0%,rgba(13,23,20,.88) 62%,rgba(13,23,20,0) 100%);
-  border:0;width:100%;text-align:left;
+  position:absolute;z-index:600;
+  top:calc(var(--safe-t) + 8px);right:12px;left:auto;
+  max-width:calc(100% - 24px);
+  padding:8px 12px;border-radius:10px;
+  background:rgba(20,33,29,.92);border:1px solid var(--rule);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  width:auto;text-align:left;
   font:inherit;color:inherit;cursor:pointer;
   display:flex;align-items:center;gap:9px;
 }
@@ -426,6 +429,10 @@ function defaultD1(){
   return `${y}-${m}-${day}`;
 }
 function defaultQuality(){ return ["research","needs_id"]; }
+function isDefaultQuality(){
+  const d = defaultQuality();
+  return state.quality.length === d.length && d.every(v => state.quality.includes(v));
+}
 
 const state = {
   taxon:null, tname:"", iconic:[], quality:defaultQuality(),
@@ -716,7 +723,8 @@ function renderLabel(){
       return esc(hit ? hit[1] : v);
     }).join(" + "));
   }
-  if(state.quality.length){
+  // Grade and precision are only worth the width when they stray from the defaults.
+  if(state.quality.length && !isDefaultQuality()){
     const names = state.quality.map(v => {
       const hit = QUALITY.find(q => q[0] === v);
       return esc(hit ? hit[1] : v);
@@ -729,7 +737,7 @@ function renderLabel(){
     if(state.ssp === "only") bits.push("subspecies only");
     else if(state.ssp)       bits.push("incl. subspecies");
   }
-  if(state.precise) bits.push("exact locations");
+  if(!state.precise) bits.push("incl. obscured");
   if(state.d1 || state.d2){
     bits.push(esc(fmtYear(state.d1) + " – " + (fmtYear(state.d2) || "now")));
   }
