@@ -335,14 +335,14 @@ async function speciesHere(){
   return rows;
 }
 
-// What this user has already recorded, anywhere — so the tick reads as "I have seen this
-// species", not "I have seen it in this square". Scoped to the taxon/quick-group filters
-// only, which keeps a bird list from paging through someone's entire life list.
-async function speciesSeenBy(user){
-  const o = { user_id: user };
-  if(view.taxon) o.taxon_id = view.taxon;
-  if(view.iconic.length) o.iconic_taxa = view.iconic.join(",");
-  return new Set((await speciesCounts(o)).map(x => x.taxon.id));
+// Which of the area's species this user has never recorded — asked of iNat the way round
+// that keeps the answer small. Reading their species list instead would mean paging an
+// entire life list (11k species, two dozen requests) to tick off a few hundred rows; this
+// is one area-sized query however much the user has seen. "Unobserved" is iNat's own and
+// means anywhere, not just here, so the tick reads as "I have this species".
+async function unseenHere(user){
+  const rows = await speciesCounts({ ...areaScope(), unobserved_by_user_id: user });
+  return new Set(rows.map(x => x.taxon.id));
 }
 
 // iNat's own place search, the one behind the place field on their observation pages.
@@ -712,13 +712,16 @@ async function runPlace(){
       view.user ? `, then checking them against @${esc(view.user)}'s own species` : ""}.</div>
   </div>`, "reading&hellip;", true);
   try{
-    // Both lists at once — neither depends on the other, and the area list is usually the
-    // slower of the two.
-    const [rows, seen] = await Promise.all([
+    // Both lists at once — neither depends on the other, and they are the same size.
+    const [rows, unseen] = await Promise.all([
       speciesHere(),
-      view.user ? speciesSeenBy(view.user) : Promise.resolve(null)
+      view.user ? unseenHere(view.user) : Promise.resolve(null)
     ]);
-    const fresh = seen ? rows.filter(x => !seen.has(x.taxon.id)).length : 0;
+    // Flip the answer round for the renderer, which asks "is this one ticked?"
+    const seen = unseen
+      ? new Set(rows.filter(x => !unseen.has(x.taxon.id)).map(x => x.taxon.id))
+      : null;
+    const fresh = seen ? rows.length - seen.size : 0;
     paint(placeListHtml(rows, seen, view.sort),
       `${rows.length} species` + (seen ? ` &middot; ${fresh} unticked` : ""));
     afterPaint([rows]);
