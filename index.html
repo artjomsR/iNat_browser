@@ -135,6 +135,19 @@ body{
 .locate svg{width:19px;height:19px}
 .locate:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
 
+/* Heading wedge under the "me" dot. Fixed pixel size, like Google Maps — it reads as
+   a beam from the dot rather than a real-world distance, so it must not scale with zoom. */
+.me-cone{pointer-events:none}
+.me-cone i{
+  display:block;width:88px;height:88px;border-radius:50%;
+  visibility:hidden;   /* no compass, no wedge — never fake a heading of north */
+  transform:rotate(0deg);transform-origin:50% 50%;
+  transition:transform .18s ease-out;
+  background:conic-gradient(from -33deg,rgba(45,156,255,.55),rgba(45,156,255,.05) 44deg,transparent 66deg);
+  -webkit-mask-image:radial-gradient(closest-side,#000 8%,rgba(0,0,0,.65) 55%,transparent 100%);
+          mask-image:radial-gradient(closest-side,#000 8%,rgba(0,0,0,.65) 55%,transparent 100%);
+}
+
 /* ---------- sheet ---------- */
 .sheet{
   position:absolute;left:0;right:0;bottom:0;z-index:700;
@@ -443,7 +456,7 @@ const state = {
   dmode:"unobserved", lvlExclude:null, cursor:"precise", ssp:""   // "" | "1" incl. | "only"
 };
 
-let map, overlay, accLayer, probeAccLayer, probeMark, probeRing, meRing, sheetView = null;
+let map, overlay, accLayer, probeAccLayer, probeMark, probeRing, meRing, meCone, sheetView = null;
 
 /* ---------------- query building ---------------- */
 
@@ -1636,16 +1649,69 @@ function wireResults(){
 
 /* ---------------- locate ---------------- */
 
+// Compass heading, in degrees clockwise from true north. Two sources: iOS exposes a
+// ready-made webkitCompassHeading, everyone else reports alpha, which counts the other
+// way round. Devices with no magnetometer send neither and the wedge simply never shows.
+let headingDeg = null, headingWired = false;
+
+function onOrient(e){
+  let h = null;
+  if(typeof e.webkitCompassHeading === "number") h = e.webkitCompassHeading;
+  else if(e.absolute && typeof e.alpha === "number") h = 360 - e.alpha;
+  if(h == null || !isFinite(h)) return;
+  headingDeg = (h + 360) % 360;
+  paintCone();
+}
+
+function wireHeading(){
+  if(headingWired || !window.DeviceOrientationEvent) return;
+  // iOS 13+ gates the sensor behind a prompt that only a user gesture may raise, so the
+  // boot-time attempt is rejected there — the flag is set on success only, letting the
+  // locate button (a real gesture) try again.
+  const req = DeviceOrientationEvent.requestPermission;
+  const listen = () => {
+    headingWired = true;
+    window.addEventListener("deviceorientationabsolute", onOrient, true);
+    window.addEventListener("deviceorientation", onOrient, true);
+  };
+  if(typeof req === "function") req.call(DeviceOrientationEvent).then(s => { if(s === "granted") listen(); }).catch(() => {});
+  else listen();
+}
+
+function paintCone(){
+  if(!meCone || headingDeg == null) return;
+  const el = meCone.getElement();
+  if(!el) return;
+  const wedge = el.firstElementChild;
+  // Unwrap the angle so 359° → 2° turns 3° the short way instead of spinning backwards.
+  const prev = +wedge.dataset.deg || 0;
+  wedge.dataset.deg = prev + ((((headingDeg - prev) % 360) + 540) % 360) - 180;
+  wedge.style.transform = `rotate(${wedge.dataset.deg}deg)`;
+  wedge.style.visibility = "visible";
+}
+
+function showMe(ll){
+  if(meRing) map.removeLayer(meRing);
+  if(meCone) map.removeLayer(meCone);
+  // Under the dot, so the dot stays legible on top of the wedge.
+  meCone = L.marker(ll, {
+    interactive: false,
+    icon: L.divIcon({ className: "me-cone", html: "<i></i>", iconSize: [88,88], iconAnchor: [44,44] })
+  }).addTo(map);
+  meRing = L.circleMarker(ll, {
+    radius: 6, color: "#6FD3A8", weight: 3, fillColor: "#2D9CFF", fillOpacity: 1
+  }).addTo(map);
+  paintCone();
+}
+
 document.getElementById("locate").addEventListener("click", function(){
   if(!navigator.geolocation) return;
+  wireHeading();
   this.dataset.busy = "1";
   navigator.geolocation.getCurrentPosition(pos => {
     this.dataset.busy = "0";
     const ll = [pos.coords.latitude, pos.coords.longitude];
-    if(meRing) map.removeLayer(meRing);
-    meRing = L.circleMarker(ll, {
-      radius: 6, color: "#6FD3A8", weight: 3, fillColor: "#2D9CFF", fillOpacity: 1
-    }).addTo(map);
+    showMe(ll);
     map.setView(ll, Math.max(map.getZoom(), 14));
   }, () => {
     this.dataset.busy = "0";
@@ -1691,14 +1757,17 @@ document.getElementById("locate").addEventListener("click", function(){
   // Fresh load with no coords in the hash: try for the real position, staying on Lisbon
   // if it's denied, unavailable, or slow. moveend does the rest (hash + pin refresh).
   if(!v.pinned && navigator.geolocation){
-    let moved = false;                 // never yank the map out from under a user gesture
+    wireHeading();      // no-op on iOS, which only grants the sensor from a gesture
+    let moved = false;               // never yank the map out from under a user gesture
     map.on("dragstart", () => { moved = true; });
     map.on("zoomstart", () => { moved = true; });
     navigator.geolocation.getCurrentPosition(pos => {
+      const ll = [pos.coords.latitude, pos.coords.longitude];
+      showMe(ll);
       if(moved) return;
       // A real position is worth two extra levels; the Lisbon fallback stays wide.
       const z = v.zPinned ? map.getZoom() : ACC_MIN_ZOOM + 2;
-      map.setView([pos.coords.latitude, pos.coords.longitude], z);
+      map.setView(ll, z);
     }, () => {}, { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
   }
 
