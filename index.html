@@ -868,6 +868,12 @@ function taxonObsUrl(taxonId, user){
        + "&user_id=" + encodeURIComponent(user) + "&verifiable=any";
 }
 
+// Everything this user has tagged at one tier, on iNat itself — the tier headings link here.
+function tagObsUrl(tag, user){
+  return "https://www.inaturalist.org/observations?q=" + encodeURIComponent(tag)
+       + "&search_on=tags&user_id=" + encodeURIComponent(user);
+}
+
 function scopeLabel(){
   if(state.taxon) return state.tname || ("taxon " + state.taxon);
   if(state.iconic.length) return state.iconic.map(v => {
@@ -887,11 +893,13 @@ function sortName(t){ return (t.preferred_common_name || t.name || "").toLowerCa
 
 // The report's sections, weakest first. A species sits at the best tag it carries, so
 // these read as where it stands rather than what it lacks.
+// Third field is the tag the heading links to on iNat; "" for Untagged, which has no tag
+// search to point at.
 const TIERS = [
-  ["Untagged", "Not one observation carries a Lvl tag."],
-  ["Lvl C",    "C is the best tag on it — nothing tagged B or S."],
-  ["Lvl B",    "B is the best tag on it — nothing tagged S."],
-  ["Lvl S",    "Carries an S tag, the top tier."]
+  ["Untagged", "Not one observation carries a Lvl tag.",         ""],
+  ["Lvl C",    "C is the best tag on it — nothing tagged B or S.", "c"],
+  ["Lvl B",    "B is the best tag on it — nothing tagged S.",      "b"],
+  ["Lvl S",    "Carries an S tag, the top tier.",                  "s"]
 ];
 
 // Band every species the user has recorded by its best tag. The tiers override downwards,
@@ -959,6 +967,8 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
 .tier{margin-top:30px;scroll-margin-top:18px}
 .tier h2{display:flex;align-items:baseline;gap:9px;margin:0;
   font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--mark)}
+.tier h2 a{color:inherit;text-decoration:none;border-bottom:1px solid transparent}
+.tier h2 a:hover{border-bottom-color:var(--mark)}
 .tier h2 .n{font-size:10px;letter-spacing:.1em;color:var(--mute);font-variant-numeric:tabular-nums}
 .tier .blurb{margin:5px 0 2px;font-family:var(--lit);font-size:14px;color:var(--mute)}
 .tier .clear{margin:10px 0 0;padding:14px 2px;font-family:var(--lit);font-size:15px;
@@ -968,8 +978,12 @@ li{display:flex;align-items:flex-start;gap:14px;padding:13px 2px;border-bottom:1
 li:last-child{border-bottom:0}
 .num{flex:0 0 34px;padding-top:5px;text-align:right;font-size:11px;color:var(--rule);
   font-variant-numeric:tabular-nums}
-li img,.nophoto{width:78px;height:78px;flex:0 0 auto;border-radius:5px;object-fit:cover;
-  background:var(--raise);border:1px solid var(--rule)}
+/* the thumbnail is a second handle on the same link — hidden from the reading order, since
+   the name right beside it already carries it */
+.shot{flex:0 0 auto;display:block;line-height:0}
+.shot:hover img,.shot:hover .nophoto{border-color:var(--mark)}
+li img,.nophoto{width:78px;height:78px;border-radius:5px;object-fit:cover;
+  background:var(--raise);border:1px solid var(--rule);transition:border-color .14s}
 .nophoto{display:grid;place-items:center;color:var(--rule);font-size:24px}
 .body{flex:1 1 auto;min-width:0}
 .body > span{display:block}
@@ -1088,8 +1102,9 @@ function lvlRowHtml(x, i, user){
   const common = t.preferred_common_name || "";
   return `<li data-count="${x.count}" data-name="${esc(sortName(t))}">
     <span class="num">${i + 1}</span>
-    ${photo ? `<img src="${esc(photo)}" alt="" loading="lazy">`
-            : `<span class="nophoto">&#9673;</span>`}
+    <a class="shot" href="${esc(url)}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">${
+      photo ? `<img src="${esc(photo)}" alt="" loading="lazy">`
+            : `<span class="nophoto">&#9673;</span>`}</a>
     <span class="body">
       <span class="common${common ? "" : " as-sci"}"><a href="${esc(url)}" target="_blank" rel="noopener">${
         esc(common || t.name || "Unnamed")}</a></span>
@@ -1119,12 +1134,17 @@ function lvlListHtml(buckets, user, sortBy){
   const index = `<nav class="index">` + TIERS.map(([title], i) =>
     `<a href="#tier-${i}">${esc(title)}<span class="n">${buckets[i].length}</span></a>`
   ).join("") + `</nav>`;
-  const sections = TIERS.map(([title, blurb], i) => {
+  const sections = TIERS.map(([title, blurb, tag], i) => {
     const rows = byName
       ? buckets[i].slice().sort((a, b) => sortName(a.taxon).localeCompare(sortName(b.taxon)))
       : buckets[i];
+    // A tagged tier heads out to that tag search on iNat; Untagged has nothing to point at.
+    const head = tag
+      ? `<a href="${esc(tagObsUrl(tag, user))}" target="_blank" rel="noopener"
+            title="Every ${esc(title)} observation on iNaturalist">${esc(title)}</a>`
+      : esc(title);
     return `<section class="tier" id="tier-${i}">
-      <h2>${esc(title)}<span class="n">${rows.length}</span></h2>
+      <h2>${head}<span class="n">${rows.length}</span></h2>
       <p class="blurb">${esc(blurb)}</p>
       ${rows.length ? "<ul>" + rows.map((x, n) => lvlRowHtml(x, n, user)).join("") + "</ul>"
                     : `<p class="clear">All clear.</p>`}
