@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0D1714">
+<title>Species by Lvl tag</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+
+<style>
+:root{--ink:#0D1714;--raise:#1B2C26;--rule:#26382F;--text:#E8F0EB;--mute:#7C9389;--mark:#FF3E7C;
+  --ui:"Archivo Narrow","Helvetica Neue",Arial,sans-serif;--lit:"Newsreader",Georgia,"Times New Roman",serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--text);font-family:var(--ui);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:36px 30px 80px}
+header{padding-bottom:16px;margin-bottom:4px;border-bottom:1px solid var(--rule)}
+h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
+  font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase}
+.act{margin-left:auto;flex:0 0 auto;display:flex;gap:7px}
+.act button,.act a{padding:6px 13px;cursor:pointer;text-decoration:none;
+  font:inherit;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--mute);background:var(--raise);border:1px solid var(--rule);border-radius:5px}
+.act button:hover,.act a:hover{color:var(--mark);border-color:var(--mark)}
+.act button[disabled]{opacity:.45;cursor:default;color:var(--mute);border-color:var(--rule)}
+.lozenge{width:11px;height:11px;flex:0 0 auto;transform:rotate(45deg);border:1.5px solid var(--mark)}
+.sub{margin:0;font-family:var(--lit);font-size:17px;color:var(--mute)}
+.sub b{color:var(--text);font-weight:600}
+.note{margin:9px 0 0;font-size:11px;letter-spacing:.05em;line-height:1.5;color:var(--mute)}
+.sortbar{display:flex;align-items:center;gap:7px;margin:15px 0 4px;
+  font-size:9.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--mute)}
+.sortbar button{padding:6px 12px;cursor:pointer;font:inherit;letter-spacing:.1em;
+  color:var(--mute);background:var(--raise);border:1px solid var(--rule);border-radius:5px}
+.sortbar button:hover{color:var(--text);border-color:var(--mute)}
+.sortbar button.on{color:var(--ink);background:var(--mark);border-color:var(--mark)}
+/* index rail — sticky beside the tiers on a wide window, a wrapping strip on a narrow one */
+.cols{display:grid;grid-template-columns:186px minmax(0,1fr);gap:34px;align-items:start;margin-top:14px}
+.index{position:sticky;top:22px;display:flex;flex-direction:column;gap:3px}
+.index a{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  padding:9px 11px;text-decoration:none;border:1px solid transparent;border-radius:6px;
+  font-size:9.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--mute)}
+.index a:hover{color:var(--text);border-color:var(--rule)}
+.index a.on{color:var(--mark);background:var(--raise);border-color:var(--rule)}
+.index a .n{font-size:10px;letter-spacing:.05em;color:var(--rule);font-variant-numeric:tabular-nums}
+.index a.on .n{color:var(--mute)}
+@media (max-width:780px){
+  .cols{grid-template-columns:minmax(0,1fr);gap:6px}
+  .index{position:static;flex-direction:row;flex-wrap:wrap}
+  .index a{flex:1 1 auto;background:var(--raise);border-color:var(--rule)}
+}
+.tier{margin-top:30px;scroll-margin-top:18px}
+.tier h2{display:flex;align-items:baseline;gap:9px;margin:0;
+  font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--mark)}
+.tier h2 a{color:inherit;text-decoration:none;border-bottom:1px solid transparent}
+.tier h2 a:hover{border-bottom-color:var(--mark)}
+.tier h2 .n{font-size:10px;letter-spacing:.1em;color:var(--mute);font-variant-numeric:tabular-nums}
+.tier .blurb{margin:5px 0 2px;font-family:var(--lit);font-size:14px;color:var(--mute)}
+.tier .clear{margin:10px 0 0;padding:14px 2px;font-family:var(--lit);font-size:15px;
+  color:var(--rule);border-top:1px solid var(--rule)}
+ul{margin:0;padding:0;list-style:none}
+li{display:flex;align-items:flex-start;gap:14px;padding:13px 2px;border-bottom:1px solid var(--rule)}
+li:last-child{border-bottom:0}
+.num{flex:0 0 34px;padding-top:5px;text-align:right;font-size:11px;color:var(--rule);
+  font-variant-numeric:tabular-nums}
+/* the thumbnail is a second handle on the same link — hidden from the reading order, since
+   the name right beside it already carries it */
+.shot{flex:0 0 auto;display:block;line-height:0}
+.shot:hover img,.shot:hover .nophoto{border-color:var(--mark)}
+li img,.nophoto{width:78px;height:78px;border-radius:5px;object-fit:cover;
+  background:var(--raise);border:1px solid var(--rule);transition:border-color .14s}
+.nophoto{display:grid;place-items:center;color:var(--rule);font-size:24px}
+.body{flex:1 1 auto;min-width:0}
+.body > span{display:block}
+.common{font-size:18px;line-height:1.25}
+.common a{color:var(--text);text-decoration:none}
+.common a:hover{color:var(--mark)}
+.common.as-sci a{font-family:var(--lit);font-style:italic;font-size:17px}
+.sci{margin-top:1px;font-family:var(--lit);font-style:italic;font-size:14.5px;color:var(--mute)}
+.meta{margin-top:6px;font-size:9.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.url{margin-top:5px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;
+  color:var(--mute);word-break:break-all}
+.url a{color:inherit;text-decoration:none}
+.url a:hover{color:var(--mark)}
+.state{padding:70px 0;text-align:center;color:var(--mute)}
+.state-lede{margin-bottom:8px;font-family:var(--lit);font-size:21px;color:var(--text)}
+.state-hint{font-size:12px;letter-spacing:.05em;line-height:1.6}
+.state-hint input{margin-top:14px;padding:9px 12px;width:min(280px,80vw);
+  font:inherit;font-size:14px;color:var(--text);background:var(--raise);
+  border:1px solid var(--rule);border-radius:6px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1><span class="lozenge"></span>Species by Lvl tag
+    <span class="act">
+      <button type="button" id="refresh">Refresh</button>
+      <a id="backLink" href="index.html">Map</a>
+    </span></h1>
+  <p class="sub"><b id="who">&mdash;</b> &middot; <span id="scope">all taxa</span> &middot; <span id="count">reading&hellip;</span></p>
+  <p class="note">Every species this user has recorded, banded by the best Lvl tag it carries
+     and listed weakest first. The tiers override downwards &mdash; S beats B beats C &mdash; so a
+     species tagged S counts as Lvl S whatever else sits on it, and appears once. IDs left
+     coarser than species are not counted. Each link opens their observations of that species,
+     casual ones included.</p>
+</header>
+<main id="main"></main>
+</div>
+
+<script>
+/* ---------------- page address ----------------
+
+   The report is its own page, so its whole input lives in the query string and it can be
+   bookmarked, shared, and reloaded on its own:
+
+     species.html?u=USER&taxon=ID&tname=NAME&iconic=Aves,Insecta&sort=name#tier-3
+
+   `tname` is only a label — the taxon id is what scopes the query — so a stale or missing
+   name costs nothing but a prettier heading.
+
+   `back` holds the map's own hash, added by the map when it opens this page. It is never
+   read here, only handed straight back to the Map link, so the reader returns to the
+   filters and viewport they left rather than to a fresh map. */
+
+const API = "https://api.inaturalist.org/v1";
+const LEVELS = ["s","b","c"];
+const ICONIC = [
+  ["Plantae","Plants"],["Aves","Birds"],["Insecta","Insects"],["Fungi","Fungi"],
+  ["Arachnida","Arachnids"],["Mammalia","Mammals"],["Reptilia","Reptiles"],
+  ["Amphibia","Amphibians"],["Actinopterygii","Fish"],["Mollusca","Molluscs"]
+];
+
+const q = new URLSearchParams(location.search);
+const view = {
+  user:   (q.get("u") || "").trim(),
+  taxon:  q.get("taxon") || "",
+  tname:  q.get("tname") || "",
+  iconic: (q.get("iconic") || "").split(",").filter(Boolean),
+  sort:   q.get("sort") === "name" ? "name" : "count",
+  back:   q.get("back") || ""
+};
+
+function esc(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+    ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+// Sort choice belongs in the address too, so a link carries the order it was read in.
+// replaceState, not a reload — the rows are already in the DOM and only get reordered.
+function writeSort(by){
+  view.sort = by;
+  const p = new URLSearchParams(location.search);
+  if(by === "name") p.set("sort", "name"); else p.delete("sort");
+  history.replaceState(null, "", location.pathname + (p.toString() ? "?" + p : "") + location.hash);
+}
+
+/* ---------------- queries ---------------- */
+
+function taxonObsUrl(taxonId, user){
+  return "https://www.inaturalist.org/observations?taxon_id=" + encodeURIComponent(taxonId)
+       + "&user_id=" + encodeURIComponent(user) + "&verifiable=any";
+}
+
+// Everything this user has tagged at one tier, on iNat itself — the tier headings link here.
+function tagObsUrl(tag, user){
+  return "https://www.inaturalist.org/observations?q=" + encodeURIComponent(tag)
+       + "&search_on=tags&user_id=" + encodeURIComponent(user);
+}
+
+function scopeLabel(){
+  if(view.taxon) return view.tname || ("taxon " + view.taxon);
+  if(view.iconic.length) return view.iconic.map(v => {
+    const hit = ICONIC.find(i => i[0] === v);
+    return hit ? hit[1] : v;
+  }).join(" + ");
+  return "all taxa";
+}
+
+// Scope a species_counts query to one user plus the taxon / quick-group filters the map
+// was holding when the link was made.
+function userScope(user){
+  const o = { user_id: user };
+  if(view.taxon) o.taxon_id = view.taxon;
+  if(view.iconic.length) o.iconic_taxa = view.iconic.join(",");
+  return o;
+}
+
+// Page through species_counts and return the raw {taxon, count} rows.
+async function speciesCounts(params){
+  const out = [];
+  for(let page = 1; page <= 20; page++){
+    const p = new URLSearchParams(params);
+    p.set("per_page", "500");
+    p.set("page", String(page));
+    const r = await fetch(`${API}/observations/species_counts?${p.toString()}`);
+    if(!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    (d.results || []).forEach(x => { if(x.taxon && x.taxon.id) out.push(x); });
+    if(page * 500 >= (d.total_results || 0)) break;
+  }
+  return out;
+}
+
+// The species carrying one tier's tag. One request per tag: the tags index matches a
+// single term, so "s b" ORs nothing.
+async function speciesIdsWithTag(user, tag){
+  const rows = await speciesCounts({ ...userScope(user), search_on:"tags", q:tag });
+  return new Set(rows.map(x => x.taxon.id));
+}
+
+// species_counts groups by leaf taxon, so an observation left at genus or family lands
+// here as its own row — drop anything coarser than species so the list reads as species.
+// rank_level: species and hybrid 10, subspecies 5. Absent rank_level fails open.
+function isSpeciesRow(x){ return !(x.taxon.rank_level > 10); }
+
+// The name the list sorts and labels by — common where iNat has one, binomial otherwise.
+function sortName(t){ return (t.preferred_common_name || t.name || "").toLowerCase(); }
+
+// The report's sections, weakest first. A species sits at the best tag it carries, so
+// these read as where it stands rather than what it lacks.
+// Third field is the tag the heading links to on iNat; "" for Untagged, which has no tag
+// search to point at.
+const TIERS = [
+  ["Untagged", "Not one observation carries a Lvl tag.",         ""],
+  ["Lvl C",    "C is the best tag on it — nothing tagged B or S.", "c"],
+  ["Lvl B",    "B is the best tag on it — nothing tagged S.",      "b"],
+  ["Lvl S",    "Carries an S tag, the top tier.",                  "s"]
+];
+
+// Band every species the user has recorded by its best tag. The tiers override downwards,
+// S over B over C, so a species tagged both S and C counts as Lvl S and appears once.
+// Nothing drops out — the four tiers together are everything recorded in scope.
+async function speciesByLvl(user){
+  const have = {};
+  for(const tag of LEVELS) have[tag] = await speciesIdsWithTag(user, tag);
+  const all = await speciesCounts(userScope(user));
+  const buckets = TIERS.map(() => []);
+  for(const x of all){
+    if(!isSpeciesRow(x)) continue;
+    const has = tag => have[tag].has(x.taxon.id);
+    buckets[has("s") ? 3 : has("b") ? 2 : has("c") ? 1 : 0].push(x);
+  }
+  // Heaviest-recorded first inside each tier: the species you already have the most shots
+  // of are the ones most likely to hold a taggable frame. The page can flip to A–Z
+  // without a refetch.
+  buckets.forEach(rows => rows.sort((a,b) =>
+    b.count - a.count || sortName(a.taxon).localeCompare(sortName(b.taxon))));
+  return buckets;
+}
+
+/* ---------------- painting ---------------- */
+
+const main = document.getElementById("main");
+const refreshBtn = document.getElementById("refresh");
+const countEl = document.getElementById("count");
+
+function rowHtml(x, i, user){
+  const t = x.taxon;
+  const url = taxonObsUrl(t.id, user);
+  const photo = t.default_photo && (t.default_photo.medium_url || t.default_photo.square_url);
+  // Plenty of taxa have no English name; those lead with the binomial instead of
+  // printing it twice, set in the same italic serif the second line would have used.
+  const common = t.preferred_common_name || "";
+  return `<li data-count="${x.count}" data-name="${esc(sortName(t))}">
+    <span class="num">${i + 1}</span>
+    <a class="shot" href="${esc(url)}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">${
+      photo ? `<img src="${esc(photo)}" alt="" loading="lazy">`
+            : `<span class="nophoto">&#9673;</span>`}</a>
+    <span class="body">
+      <span class="common${common ? "" : " as-sci"}"><a href="${esc(url)}" target="_blank" rel="noopener">${
+        esc(common || t.name || "Unnamed")}</a></span>
+      ${common && t.name ? `<span class="sci">${esc(t.name)}</span>` : ""}
+      <span class="meta">${x.count} observation${x.count === 1 ? "" : "s"}${
+        t.rank ? " &middot; " + esc(t.rank) : ""}</span>
+      <span class="url"><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></span>
+    </span>
+  </li>`;
+}
+
+function listHtml(buckets, user, sortBy){
+  if(!buckets.some(rows => rows.length)){
+    return `<div class="state">
+      <div class="state-lede">Nothing to show.</div>
+      <div class="state-hint">This user has no species recorded in this scope.</div>
+    </div>`;
+  }
+  const byName = sortBy === "name";
+  // One sortbar for the page: it re-sorts each tier in place, so the tiers hold their order.
+  const sortbar = `<div class="sortbar">Sort
+    <button type="button" data-by="count"${byName ? "" : ` class="on"`}>Most observed</button>
+    <button type="button" data-by="name"${byName ? ` class="on"` : ""}>A&ndash;Z</button>
+  </div>`;
+  const index = `<nav class="index">` + TIERS.map(([title], i) =>
+    `<a href="#tier-${i}">${esc(title)}<span class="n">${buckets[i].length}</span></a>`
+  ).join("") + `</nav>`;
+  const sections = TIERS.map(([title, blurb, tag], i) => {
+    const rows = byName
+      ? buckets[i].slice().sort((a, b) => sortName(a.taxon).localeCompare(sortName(b.taxon)))
+      : buckets[i];
+    // A tagged tier heads out to that tag search on iNat; Untagged has nothing to point at.
+    const head = tag
+      ? `<a href="${esc(tagObsUrl(tag, user))}" target="_blank" rel="noopener"
+            title="Every ${esc(title)} observation on iNaturalist">${esc(title)}</a>`
+      : esc(title);
+    return `<section class="tier" id="tier-${i}">
+      <h2>${head}<span class="n">${rows.length}</span></h2>
+      <p class="blurb">${esc(blurb)}</p>
+      ${rows.length ? "<ul>" + rows.map((x, n) => rowHtml(x, n, user)).join("") + "</ul>"
+                    : `<p class="clear">All clear.</p>`}
+    </section>`;
+  }).join("");
+  return `<div class="cols">${index}<div class="tiers">${sortbar}${sections}</div></div>`;
+}
+
+// Re-sorts by shuffling the rendered rows, so flipping order costs no refetch and needs
+// no second copy of the row markup. The one sortbar drives every tier, each sorted and
+// renumbered within itself.
+function wireSort(){
+  const lists = [...document.querySelectorAll("#main ul")];
+  if(!lists.length) return;
+  const btns = [...document.querySelectorAll(".sortbar button")];
+  btns.forEach(b => b.addEventListener("click", () => {
+    btns.forEach(x => { x.className = x === b ? "on" : ""; });
+    const byCount = b.dataset.by === "count";
+    writeSort(b.dataset.by);
+    lists.forEach(ul => {
+      [...ul.children].sort((p, r) => {
+        const pn = p.dataset.name, rn = r.dataset.name;
+        if(!byCount) return pn.localeCompare(rn);
+        return (+r.dataset.count) - (+p.dataset.count) || pn.localeCompare(rn);
+      }).forEach((li, i) => {
+        li.firstElementChild.textContent = i + 1;   // .num
+        ul.appendChild(li);                          // moves, does not clone
+      });
+    });
+    scrollTo(0, 0);
+  }));
+}
+
+// Index rail: real fragment links now that the page has an address, so a tier can be
+// linked to directly. The highlight follows whichever heading last passed the top.
+function wireIndex(){
+  const links = [...document.querySelectorAll(".index a")];
+  if(!links.length) return;
+  const tiers = links.map(a => document.getElementById(a.getAttribute("href").slice(1)));
+  const mark = () => {
+    let at = 0;
+    tiers.forEach((sec, i) => { if(sec && sec.getBoundingClientRect().top <= 90) at = i; });
+    links.forEach((a, i) => { a.className = i === at ? "on" : ""; });
+  };
+  addEventListener("scroll", mark, { passive:true });
+  mark();
+  // A fragment in the address at load time only resolves once the rows exist.
+  if(location.hash){
+    const target = document.getElementById(location.hash.slice(1));
+    if(target) target.scrollIntoView();
+  }
+}
+
+function paint(html, sub, busy){
+  main.innerHTML = html;
+  countEl.innerHTML = sub;
+  refreshBtn.disabled = !!busy;
+  refreshBtn.innerHTML = busy ? "Reading&hellip;" : "Refresh";
+}
+
+async function run(){
+  paint(`<div class="state">
+    <div class="state-lede">Compiling the list&hellip;</div>
+    <div class="state-hint">Reading every species @${esc(view.user)} has recorded, then sorting them by the tags they carry.</div>
+  </div>`, "reading&hellip;", true);
+  try{
+    const buckets = await speciesByLvl(view.user);
+    const total = buckets.reduce((n, rows) => n + rows.length, 0);
+    paint(listHtml(buckets, view.user, view.sort), `${total} species`);
+    wireSort();
+    wireIndex();
+  }catch(e){
+    paint(`<div class="state">
+      <div class="state-lede">The list didn't come back.</div>
+      <div class="state-hint">iNaturalist may be rate-limiting, or that username may not exist.</div>
+    </div>`, "failed");
+  }
+}
+
+/* ---------------- boot ---------------- */
+
+(function init(){
+  document.getElementById("scope").textContent = scopeLabel();
+  // Straight back to the map the reader came from. Bookmarked or shared links carry no
+  // `back`, so those rebuild what this page does know — the username and the scope.
+  let back = view.back;
+  if(!back){
+    const p = new URLSearchParams();
+    if(view.user) p.set("unobs", view.user);
+    if(view.taxon){
+      p.set("taxon", view.taxon);
+      if(view.tname) p.set("tname", view.tname);
+    }
+    if(view.iconic.length) p.set("iconic", view.iconic.join(","));
+    back = p.toString();
+  }
+  document.getElementById("backLink").href = "index.html" + (back ? "#" + back : "");
+
+  if(!view.user){
+    document.title = "Species by Lvl tag";
+    document.getElementById("who").textContent = "no user";
+    paint(`<div class="state">
+      <div class="state-lede">Which user?</div>
+      <div class="state-hint">This page reports one iNaturalist account's species by Lvl tag.
+        <br><input id="userInput" type="text" placeholder="iNaturalist username"
+             autocapitalize="none" autocorrect="off" spellcheck="false"></div>
+    </div>`, "nothing to read yet");
+    const input = document.getElementById("userInput");
+    input.focus();
+    input.addEventListener("keydown", e => {
+      if(e.key !== "Enter" || !input.value.trim()) return;
+      location.search = "?u=" + encodeURIComponent(input.value.trim());
+    });
+    return;
+  }
+
+  document.title = "Lvl tags — @" + view.user;
+  document.getElementById("who").textContent = "@" + view.user;
+  refreshBtn.addEventListener("click", run);
+  run();
+})();
+</script>
+</body>
+</html>
