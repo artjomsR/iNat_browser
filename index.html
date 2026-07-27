@@ -1220,9 +1220,18 @@ function fmtDate(iso){
   return `${+m[3]} ${MONTHS[+m[2]-1]} ${m[1]}`;
 }
 
-// The tapped circle, as a species list on our own page — the pin and its radius are the
-// area, and the panel's username rides along so the list can tick off what it already has.
 function speciesUrl(latlng, km){
+  const p = obsParams();
+  p.set("lat", latlng.lat.toFixed(6));
+  p.set("lng", latlng.lng.toFixed(6));
+  p.set("radius", km.toFixed(3));
+  p.set("view", "species");
+  return "https://www.inaturalist.org/observations?" + p.toString();
+}
+
+// The same circle on our own species page: the pin and its radius are the area, and the
+// panel's username rides along so the list can tick off what it already holds.
+function hereUrl(latlng, km){
   const p = new URLSearchParams({
     tab: "place",
     lat: latlng.lat.toFixed(6),
@@ -1277,7 +1286,8 @@ function resultsHtml(list, km, latlng){
   }).join("");
   return `<div class="eyebrow"><span>${list.length} selected &middot; ${km.toFixed(1)} km</span>
     <span class="eyebrow-actions">
-      <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">Show as species</button>
+      <button class="linkish" id="toHere" data-url="${esc(hereUrl(latlng, km))}">Species here</button>
+      <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">On iNat</button>
       <button class="linkish" id="toFilters">Filters</button>
     </span></div>${rows}`;
 }
@@ -1344,9 +1354,10 @@ async function probe(latlng){
 function wireResults(){
   const toF = document.getElementById("toFilters");
   if(toF) toF.addEventListener("click", openFilters);
-  const toS = document.getElementById("toSpecies");
-  if(toS) toS.addEventListener("click", () => {
-    window.open(toS.dataset.url, "_blank", "noopener");
+  // Two ways out of a pin: this app's own species list, or the same circle on iNat.
+  ["toHere", "toSpecies"].forEach(id => {
+    const b = document.getElementById(id);
+    if(b) b.addEventListener("click", () => window.open(b.dataset.url, "_blank", "noopener"));
   });
   sheetBody.querySelectorAll(".result").forEach(b => {
     b.addEventListener("click", () => {
