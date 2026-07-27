@@ -838,9 +838,9 @@ function filtersHtml(){
     <input class="input" id="unobsInput" type="text" autocapitalize="none" autocorrect="off"
            spellcheck="false" placeholder="Username — only desired taxa" value="${esc(state.unobs)}">
     <div class="seg" id="unobsModeRow">
-      <button type="button" data-mode="s" aria-pressed="${state.dmode === "s"}">Lvl S +</button>
-      <button type="button" data-mode="b" aria-pressed="${state.dmode === "b"}">Lvl B +</button>
-      <button type="button" data-mode="c" aria-pressed="${state.dmode === "c"}">Lvl C +</button>
+      <button type="button" data-mode="s" aria-pressed="${state.dmode === "s"}">Lvl S</button>
+      <button type="button" data-mode="b" aria-pressed="${state.dmode === "b"}">Lvl B</button>
+      <button type="button" data-mode="c" aria-pressed="${state.dmode === "c"}">Lvl C + Audio Only</button>
       <button type="button" data-mode="unobserved" aria-pressed="${state.dmode === "unobserved"}">Unobserved</button>
     </div>
     <label class="check">
@@ -1293,7 +1293,6 @@ function resultsHtml(list, km, latlng){
     <span class="eyebrow-actions">
       <button class="linkish" id="toHere" data-url="${esc(hereUrl(latlng, km))}">Species here</button>
       <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">On iNat</button>
-      <button class="linkish" id="toFilters">Filters</button>
     </span></div>${rows}`;
 }
 
