@@ -132,7 +132,7 @@ li.seen .num{color:var(--verified)}
 .state{padding:70px 0;text-align:center;color:var(--mute)}
 .state-lede{margin-bottom:8px;font-family:var(--lit);font-size:21px;color:var(--text)}
 .state-hint{font-size:12px;letter-spacing:.05em;line-height:1.6}
-/* quick groups — the place tab's standing filter, and the way out of an unscoped area */
+/* quick groups — both tabs' standing filter, and the way out of an unscoped area */
 .picks{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
 .picks button{padding:8px 14px;cursor:pointer;font:inherit;
   font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
@@ -170,8 +170,8 @@ li.seen .num{color:var(--verified)}
       <input id="userQuick" type="text" placeholder="Your iNaturalist username &mdash; for the ticks"
              autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
     </div>
-    <div class="picks" id="groupPicks"></div>
   </div>
+  <div class="picks" id="groupPicks"></div>
 </header>
 <main id="main"></main>
 </div>
@@ -207,16 +207,24 @@ const ICONIC = [
 ];
 
 const q = new URLSearchParams(location.search);
+const tab = q.get("tab") === "place" ? "place" : "lvl";
+
+// The threshold's default has to follow what the counts mean, and the two tabs count
+// different things. On the place tab a count is iNaturalist's area-wide total for that
+// species — hundreds or thousands — so trimming under 20 drops only the long tail. On the
+// Lvl tab it is this one user's own observations of it, which is a handful even for a
+// species they photograph often, so any threshold at all empties the page.
+const DEFAULT_MIN = tab === "place" ? 20 : 0;
+
 const view = {
-  tab:    q.get("tab") === "place" ? "place" : "lvl",
+  tab,
   user:   (q.get("u") || "").trim(),
   taxon:  q.get("taxon") || "",
   tname:  q.get("tname") || "",
   iconic: (q.get("iconic") || "").split(",").filter(Boolean),
   sort:   ["name","taxo"].includes(q.get("sort")) ? q.get("sort") : "count",
-  // A long tail of one-off records buries the rows worth reading, so the list starts
-  // trimmed. `min=0` in the address is an explicit "show me everything" and survives.
-  min:    q.has("min") ? Math.max(0, Math.floor(+q.get("min") || 0)) : 20,
+  // `min=0` in the address is an explicit "show me everything" and survives a reload.
+  min:    q.has("min") ? Math.max(0, Math.floor(+q.get("min") || 0)) : DEFAULT_MIN,
   back:   q.get("back") || "",
   place:  q.get("place_id") || "",
   pname:  q.get("pname") || "",
@@ -888,6 +896,24 @@ const NOTES = {
   document.getElementById("note").innerHTML = NOTES[view.tab];
   document.getElementById("who").textContent = view.user ? "@" + view.user : "no user";
 
+  // Quick groups sit on both tabs and stay put rather than only appearing when the scope
+  // is empty: they are the filter, so changing group is one tap wherever the reader is.
+  // Toggling, not choosing — the map allows several at once and so does this. The scope
+  // is the same key on either tab, so a group survives switching between them.
+  const picks = document.getElementById("groupPicks");
+  picks.innerHTML = ICONIC.map(([v, l]) =>
+    `<button type="button" data-iconic="${v}"${
+      view.iconic.includes(v) ? ` class="on"` : ""}>${esc(l)}</button>`).join("");
+  picks.addEventListener("click", e => {
+    const b = e.target.closest("button[data-iconic]");
+    if(!b) return;
+    const v = b.dataset.iconic;
+    const next = view.iconic.includes(v)
+      ? view.iconic.filter(x => x !== v)
+      : view.iconic.concat(v);
+    location.href = selfUrl({ iconic: next.join(",") });
+  });
+
   // A username input, used by whichever tab is missing one. On the Lvl tab it is the whole
   // question; on the place tab it only decides whether the ticks can be drawn.
   const askUser = (lede, hint, sub) => {
@@ -912,23 +938,6 @@ const NOTES = {
       (hasArea ? areaLabel() : "no area") + " · " + scopeLabel();
     document.getElementById("placebar").hidden = false;
     wirePlaceFinder();
-
-    // Quick groups stay on the page rather than only appearing when the scope is empty:
-    // they are the filter, so changing group is one tap wherever the reader is. Toggling,
-    // not choosing — the map allows several at once and so does this.
-    const picks = document.getElementById("groupPicks");
-    picks.innerHTML = ICONIC.map(([v, l]) =>
-      `<button type="button" data-iconic="${v}"${
-        view.iconic.includes(v) ? ` class="on"` : ""}>${esc(l)}</button>`).join("");
-    picks.addEventListener("click", e => {
-      const b = e.target.closest("button[data-iconic]");
-      if(!b) return;
-      const v = b.dataset.iconic;
-      const next = view.iconic.includes(v)
-        ? view.iconic.filter(x => x !== v)
-        : view.iconic.concat(v);
-      location.href = selfUrl({ iconic: next.join(",") });
-    });
 
     // No username, no ticks — so offer the field rather than silently dropping the column.
     if(!view.user){
