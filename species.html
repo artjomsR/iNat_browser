@@ -132,6 +132,14 @@ li.seen .num{color:var(--verified)}
 .state{padding:70px 0;text-align:center;color:var(--mute)}
 .state-lede{margin-bottom:8px;font-family:var(--lit);font-size:21px;color:var(--text)}
 .state-hint{font-size:12px;letter-spacing:.05em;line-height:1.6}
+/* quick groups — the place tab's standing filter, and the way out of an unscoped area */
+.picks{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.picks button{padding:8px 14px;cursor:pointer;font:inherit;
+  font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--mute);background:var(--raise);border:1px solid var(--rule);border-radius:6px}
+.picks button:hover{color:var(--text);border-color:var(--mute)}
+.picks button.on{color:var(--ink);background:var(--mark);border-color:var(--mark)}
+.picks button.on:hover{color:var(--ink);border-color:var(--mark)}
 .state-hint input{margin-top:14px;padding:9px 12px;width:min(280px,80vw);
   font:inherit;font-size:14px;color:var(--text);background:var(--raise);
   border:1px solid var(--rule);border-radius:6px}
@@ -162,6 +170,7 @@ li.seen .num{color:var(--verified)}
       <input id="userQuick" type="text" placeholder="Your iNaturalist username &mdash; for the ticks"
              autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
     </div>
+    <div class="picks" id="groupPicks"></div>
   </div>
 </header>
 <main id="main"></main>
@@ -218,6 +227,9 @@ const view = {
 // A pin needs both halves to mean anything; a bare lat with no lng is no location at all.
 const hasPin = !!(view.lat && view.lng && view.radius);
 const hasArea = !!view.place || hasPin;
+// Something narrowing the tree. Without it an area query is unbounded, so the place tab
+// declines to run one.
+const hasTaxa = !!(view.taxon || view.iconic.length);
 
 // Rebuild this page's address with a few keys changed — how the tabs, the place picker and
 // the sort control all move around without losing the rest of the scope.
@@ -819,7 +831,7 @@ const NOTES = {
   place: `Every species recorded inside this area, with the ones the named user has already
      recorded &mdash; anywhere, not just here &mdash; ticked off. Counts are iNaturalist's own
      observation totals for the area, so the default order is the same one their species view
-     leads with. Dates and quality grade are deliberately not filtered here: this answers what
+     leads with. Casual records are not counted; dates are not filtered, so this answers what
      has been found in this place, ever.`
 };
 
@@ -875,6 +887,23 @@ const NOTES = {
     document.getElementById("placebar").hidden = false;
     wirePlaceFinder();
 
+    // Quick groups stay on the page rather than only appearing when the scope is empty:
+    // they are the filter, so changing group is one tap wherever the reader is. Toggling,
+    // not choosing — the map allows several at once and so does this.
+    const picks = document.getElementById("groupPicks");
+    picks.innerHTML = ICONIC.map(([v, l]) =>
+      `<button type="button" data-iconic="${v}"${
+        view.iconic.includes(v) ? ` class="on"` : ""}>${esc(l)}</button>`).join("");
+    picks.addEventListener("click", e => {
+      const b = e.target.closest("button[data-iconic]");
+      if(!b) return;
+      const v = b.dataset.iconic;
+      const next = view.iconic.includes(v)
+        ? view.iconic.filter(x => x !== v)
+        : view.iconic.concat(v);
+      location.href = selfUrl({ iconic: next.join(",") });
+    });
+
     // No username, no ticks — so offer the field rather than silently dropping the column.
     if(!view.user){
       document.getElementById("userBar").hidden = false;
@@ -892,6 +921,19 @@ const NOTES = {
           or tap the map and open a pin's species list from there.</div>
       </div>`, "nothing to read yet");
       document.getElementById("placeInput").focus();
+      return;
+    }
+
+    // An area with no taxon or quick-group behind it is not a list anyone can read: a
+    // country holds tens of thousands of species, past the point where paging them is
+    // either quick or complete. Ask for a group rather than starting a request that will
+    // hang and then truncate.
+    if(!hasTaxa){
+      paint(`<div class="state">
+        <div class="state-lede">Which group?</div>
+        <div class="state-hint">${esc(areaLabel())} holds far too many species to list at once.
+          Pick a group above &mdash; or set a species on the map first.</div>
+      </div>`, "pick a group");
       return;
     }
     runPlace();
