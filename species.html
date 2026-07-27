@@ -120,11 +120,35 @@ li img,.nophoto{width:78px;height:78px;border-radius:5px;object-fit:cover;
 .sci{margin-top:1px;font-family:var(--lit);font-style:italic;font-size:14.5px;color:var(--mute)}
 .meta{margin-top:6px;font-size:9.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
 /* already-recorded badge, place tab only — a filled disc, so a row reads as ticked off at
-   a glance down the column rather than needing the name to be read first */
-.common .tick{display:inline-grid;place-items:center;vertical-align:2px;
-  width:21px;height:21px;margin-left:9px;border-radius:50%;
-  background:var(--verified);color:var(--ink);font-size:12px;font-weight:700;line-height:1}
-li.seen .num{color:var(--verified)}
+   a glance down the column rather than needing the name to be read first. The glyph says
+   what is held on that species; the colour ramps with it, bronze through gold, so the
+   column can be skimmed without stopping to read each letter. */
+.tick{display:inline-grid;place-items:center;vertical-align:2px;
+  width:21px;height:21px;border-radius:50%;
+  background:var(--badge,var(--verified));color:var(--ink);
+  font-size:12px;font-weight:700;line-height:1}
+.common .tick{margin-left:9px}
+.tick svg{width:13px;height:13px}
+.tick-audio{--badge:#2D9CFF}
+.tick-c{--badge:#C08457}     /* bronze */
+.tick-b{--badge:#AFBAC4}     /* silver */
+.tick-s{--badge:#E8C468}     /* gold */
+/* the row number follows its badge, so the ramp reads down the left edge too */
+li.seen .num{color:var(--badge,var(--verified))}
+li[data-standing="audio"]{--badge:#2D9CFF}
+li[data-standing="c"]{--badge:#C08457}
+li[data-standing="b"]{--badge:#AFBAC4}
+li[data-standing="s"]{--badge:#E8C468}
+.legend{display:flex;flex-wrap:wrap;gap:7px 16px;margin:10px 0 0;
+  font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.legend-item{display:flex;align-items:center;gap:6px}
+/* the same badge standing in for a whole band, on the Lvl tab's headings and rail — scaled
+   to each, and centred rather than sat on the baseline the flex rows otherwise align to */
+.tier h2 .tick{flex:0 0 auto;align-self:center;width:19px;height:19px;font-size:11px}
+.tier h2 .tick svg{width:12px;height:12px}
+.index a .tick{flex:0 0 auto;width:15px;height:15px;font-size:9px}
+.index a .tick svg{width:9px;height:9px}
+.ix-name{display:flex;align-items:center;gap:7px;min-width:0}
 .url{margin-top:5px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;
   color:var(--mute);word-break:break-all}
 .url a{color:inherit;text-decoration:none}
@@ -491,10 +515,33 @@ async function audioOnlySpeciesIds(user){
   return new Set(heard.map(x => x.taxon.id).filter(id => !photographed.has(id)));
 }
 
+// Where this user stands on every species they have recorded: the best Lvl tag it carries,
+// "audio" for the ones heard and never photographed, "seen" for recorded but ungraded.
+// Same order of precedence as the Lvl tab's bands — this is that question asked from the
+// other side, so a species must never read as C here and B there.
+//
+// Scoped by taxon/quick-group like everything else on the page, not by the area: the badge
+// answers "what have I got on this bird", which does not change with where you are standing.
+async function standingLookup(user){
+  const [s, b, c, audio] = await Promise.all([
+    speciesIdsWithTag(user, "s"),
+    speciesIdsWithTag(user, "b"),
+    speciesIdsWithTag(user, "c"),
+    audioOnlySpeciesIds(user)
+  ]);
+  return id => s.has(id) ? "s"
+             : b.has(id) ? "b"
+             : c.has(id) ? "c"
+             : audio.has(id) ? "audio"
+             : "seen";
+}
+
 // The report's sections, weakest first. A species sits at the best tag it carries, so
 // these read as where it stands rather than what it lacks.
-// Third field is what the heading links to on iNat: a Lvl tag search, "audio" for the
-// sound-only band, or "" for Untagged, which has nothing to point at.
+// Third field does double duty: what the heading links to on iNat — a Lvl tag search,
+// "audio" for the sound-only band, or "" for Untagged, which has nothing to point at — and,
+// via `tag || "seen"`, which badge heads the section. Both vocabularies are the same one
+// standingLookup speaks, so a band and a badge can never drift apart.
 const TIERS = [
   ["Untagged",   "Not one observation carries a Lvl tag.",           ""],
   ["Audio only", "Recorded by sound alone — no photograph to tag.",  "audio"],
@@ -533,23 +580,56 @@ const main = document.getElementById("main");
 const refreshBtn = document.getElementById("refresh");
 const countEl = document.getElementById("count");
 
-// `seen` is the place tab's tick: null on the Lvl tab, where every row is by definition the
-// user's own, and a boolean on the place tab once their species set is in hand.
-function rowHtml(x, i, user, seen){
+// A speaker, for the species heard and never seen. Same drawing as the map's audio pins,
+// flattened to one colour since it sits on a filled disc here.
+const SPEAKER_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true">
+  <path d="M3.5 9.5H6.7L11.5 6V18L6.7 14.5H3.5Z"
+        fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+  <path d="M14.6 9.6a4.2 4.2 0 010 4.8M17.6 7.6a8 8 0 010 8.8"
+        fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+</svg>`;
+
+// What the badge says, per standing. The glyph carries the tier and the colour ramps with
+// it — bronze, silver, gold for C, B, S — so a column of these can be read at a glance
+// without stopping on each letter.
+const BADGE = {
+  seen:  ["&#10003;",   "recorded, but nothing tagged"],
+  audio: [SPEAKER_SVG,  "recorded by sound alone"],
+  c:     ["C",          "best tag: Lvl C"],
+  b:     ["B",          "best tag: Lvl B"],
+  s:     ["S",          "best tag: Lvl S"]
+};
+
+function badgeHtml(mark, user){
+  const hit = BADGE[mark] || BADGE.seen;
+  return ` <span class="tick tick-${esc(mark)}" title="@${esc(user)} &mdash; ${hit[1]}"
+      aria-label="${hit[1]}">${hit[0]}</span>`;
+}
+
+// The same badge standing in for a whole band, on the Lvl tab's headings and rail. Takes a
+// TIERS tag, where "" means Untagged and maps to the plain tick. Decorative here — the
+// heading beside it already names the tier — so it stays out of the reading order.
+function tierBadge(tag){
+  const mark = tag || "seen";
+  return `<span class="tick tick-${esc(mark)}" aria-hidden="true">${BADGE[mark][0]}</span>`;
+}
+
+// `mark` is the place tab's badge: null on the Lvl tab, where every row is the user's own
+// by definition, and on the place tab either "" for a species they have never recorded or
+// their standing on it ("seen" | "audio" | "c" | "b" | "s").
+function rowHtml(x, i, user, mark){
   const t = x.taxon;
   // On the place tab the link has to show the species in the area, not this user's takes
   // on it — the whole point is the ones they have never recorded.
-  const url = seen == null ? taxonObsUrl(t.id, user) : taxonAreaUrl(t.id);
+  const url = mark == null ? taxonObsUrl(t.id, user) : taxonAreaUrl(t.id);
   const photo = t.default_photo && (t.default_photo.medium_url || t.default_photo.square_url);
   // Plenty of taxa have no English name; those lead with the binomial instead of
   // printing it twice, set in the same italic serif the second line would have used.
   const common = t.preferred_common_name || "";
-  const tick = seen
-    ? ` <span class="tick" title="@${esc(user)} has already recorded this species"
-          aria-label="already recorded">&#10003;</span>`
-    : "";
-  return `<li class="${seen ? "seen" : ""}" data-count="${x.count}" data-name="${esc(sortName(t))}"
-      data-taxo="${esc(taxoKey(t))}" data-taxon="${t.id}" data-seen="${seen ? 1 : 0}">
+  const tick = mark ? badgeHtml(mark, user) : "";
+  return `<li class="${mark ? "seen" : ""}" data-count="${x.count}" data-name="${esc(sortName(t))}"
+      data-taxo="${esc(taxoKey(t))}" data-taxon="${t.id}" data-seen="${mark ? 1 : 0}"
+      data-standing="${esc(mark || "")}">
     <span class="num">${i + 1}</span>
     <a class="shot" href="${esc(url)}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">${
       photo ? `<img src="${esc(photo)}" alt="" loading="lazy">`
@@ -592,9 +672,18 @@ function sortRows(rows, sortBy){
     : (a, b) => sortName(a.taxon).localeCompare(sortName(b.taxon)));
 }
 
-// The place tab: one flat list, every species recorded in the area, ticked where the
-// reader has already recorded it themselves.
-function placeListHtml(rows, seen, sortBy){
+// The badges, spelled out — the glyphs are only obvious once, and a phone has no hover to
+// fall back on.
+function legendHtml(){
+  return `<p class="legend">${["seen","audio","c","b","s"].map(m =>
+    `<span class="legend-item"><span class="tick tick-${m}">${BADGE[m][0]}</span>${
+      esc(BADGE[m][1].replace("best tag: ", ""))}</span>`).join("")}</p>`;
+}
+
+// The place tab: one flat list, every species recorded in the area, badged where the
+// reader has already recorded it themselves — with what they have on it, not merely that
+// they have it.
+function placeListHtml(rows, standing, sortBy){
   if(!rows.length){
     return `<div class="state">
       <div class="state-lede">Nothing recorded here.</div>
@@ -602,9 +691,9 @@ function placeListHtml(rows, seen, sortBy){
         Try a wider place, or drop the quick-group filter.</div>
     </div>`;
   }
-  const tally = seen
-    ? `<p class="blurb">${rows.filter(x => !seen.has(x.taxon.id)).length} of these
-         ${rows.length} are unticked for @${esc(view.user)}.</p>`
+  const tally = standing
+    ? `<p class="blurb">${rows.filter(x => !standing(x.taxon.id)).length} of these
+         ${rows.length} are unticked for @${esc(view.user)}.</p>${legendHtml()}`
     : `<p class="blurb">Add a username to tick off the ones you have already recorded.</p>`;
   return `<section class="tier" id="here">
     <h2><a href="${esc(areaSpeciesUrl())}" target="_blank" rel="noopener"
@@ -612,7 +701,7 @@ function placeListHtml(rows, seen, sortBy){
     ${tally}
     ${sortbarHtml(sortBy)}
     <ul>${sortRows(rows, sortBy).map((x, n) =>
-      rowHtml(x, n, view.user, seen ? seen.has(x.taxon.id) : false)).join("")}</ul>
+      rowHtml(x, n, view.user, standing ? standing(x.taxon.id) : "")).join("")}</ul>
   </section>`;
 }
 
@@ -624,8 +713,11 @@ function listHtml(buckets, user, sortBy){
     </div>`;
   }
   const sortbar = sortbarHtml(sortBy);
-  const index = `<nav class="index">` + TIERS.map(([title], i) =>
-    `<a href="#tier-${i}">${esc(title)}<span class="n">${buckets[i].length}</span></a>`
+  // The rail carries the same badges as the headings it jumps to, so the two read as one
+  // set rather than as a list of names beside a list of icons.
+  const index = `<nav class="index">` + TIERS.map(([title, , tag], i) =>
+    `<a href="#tier-${i}"><span class="ix-name">${tierBadge(tag)}${esc(title)}</span>
+       <span class="n">${buckets[i].length}</span></a>`
   ).join("") + `</nav>`;
   const sections = TIERS.map(([title, blurb, tag], i) => {
     const rows = sortRows(buckets[i], sortBy);
@@ -636,7 +728,7 @@ function listHtml(buckets, user, sortBy){
             title="Every ${esc(title)} observation on iNaturalist">${esc(title)}</a>`
       : esc(title);
     return `<section class="tier" id="tier-${i}">
-      <h2>${head}<span class="n">${rows.length}</span></h2>
+      <h2>${tierBadge(tag)}${head}<span class="n">${rows.length}</span></h2>
       <p class="blurb">${esc(blurb)}</p>
       ${rows.length ? "<ul>" + rows.map((x, n) => rowHtml(x, n, user)).join("") + "</ul>"
                     : `<p class="clear">All clear.</p>`}
@@ -818,18 +910,22 @@ async function runPlace(){
       view.user ? `, then checking them against @${esc(view.user)}'s own species` : ""}.</div>
   </div>`, "reading&hellip;", true);
   try{
-    // Both lists at once — neither depends on the other, and they are the same size.
-    const [rows, unseen] = await Promise.all([
+    // All at once — none depends on another. `unseen` answers which of the area's species
+    // this user is missing; `bestOf` answers what they hold on the ones they do have.
+    const [rows, unseen, bestOf] = await Promise.all([
       speciesHere(),
-      view.user ? unseenHere(view.user) : Promise.resolve(null)
+      view.user ? unseenHere(view.user) : Promise.resolve(null),
+      view.user ? standingLookup(view.user) : Promise.resolve(null)
     ]);
-    // Flip the answer round for the renderer, which asks "is this one ticked?"
-    const seen = unseen
-      ? new Set(rows.filter(x => !unseen.has(x.taxon.id)).map(x => x.taxon.id))
+    // One lookup for the renderer: "" for a species they have never recorded, otherwise
+    // their standing on it. Missing beats standing — a species absent from their list has
+    // no tags to rank, whatever a stale tag search might say.
+    const standing = unseen
+      ? id => unseen.has(id) ? "" : (bestOf ? bestOf(id) : "seen")
       : null;
-    const fresh = seen ? rows.length - seen.size : 0;
-    paint(placeListHtml(rows, seen, view.sort),
-      `${rows.length} species` + (seen ? ` &middot; ${fresh} unticked` : ""));
+    const fresh = standing ? rows.filter(x => !standing(x.taxon.id)).length : 0;
+    paint(placeListHtml(rows, standing, view.sort),
+      `${rows.length} species` + (standing ? ` &middot; ${fresh} unticked` : ""));
     afterPaint([rows]);
   }catch(e){
     failed("iNaturalist may be rate-limiting, or that place may be too large to tally.");
