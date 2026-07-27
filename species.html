@@ -59,10 +59,16 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
 .sortbar button.on{color:var(--ink);background:var(--mark);border-color:var(--mark)}
 .sortbar .thresh{display:flex;align-items:center;gap:6px;margin-left:auto;
   letter-spacing:.12em;color:var(--mute)}
-.sortbar .thresh input{width:64px;padding:5px 8px;font:inherit;font-size:12px;
+/* the clear sits inside the field, between the number and the spinner arrows */
+.sortbar .minWrap{position:relative;display:inline-flex;align-items:center}
+.sortbar .thresh input{width:92px;padding:5px 38px 5px 8px;font:inherit;font-size:12px;
   letter-spacing:.04em;color:var(--text);background:var(--raise);
   border:1px solid var(--rule);border-radius:5px;font-variant-numeric:tabular-nums}
 .sortbar .thresh input:focus{outline:none;border-color:var(--mark)}
+.sortbar .minClear{position:absolute;right:19px;top:50%;transform:translateY(-50%);
+  padding:0 4px;font-size:13px;line-height:1;letter-spacing:0;
+  color:var(--mute);background:none;border:0;cursor:pointer}
+.sortbar .minClear:hover{color:var(--mark)}
 @media (max-width:520px){ .sortbar{flex-wrap:wrap} .sortbar .thresh{margin-left:0} }
 /* index rail — sticky beside the tiers on a wide window, a wrapping strip on a narrow one */
 .cols{display:grid;grid-template-columns:186px minmax(0,1fr);gap:34px;align-items:start;margin-top:14px}
@@ -199,7 +205,9 @@ const view = {
   tname:  q.get("tname") || "",
   iconic: (q.get("iconic") || "").split(",").filter(Boolean),
   sort:   ["name","taxo"].includes(q.get("sort")) ? q.get("sort") : "count",
-  min:    Math.max(0, Math.floor(+q.get("min") || 0)),
+  // A long tail of one-off records buries the rows worth reading, so the list starts
+  // trimmed. `min=0` in the address is an explicit "show me everything" and survives.
+  min:    q.has("min") ? Math.max(0, Math.floor(+q.get("min") || 0)) : 20,
   back:   q.get("back") || "",
   place:  q.get("place_id") || "",
   pname:  q.get("pname") || "",
@@ -283,10 +291,16 @@ function userScope(user){
 }
 
 // Page through species_counts and return the raw {taxon, count} rows.
+//
+// Casual records are dropped at the source, on every query this page makes: captive and
+// cultivated plants, undated and unplaced records. A species known here only from those
+// leaves the list entirely rather than sitting in it with a count of one. `verifiable` is
+// iNat's own shorthand for research plus needs-ID, and is what their species view applies.
 async function speciesCounts(params){
   const out = [];
   for(let page = 1; page <= 20; page++){
     const p = new URLSearchParams(params);
+    p.set("verifiable", "true");
     p.set("per_page", "500");
     p.set("page", String(page));
     const r = await fetch(`${API}/observations/species_counts?${p.toString()}`);
@@ -485,9 +499,13 @@ function sortbarHtml(sortBy){
     <button type="button" data-by="count"${on("count")}>Most observed</button>
     <button type="button" data-by="name"${on("name")}>A&ndash;Z</button>
     <button type="button" data-by="taxo"${on("taxo")}>Taxonomic</button>
-    <label class="thresh">Hide under
-      <input type="number" class="minObs" min="0" step="1" value="${view.min || ""}"
-             placeholder="0" inputmode="numeric"> obs</label>
+    <span class="thresh">Hide under
+      <span class="minWrap">
+        <input type="number" class="minObs" min="0" step="1" value="${view.min || ""}"
+               placeholder="0" inputmode="numeric" aria-label="Hide species under this many observations">
+        <button type="button" class="minClear" title="Show every species"
+                aria-label="Clear the threshold"${view.min ? "" : " hidden"}>&times;</button>
+      </span> obs</span>
   </div>`;
 }
 
@@ -614,7 +632,9 @@ function relist(){
 }
 
 function wireSort(){
-  const btns = [...document.querySelectorAll(".sortbar button")];
+  // `[data-by]` matters: the threshold's clear button lives in the same bar, and must not
+  // be mistaken for a sort choice.
+  const btns = [...document.querySelectorAll(".sortbar button[data-by]")];
   const nums = [...document.querySelectorAll(".sortbar .minObs")];
   if(!btns.length) return;
 
@@ -631,16 +651,27 @@ function wireSort(){
     }
   }));
 
+  const clears = [...document.querySelectorAll(".sortbar .minClear")];
+  const applyMin = n => {
+    view.min = Math.max(0, Math.floor(n || 0));
+    nums.forEach(i => { if(+i.value !== view.min) i.value = view.min || ""; });
+    clears.forEach(c => { c.hidden = !view.min; });
+    // Written even when zero: an empty field is a deliberate "show everything", and
+    // dropping the key would hand the reader the default 20 back on reload.
+    writeState({ min: String(view.min) });
+    relist();
+  };
+
   // Typed, not submitted — the list narrows as the number is entered.
   let timer = null;
   nums.forEach(input => input.addEventListener("input", () => {
     clearTimeout(timer);
-    timer = setTimeout(() => {
-      view.min = Math.max(0, Math.floor(+input.value || 0));
-      nums.forEach(other => { if(other !== input) other.value = view.min || ""; });
-      writeState({ min: view.min || "" });
-      relist();
-    }, 250);
+    timer = setTimeout(() => applyMin(+input.value), 250);
+  }));
+
+  clears.forEach(c => c.addEventListener("click", () => {
+    clearTimeout(timer);      // a pending keystroke must not put the threshold back
+    applyMin(0);
   }));
 }
 
