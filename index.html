@@ -996,7 +996,7 @@ async function refreshAccuracyLayer(){
             radius: 6, weight: 1.5, color: ring, fillColor: fill, fillOpacity: .9
           });
       marker.bindTooltip(
-        `${esc(t.preferred_common_name || t.name || "Unidentified")} — ${fmtAcc(known ? acc : null)}${audio ? " &middot; sound only" : ""}`,
+        `${esc(t.preferred_common_name || t.name || "Unidentified")} — ${fmtAcc(known ? acc : null)}`,
         { direction: "top", offset: [0,-4], opacity: .95 }
       );
       marker.on("click", e => {
