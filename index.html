@@ -1294,7 +1294,7 @@ function gmapsUrl(latlng){
 
 function resultsHtml(list, km, latlng){
   if(!list.length){
-    return `<div class="eyebrow"><span>Nothing here</span></div>
+    return `<div class="eyebrow"><span>Nothing here</span><button class="linkish" id="toGmaps" data-url="${esc(gmapsUrl(latlng))}">Open in GMaps</button></div>
       <div class="state">
         <div class="state-lede">No observations within ${km.toFixed(1)} km.</div>
         <div class="state-hint">Zoom out and tap again, or loosen the filters.</div>
