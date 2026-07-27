@@ -1275,7 +1275,7 @@ function resultsHtml(list, km, latlng){
       </span>
     </button>`;
   }).join("");
-  return `<div class="eyebrow"><span>${list.length} nearby &middot; ${km.toFixed(1)} km</span>
+  return `<div class="eyebrow"><span>${list.length} selected &middot; ${km.toFixed(1)} km</span>
     <span class="eyebrow-actions">
       <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">Show as species</button>
       <button class="linkish" id="toFilters">Filters</button>
