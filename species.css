@@ -139,7 +139,7 @@ li[data-standing="s"]{--badge:#E8C468}
 .legend{display:flex;flex-wrap:wrap;gap:7px 16px;margin:10px 0 0;
   font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
 .legend-item{display:flex;align-items:center;gap:6px}
-/* the same badge standing in for a whole band, on the Lvl tab's headings and rail — scaled
+/* the same badge standing in for a whole band, on the tier tab's headings and rail — scaled
    to each, and centred rather than sat on the baseline the flex rows otherwise align to */
 .tier h2 .tick{flex:0 0 auto;align-self:center;width:19px;height:19px;font-size:11px}
 .tier h2 .tick svg{width:12px;height:12px}

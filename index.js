@@ -40,7 +40,7 @@ function isDefaultQuality(){
 const state = {
   taxon:null, tname:"", iconic:[], quality:defaultQuality(),
   d1:defaultD1(), d2:"", style:"accuracy", base:"light", unobs:"", precise:"precise",
-  dmode:"unobserved", lvlExclude:null, cursor:"precise", ssp:""   // "" | "1" incl. | "only"
+  dmode:"unobserved", tierExclude:null, cursor:"precise", ssp:""   // "" | "1" incl. | "only"
 };
 
 let map, overlay, accLayer, probeAccLayer, probeMark, probeRing, meRing, meCone, sheetView = null;
@@ -54,9 +54,9 @@ function obsParams(){
   if(state.unobs){
     if(state.dmode === "unobserved"){
       p.set("unobserved_by_user_id", state.unobs);
-    }else if(state.lvlExclude && state.lvlExclude.length){
+    }else if(state.tierExclude && state.tierExclude.length){
       // Level mode: hide species this user has already tagged at this level.
-      p.set("without_taxon_id", state.lvlExclude.join(","));
+      p.set("without_taxon_id", state.tierExclude.join(","));
     }
     // Rank window on the results, driven by the two tickboxes. Unticked, the list is
     // floored at species: iNat treats a subspecies as its own leaf taxon, so without this
@@ -137,19 +137,19 @@ async function taggedSpeciesIds(user, level, stale){
 // Cache the ids of species the "Desired species for" user has already tagged at the
 // selected level or better, so obsParams can drop them via without_taxon_id. Clears the
 // cache (no-op) for Unobserved mode or when no user is set.
-let lvlSeq = 0;
-async function syncLvlExclude(){
-  if(state.dmode === "unobserved" || !state.unobs){ state.lvlExclude = null; return; }
-  if(LEVELS.indexOf(state.dmode) < 0){ state.lvlExclude = null; return; }
-  const mine = ++lvlSeq;
-  const stale = () => mine !== lvlSeq;       // a newer sync superseded this one
+let tierSeq = 0;
+async function syncTierExclude(){
+  if(state.dmode === "unobserved" || !state.unobs){ state.tierExclude = null; return; }
+  if(LEVELS.indexOf(state.dmode) < 0){ state.tierExclude = null; return; }
+  const mine = ++tierSeq;
+  const stale = () => mine !== tierSeq;       // a newer sync superseded this one
   try{
     const ids = await taggedSpeciesIds(state.unobs, state.dmode, stale);
     if(stale()) return;
-    state.lvlExclude = [...ids];
+    state.tierExclude = [...ids];
   }catch(e){
     if(stale()) return;
-    state.lvlExclude = [];                   // fail open: exclude nothing on error
+    state.tierExclude = [];                   // fail open: exclude nothing on error
   }
 }
 
@@ -349,7 +349,7 @@ function renderLabel(){
   }
   if(state.unobs){
     if(state.dmode === "unobserved") bits.push("new for @" + esc(state.unobs));
-    else bits.push("@" + esc(state.unobs) + " missing Lvl " + esc(state.dmode.toUpperCase()));
+    else bits.push("@" + esc(state.unobs) + " missing tier " + esc(state.dmode.toUpperCase()));
     if(state.ssp === "only") bits.push("subspecies only");
     else if(state.ssp)       bits.push("incl. subspecies");
   }
@@ -441,9 +441,9 @@ function filtersHtml(){
     <input class="input" id="unobsInput" type="text" autocapitalize="none" autocorrect="off"
            spellcheck="false" placeholder="Username — only desired taxa" value="${esc(state.unobs)}">
     <div class="seg" id="unobsModeRow">
-      <button type="button" data-mode="s" aria-pressed="${state.dmode === "s"}">Lvl S</button>
-      <button type="button" data-mode="b" aria-pressed="${state.dmode === "b"}">Lvl B</button>
-      <button type="button" data-mode="c" aria-pressed="${state.dmode === "c"}">Lvl C + Audio Only</button>
+      <button type="button" data-mode="s" aria-pressed="${state.dmode === "s"}">S Tier</button>
+      <button type="button" data-mode="b" aria-pressed="${state.dmode === "b"}">B Tier</button>
+      <button type="button" data-mode="c" aria-pressed="${state.dmode === "c"}">C Tier + Audio Only</button>
       <button type="button" data-mode="unobserved" aria-pressed="${state.dmode === "unobserved"}">Unobserved</button>
     </div>
     <label class="check">
@@ -452,12 +452,12 @@ function filtersHtml(){
     <label class="check">
       <input type="checkbox" id="sspOnlyBox" ${state.ssp === "only" ? "checked" : ""}>Show only subspecies?
     </label>
-    <div class="seg act" id="lvlListRow">
-      <button type="button" id="lvlListBtn"
-              title="List every species this user has recorded, banded by its best Lvl tag"
+    <div class="seg act" id="tierListRow">
+      <button type="button" id="tierListBtn"
+              title="List every species this user has recorded, banded by its best tier tag"
               >List desired species</button>
     </div>
-    <p class="field-hint" id="lvlListHint" hidden></p>
+    <p class="field-hint" id="tierListHint" hidden></p>
   </div>
 
   <div class="field">
@@ -499,7 +499,7 @@ function openFilters(){
   wireFilters();
 }
 
-/* ---------------- Lvl tag report ---------------- */
+/* ---------------- tier tag report ---------------- */
 
 // The report is its own page now (species.html), with the scope carried in its query
 // string so the link can be bookmarked, shared, and reloaded on its own. Everything the
@@ -508,7 +508,7 @@ function openFilters(){
 // `back` is this map's whole hash, ferried along untouched so the report's Map link
 // returns to the filters, layer and viewport the reader left — the report never reads it.
 
-function lvlReportUrl(user){
+function tierReportUrl(user){
   const p = new URLSearchParams({ u: user });
   if(state.taxon){
     p.set("taxon", state.taxon);
@@ -641,7 +641,7 @@ function wireFilters(){
   $("doneBtn").addEventListener("click", closeSheet);
 
   $("reset").addEventListener("click", () => {
-    Object.assign(state, { taxon:null, tname:"", iconic:[], quality:defaultQuality(), d1:defaultD1(), d2:"", unobs:"", precise:"precise", dmode:"unobserved", lvlExclude:null, ssp:"" });
+    Object.assign(state, { taxon:null, tname:"", iconic:[], quality:defaultQuality(), d1:defaultD1(), d2:"", unobs:"", precise:"precise", dmode:"unobserved", tierExclude:null, ssp:"" });
     commit();
     openFilters();
   });
@@ -685,14 +685,14 @@ function wireFilters(){
     state.iconic = [];
     ac.hidden = true; input.value = "";
     commit();
-    if(state.dmode !== "unobserved") syncLvlExclude().then(commit);
+    if(state.dmode !== "unobserved") syncTierExclude().then(commit);
     openFilters();
   });
 
   $("taxonClear").addEventListener("click", () => {
     state.taxon = null; state.tname = "";
     commit();
-    if(state.dmode !== "unobserved") syncLvlExclude().then(commit);
+    if(state.dmode !== "unobserved") syncTierExclude().then(commit);
     openFilters();
   });
 
@@ -705,7 +705,7 @@ function wireFilters(){
       : [...state.iconic, v];
     if(state.iconic.length){ state.taxon = null; state.tname = ""; }
     commit();
-    if(state.dmode !== "unobserved") syncLvlExclude().then(commit);
+    if(state.dmode !== "unobserved") syncTierExclude().then(commit);
     openFilters();
   });
 
@@ -767,18 +767,18 @@ function wireFilters(){
     if(!b) return;
     state.dmode = b.dataset.mode;
     [...$("unobsModeRow").children].forEach(c => c.setAttribute("aria-pressed", c === b));
-    syncLvlExclude().then(commit);
+    syncTierExclude().then(commit);
   });
 
   // Reads the username straight off the field rather than state.unobs, which the 420ms
   // debounce below may not have committed yet. The report covers every tier regardless of
   // the mode row, so the username is all it needs.
-  $("lvlListBtn").addEventListener("click", function(){
-    const hint = $("lvlListHint"), user = $("unobsInput").value.trim();
+  $("tierListBtn").addEventListener("click", function(){
+    const hint = $("tierListHint"), user = $("unobsInput").value.trim();
     const say = msg => { hint.textContent = msg; hint.hidden = false; };
     if(!user){ say("Enter an iNaturalist username above first."); $("unobsInput").focus(); return; }
     hint.hidden = true;
-    if(!openOut(lvlReportUrl(user))){
+    if(!openOut(tierReportUrl(user))){
       say("Allow pop-ups for this page to open the list.");
     }
   });
@@ -797,7 +797,7 @@ function wireFilters(){
   { let t = null;
     $("unobsInput").addEventListener("input", () => {
       clearTimeout(t);
-      t = setTimeout(() => { state.unobs = $("unobsInput").value.trim(); syncLvlExclude().then(commit); }, 420);
+      t = setTimeout(() => { state.unobs = $("unobsInput").value.trim(); syncTierExclude().then(commit); }, 420);
     });
   }
 }
@@ -1148,5 +1148,5 @@ document.getElementById("locate").addEventListener("click", function(){
   }
 
   // If a shared link lands in a level mode, resolve its exclude set then refresh.
-  if(state.dmode !== "unobserved" && state.unobs) syncLvlExclude().then(commit);
+  if(state.dmode !== "unobserved" && state.unobs) syncTierExclude().then(commit);
 })();

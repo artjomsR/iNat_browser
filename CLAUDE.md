@@ -9,10 +9,10 @@ via `.claude/launch.json`'s static server) to run it.
 - **index.html / index.css / index.js** — the map view. Leaflet map of iNaturalist
   observations, filter sheet, location-accuracy legend. Entry point for the app.
 - **species.html / species.css / species.js** — the species report, reached from the map's
-  "Map" link. Two tabs over the same rows: `lvl` (one user's species banded by Lvl tag) and
+  "Map" link. Two tabs over the same rows: `tier` (one user's species banded by tier tag) and
   `place` (every species in an area, ticked off against a user). Fully addressed via query
   string (see the comment block at the top of `species.js`) so any state is bookmarkable.
-  - Category ordering is: Untagged (green tick), audio, LVLs for LVL page; and audio, observed (green tick), LVLs for species page
+  - Category ordering is: Untagged (green tick), audio, tiers for tier page; and audio, observed (green tick), tiers for species page
 
 Each page is a plain `<link rel="stylesheet">` + `<script src>` pair — no modules, no
 imports, everything in one script file per page. Keep it that way; don't introduce a build

@@ -7,7 +7,7 @@
      species.html?tab=place&place_id=7122&pname=Portugal&u=USER&sort=taxo
      species.html?tab=place&lat=38.72&lng=-9.14&radius=12&u=USER
 
-   Two tabs over the same rows. `lvl` is about one person: their species banded by the Lvl
+   Two tabs over the same rows. `tier` is about one person: their species banded by the tier
    tag they carry. `place` is about one patch of ground: every species recorded there, with
    the ones that person has already recorded ticked off. Both are addresses, so either can
    be bookmarked and the tab strip is just two links.
@@ -28,12 +28,12 @@ const ICONIC = [
 ];
 
 const q = new URLSearchParams(location.search);
-const tab = q.get("tab") === "place" ? "place" : "lvl";
+const tab = q.get("tab") === "place" ? "place" : "tier";
 
 // The threshold's default has to follow what the counts mean, and the two tabs count
 // different things. On the place tab a count is iNaturalist's area-wide total for that
 // species — hundreds or thousands — so trimming under 20 drops only the long tail. On the
-// Lvl tab it is this one user's own observations of it, which is a handful even for a
+// tier tab it is this one user's own observations of it, which is a handful even for a
 // species they photograph often, so any threshold at all empties the page.
 const DEFAULT_MIN = tab === "place" ? 20 : 0;
 
@@ -128,7 +128,7 @@ function areaSpeciesUrl(){
 }
 
 // Where a tier heading points on iNat: the sound-only band opens this user's audio-only
-// records, every other band opens their observations carrying that Lvl tag.
+// records, every other band opens their observations carrying that tier tag.
 function tierUrl(tag, user){
   if(tag === "audio"){
     return "https://www.inaturalist.org/observations?sounds=true&photos=false&verifiable=any"
@@ -317,7 +317,7 @@ async function loadFamilies(buckets){
 // and no photograph of that species anywhere. The second half is what makes the band
 // meaningful — a species with forty photos and one incidental sound recording still has
 // frames to tag, and belongs with the rest. Only a bird heard and never seen has nothing
-// a Lvl tag could ever be applied to.
+// a tier tag could ever be applied to.
 //
 // Two queries, because iNat filters observations by their media while this is a question
 // about the species: "no photo of it at all" can only be answered by subtracting the
@@ -332,9 +332,9 @@ async function audioOnlySpeciesIds(user){
   return new Set(heard.map(x => x.taxon.id).filter(id => !photographed.has(id)));
 }
 
-// Where this user stands on every species they have recorded: the best Lvl tag it carries,
+// Where this user stands on every species they have recorded: the best tier tag it carries,
 // "audio" for the ones heard and never photographed, "seen" for recorded but ungraded.
-// Same order of precedence as the Lvl tab's bands — this is that question asked from the
+// Same order of precedence as the tier tab's bands — this is that question asked from the
 // other side, so a species must never read as C here and B there.
 //
 // Scoped by taxon/quick-group like everything else on the page, not by the area: the badge
@@ -355,7 +355,7 @@ async function standingLookup(user){
 
 // The report's sections, weakest first. A species sits at the best tag it carries, so
 // these read as where it stands rather than what it lacks.
-// Third field does double duty: what the heading links to on iNat — a Lvl tag search,
+// Third field does double duty: what the heading links to on iNat — a tier tag search,
 // "audio" for the sound-only band, or "" for Untagged, which has nothing to point at — and,
 // via `tag || "seen"`, which badge heads the section. Both vocabularies are the same one
 // standingLookup speaks, so a band and a badge can never drift apart.
@@ -363,15 +363,15 @@ async function standingLookup(user){
 // arrange; nothing below reads position in this array as meaning anything beyond "where it
 // sits on the page."
 const TIERS = [
-  ["Untagged",   "Not one observation carries a Lvl tag.",           ""],
+  ["Untagged",   "Not one observation carries a tier tag.",          ""],
   ["Audio only", "Recorded by sound alone — no photograph to tag.",  "audio"],
-  ["Lvl C",      "C is the best tag on it — nothing tagged B or S.", "c"],
-  ["Lvl B",      "B is the best tag on it — nothing tagged S.",      "b"],
-  ["Lvl S",      "Carries an S tag, the top tier.",                  "s"],
+  ["Tier",     "C is the best tag on it — nothing tagged B or S.", "c"],
+  ["Tier",     "B is the best tag on it — nothing tagged S.",      "b"],
+  ["Tier",     "Carries an S tag, the top tier.",                  "s"],
 ];
 
 // Hide-cascade rank — weakest standing first, and deliberately NOT the same array as TIERS:
-// the two pages show these in different orders on purpose (Untagged first on the Lvl tab,
+// the two pages show these in different orders on purpose (Untagged first on the tier tab,
 // audio first on the place tab), so display order and rank have to be free to disagree.
 // Rearranging TIERS must never change what a click hides.
 //
@@ -387,7 +387,7 @@ function standingRank(mark){ return STANDING_ORDER.indexOf(mark || "seen"); }
 // a sound recording, a sound recording always beats nothing) is independent of both TIERS'
 // display order and STANDING_ORDER's hide rank — three separate orderings over the same
 // five names, each answering a different question.
-async function speciesByLvl(user){
+async function speciesByTier(user){
   const have = {};
   for(const tag of LEVELS) have[tag] = await speciesIdsWithTag(user, tag);
   const audio = await audioOnlySpeciesIds(user);
@@ -430,9 +430,9 @@ const SPEAKER_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true">
 const BADGE = {
   seen:  ["&#10003;",   "recorded, but nothing tagged"],
   audio: [SPEAKER_SVG,  "recorded by sound alone"],
-  c:     ["C",          "best tag: Lvl C"],
-  b:     ["B",          "best tag: Lvl B"],
-  s:     ["S",          "best tag: Lvl S"]
+  c:     ["C",          "best tag: tier C"],
+  b:     ["B",          "best tag: tier B"],
+  s:     ["S",          "best tag: tier S"]
 };
 
 // Every badge doubles as a hide-cascade trigger: click one and it, along with everything
@@ -447,7 +447,7 @@ function badgeHtml(mark, user){
       aria-label="${hit[1]}">${hit[0]}</span>`;
 }
 
-// The same badge standing in for a whole band, on the Lvl tab's headings and rail. Takes a
+// The same badge standing in for a whole band, on the tier tab's headings and rail. Takes a
 // TIERS tag, where "" means Untagged and maps to the plain tick — `data-rank` comes from
 // STANDING_ORDER, not this tier's position in TIERS, so the hide-cascade stays correct
 // however the sections are arranged. No longer purely decorative — aria-hidden is dropped
@@ -459,7 +459,7 @@ function tierBadge(tag){
       aria-label="Hide ${esc(BADGE[mark][1])} and above">${BADGE[mark][0]}</span>`;
 }
 
-// `mark` is the place tab's badge: null on the Lvl tab, where every row is the user's own
+// `mark` is the place tab's badge: null on the tier tab, where every row is the user's own
 // by definition, and on the place tab either "" for a species they have never recorded or
 // their standing on it ("seen" | "audio" | "c" | "b" | "s").
 function rowHtml(x, i, user, mark){
@@ -491,7 +491,7 @@ function rowHtml(x, i, user, mark){
 }
 
 // One sortbar per list, shared by both tabs: it re-sorts what is already rendered, so
-// flipping order never costs a refetch. On the Lvl tab it drives every tier at once.
+// flipping order never costs a refetch. On the tier tab it drives every tier at once.
 function sortbarHtml(sortBy){
   const on = by => sortBy === by ? ` class="on"` : "";
   return `<div class="sortbar">Sort
@@ -521,7 +521,7 @@ function sortRows(rows, sortBy){
 // fall back on. Doubles as the persistent hide-cascade control here: rows vanish once
 // hidden, so this is the one thing on the place tab that stays put to bring them back.
 // Painted in STANDING_ORDER — audio, tick, C, B, S — which is the place tab's own order and
-// deliberately not the Lvl tab's; here it doubles as the rank each badge carries.
+// deliberately not the tier tab's; here it doubles as the rank each badge carries.
 function legendHtml(){
   return `<p class="legend">${STANDING_ORDER.map((m, i) =>
     `<span class="legend-item"><span class="tick tick-${m}" data-rank="${i}" role="button" tabindex="0"
@@ -541,8 +541,7 @@ function placeListHtml(rows, standing, sortBy){
     </div>`;
   }
   const tally = standing
-    ? `<p class="blurb">${rows.filter(x => !standing(x.taxon.id)).length} of these
-         ${rows.length} are unobserved for @${esc(view.user)}.</p><p class="blurb">Click the LVLs below to hide them.</p>${legendHtml()}`
+    ? `<p class="blurb">Click the tiers below to hide them.</p>${legendHtml()}`
     : `<p class="blurb">Add a username to tick off the ones you have already recorded.</p>`;
   return `<section class="tier" id="here">
     <h2><a href="${esc(areaSpeciesUrl())}" target="_blank" rel="noopener"
@@ -657,11 +656,11 @@ function relist(){
   });
 }
 
-// The Lvl tab's half of the cascade: whole `<section>`s disappear rather than individual
+// The tier tab's half of the cascade: whole `<section>`s disappear rather than individual
 // rows, since a tier there IS a standing — hiding "C and above" means hiding those three
 // sections outright.
 //
-// Only the Lvl tab's `tier-N` sections are eligible. The place tab's one section is
+// Only the tier tab's `tier-N` sections are eligible. The place tab's one section is
 // `id="here"`, and it must never be hidden as a block: its rows carry their own standings
 // and `relist` filters them individually, leaving the never-recorded species behind. (This
 // is where the bug lived — `+"here".slice(5)` is `+""`, which is 0, not NaN, so that section
@@ -687,7 +686,7 @@ function applyHideFrom(){
 function toggleHideFrom(i){
   view.hide = view.hide === i ? null : i;
   writeState({ hide: view.hide == null ? "" : String(view.hide) });
-  applyHideFrom();     // sections, on the Lvl tab
+  applyHideFrom();     // sections, on the tier tab
   relist();             // rows, on the place tab (also re-applies sort/threshold, which is a no-op if neither changed)
 }
 
@@ -792,7 +791,7 @@ function failed(hint){
 // rather than in front of it. The headings appear when they land.
 function afterPaint(buckets){
   wireSort();
-  applyHideFrom();              // Lvl tab's sections; a no-op if nothing is cut and place-tab-safe
+  applyHideFrom();              // tier tab's sections; a no-op if nothing is cut and place-tab-safe
   if(view.min || view.hide != null) relist();   // a threshold or cutoff in the address applies to first paint
   familiesReady = loadFamilies(buckets).catch(() => {});
   familiesReady.then(() => {
@@ -800,13 +799,13 @@ function afterPaint(buckets){
   });
 }
 
-async function runLvl(){
+async function runTier(){
   paint(`<div class="state">
     <div class="state-lede">Compiling the list&hellip;</div>
     <div class="state-hint">Reading every species @${esc(view.user)} has recorded, then sorting them by the tags they carry.</div>
   </div>`, "reading&hellip;", true);
   try{
-    const buckets = await speciesByLvl(view.user);
+    const buckets = await speciesByTier(view.user);
     const total = buckets.reduce((n, rows) => n + rows.length, 0);
     paint(listHtml(buckets, view.user, view.sort), `${total} species`);
     afterPaint(buckets);
@@ -895,9 +894,9 @@ function wirePlaceFinder(){
 /* ---------------- boot ---------------- */
 
 const NOTES = {
-  lvl: `Every species this user has recorded, banded by the best Lvl tag it carries
+  tier: `Every species this user has recorded, banded by the best tier tag it carries
      and listed weakest first. The tiers override downwards &mdash; S beats B beats C &mdash; so a
-     species tagged S counts as Lvl S whatever else sits on it, and appears once. IDs left
+     species tagged S counts as tier S whatever else sits on it, and appears once. IDs left
      coarser than species are not counted. Each link opens their observations of that species,
      casual ones included.`,
   place: `Every species recorded inside this area, with the ones the named user has already
@@ -916,7 +915,7 @@ const NOTES = {
   // drops only what cannot apply.
   document.querySelectorAll("#tabs a").forEach(a => {
     const tab = a.dataset.tab;
-    a.href = selfUrl({ tab: tab === "lvl" ? null : tab });
+    a.href = selfUrl({ tab: tab === "tier" ? null : tab });
     if(tab === view.tab) a.className = "on";
   });
 
@@ -956,7 +955,7 @@ const NOTES = {
     location.href = selfUrl({ iconic: next.join(",") });
   });
 
-  // A username input, used by whichever tab is missing one. On the Lvl tab it is the whole
+  // A username input, used by whichever tab is missing one. On the tier tab it is the whole
   // question; on the place tab it only decides whether the ticks can be drawn.
   const askUser = (lede, hint, sub) => {
     paint(`<div class="state">
@@ -1017,19 +1016,19 @@ const NOTES = {
     return;
   }
 
-  document.getElementById("title").textContent = "Species by Lvl tag";
-  document.title = view.user ? "Lvl tags — @" + view.user : "Species by Lvl tag";
+  document.getElementById("title").textContent = "Species by tier tag";
+  document.title = view.user ? "Tier tags — @" + view.user : "Species by tier tag";
   // Refresh belongs to this tab only: the place tab's answer is a place's, not a person's,
   // and it changes on the timescale of other people's uploads.
   refreshBtn.hidden = false;
 
   if(!view.user){
     askUser("Which user?",
-      "This tab reports one iNaturalist account's species by Lvl tag.",
+      "This tab reports one iNaturalist account's species by tier tag.",
       "nothing to read yet");
     return;
   }
 
-  refreshBtn.addEventListener("click", runLvl);
-  runLvl();
+  refreshBtn.addEventListener("click", runTier);
+  runTier();
 })();
