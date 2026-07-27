@@ -286,8 +286,13 @@ function areaSpeciesUrl(){
   return "https://www.inaturalist.org/observations?" + p.toString();
 }
 
-// Everything this user has tagged at one tier, on iNat itself — the tier headings link here.
-function tagObsUrl(tag, user){
+// Where a tier heading points on iNat: the sound-only band opens this user's audio-only
+// records, every other band opens their observations carrying that Lvl tag.
+function tierUrl(tag, user){
+  if(tag === "audio"){
+    return "https://www.inaturalist.org/observations?sounds=true&photos=false&verifiable=any"
+         + "&user_id=" + encodeURIComponent(user);
+  }
   return "https://www.inaturalist.org/observations?q=" + encodeURIComponent(tag)
        + "&search_on=tags&user_id=" + encodeURIComponent(user);
 }
@@ -467,29 +472,52 @@ async function loadFamilies(buckets){
   });
 }
 
+// Species this user has only ever recorded by sound: at least one audio-only observation,
+// and no photograph of that species anywhere. The second half is what makes the band
+// meaningful — a species with forty photos and one incidental sound recording still has
+// frames to tag, and belongs with the rest. Only a bird heard and never seen has nothing
+// a Lvl tag could ever be applied to.
+//
+// Two queries, because iNat filters observations by their media while this is a question
+// about the species: "no photo of it at all" can only be answered by subtracting the
+// photographed set.
+async function audioOnlySpeciesIds(user){
+  const scope = userScope(user);
+  const [heard, shot] = await Promise.all([
+    speciesCounts({ ...scope, sounds: "true", photos: "false" }),
+    speciesCounts({ ...scope, photos: "true" })
+  ]);
+  const photographed = new Set(shot.map(x => x.taxon.id));
+  return new Set(heard.map(x => x.taxon.id).filter(id => !photographed.has(id)));
+}
+
 // The report's sections, weakest first. A species sits at the best tag it carries, so
 // these read as where it stands rather than what it lacks.
-// Third field is the tag the heading links to on iNat; "" for Untagged, which has no tag
-// search to point at.
+// Third field is what the heading links to on iNat: a Lvl tag search, "audio" for the
+// sound-only band, or "" for Untagged, which has nothing to point at.
 const TIERS = [
-  ["Untagged", "Not one observation carries a Lvl tag.",         ""],
-  ["Lvl C",    "C is the best tag on it — nothing tagged B or S.", "c"],
-  ["Lvl B",    "B is the best tag on it — nothing tagged S.",      "b"],
-  ["Lvl S",    "Carries an S tag, the top tier.",                  "s"]
+  ["Untagged",   "Not one observation carries a Lvl tag.",           ""],
+  ["Audio only", "Recorded by sound alone — no photograph to tag.",  "audio"],
+  ["Lvl C",      "C is the best tag on it — nothing tagged B or S.", "c"],
+  ["Lvl B",      "B is the best tag on it — nothing tagged S.",      "b"],
+  ["Lvl S",      "Carries an S tag, the top tier.",                  "s"]
 ];
 
 // Band every species the user has recorded by its best tag. The tiers override downwards,
 // S over B over C, so a species tagged both S and C counts as Lvl S and appears once.
-// Nothing drops out — the four tiers together are everything recorded in scope.
+// Audio-only sits just above Untagged: a tag always wins, since a tag means a photo was
+// found and judged, but an unheard-of photo is not what a sound-only record is. Nothing
+// drops out — the five tiers together are everything recorded in scope.
 async function speciesByLvl(user){
   const have = {};
   for(const tag of LEVELS) have[tag] = await speciesIdsWithTag(user, tag);
+  const audio = await audioOnlySpeciesIds(user);
   const all = await speciesCounts(userScope(user));
   const buckets = TIERS.map(() => []);
   for(const x of all){
     if(!isSpeciesRow(x)) continue;
     const has = tag => have[tag].has(x.taxon.id);
-    buckets[has("s") ? 3 : has("b") ? 2 : has("c") ? 1 : 0].push(x);
+    buckets[has("s") ? 4 : has("b") ? 3 : has("c") ? 2 : audio.has(x.taxon.id) ? 1 : 0].push(x);
   }
   // Heaviest-recorded first inside each tier: the species you already have the most shots
   // of are the ones most likely to hold a taggable frame. The page can flip to A–Z
@@ -601,9 +629,10 @@ function listHtml(buckets, user, sortBy){
   ).join("") + `</nav>`;
   const sections = TIERS.map(([title, blurb, tag], i) => {
     const rows = sortRows(buckets[i], sortBy);
-    // A tagged tier heads out to that tag search on iNat; Untagged has nothing to point at.
+    // Every tier but Untagged heads out to the matching search on iNat, which has no
+    // "carries no tag at all" query to point at.
     const head = tag
-      ? `<a href="${esc(tagObsUrl(tag, user))}" target="_blank" rel="noopener"
+      ? `<a href="${esc(tierUrl(tag, user))}" target="_blank" rel="noopener"
             title="Every ${esc(title)} observation on iNaturalist">${esc(title)}</a>`
       : esc(title);
     return `<section class="tier" id="tier-${i}">

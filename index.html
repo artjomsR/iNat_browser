@@ -540,6 +540,11 @@ async function speciesIdsWithTag(user, tag, stale){
 
 // The species a user has tagged at `level` or better. The tiers stack, so level i means
 // tags 0..i.
+//
+// Only tags count here. A species recorded by sound alone carries no tag, so it stays on
+// the map at every level — which is the point: no photograph of it exists yet, so it is
+// still worth going after however the level row is set. The species report gives those
+// their own band, but that is a way of reading a list, not a claim that the bird is done.
 async function taggedSpeciesIds(user, level, stale){
   const ids = new Set();                     // a species may be tagged at several tiers
   for(const tag of LEVELS.slice(0, LEVELS.indexOf(level) + 1)){
