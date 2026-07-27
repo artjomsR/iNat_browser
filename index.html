@@ -439,11 +439,18 @@ const ICONIC = [
 const QUALITY = [["research","Research"],["needs_id","Needs ID"],["casual","Casual"]];
 const PRECISION = [["","Any"],["precise","Exact only"]];
 const STYLES  = [["auto","Auto"],["points","Points"],["grid","Grid"],["heat","Heat"],["accuracy","Accuracy"]];
-const BASES   = [["dark","Dark"],["light","Light"],["sat","Satellite"]];
+const BASES   = [["light", "Light"], ["dark","Dark"],["sat","Satellite"]];
+
+// Two levels past every layer's tightest native ceiling (satellite's 19) — past that point
+// every layer is upscaling anyway, so there's nothing left to gain by going further.
+const MAX_ZOOM = 21;
 
 function defaultD1(){
   const d = new Date();
-  d.setMonth(d.getMonth() - 3);
+  // 1.5 months as a fixed 45 days: setMonth only takes whole months, and calendar months
+  // vary in length anyway, so a day count is the one way to make "a month and a half" mean
+  // the same span every time this runs.
+  d.setDate(d.getDate() - 45);
   const y = d.getFullYear();
   const m = String(d.getMonth()+1).padStart(2,"0");
   const day = String(d.getDate()).padStart(2,"0");
@@ -460,7 +467,7 @@ function isDefaultQuality(){
 
 const state = {
   taxon:null, tname:"", iconic:[], quality:defaultQuality(),
-  d1:defaultD1(), d2:"", style:"accuracy", base:"dark", unobs:"", precise:"precise",
+  d1:defaultD1(), d2:"", style:"accuracy", base:"light", unobs:"", precise:"precise",
   dmode:"unobserved", lvlExclude:null, cursor:"precise", ssp:""   // "" | "1" incl. | "only"
 };
 
@@ -675,14 +682,19 @@ function fmtAcc(m){
 const OSM_ATTR = '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 const INAT_ATTR = 'Observations &copy; <a href="https://www.inaturalist.org">iNaturalist</a>';
 
+// Every layer's real tiles stop at 19 or 20; `maxNativeZoom` holds each at its true ceiling
+// while `maxZoom` lets the map itself go two levels past the tightest of them (see
+// MAX_ZOOM), Leaflet upscaling the last native tile rather than fetching nothing. A closely
+// packed cluster of pins is the case this is for — there is nothing further to fetch, but
+// there is still something to gain from a bigger picture of what's already on screen.
 function makeBase(kind){
   if(kind === "sat"){
     return L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      { maxZoom:19, attribution:'Imagery &copy; Esri, Maxar, Earthstar Geographics &middot; ' + INAT_ATTR });
+      { maxNativeZoom:19, maxZoom:MAX_ZOOM, attribution:'Imagery &copy; Esri, Maxar, Earthstar Geographics &middot; ' + INAT_ATTR });
   }
   const slug = kind === "light" ? "light_all" : "dark_all";
   return L.tileLayer(`https://{s}.basemaps.cartocdn.com/${slug}/{z}/{x}/{y}{r}.png`,
-    { maxZoom:20, subdomains:"abcd", attribution: OSM_ATTR + " &middot; " + INAT_ATTR });
+    { maxNativeZoom:20, maxZoom:MAX_ZOOM, subdomains:"abcd", attribution: OSM_ATTR + " &middot; " + INAT_ATTR });
 }
 
 let baseLayer;
@@ -711,7 +723,7 @@ function writeHash(){
   p.set("d1", state.d1);
   if(state.d2)      p.set("d2", state.d2);
   if(state.style !== "accuracy") p.set("s", state.style);
-  if(state.base !== "dark")  p.set("b", state.base);
+  if(state.base !== "light")  p.set("b", state.base);
   if(state.cursor !== "precise") p.set("cur", state.cursor);
   history.replaceState(null, "", "#" + p.toString());
 }
@@ -729,7 +741,7 @@ function readHash(){
   state.d1      = p.has("d1") ? p.get("d1") : defaultD1();
   state.d2      = p.get("d2") || "";
   state.style   = p.get("s") || "accuracy";
-  state.base    = p.get("b") || "dark";
+  state.base    = p.get("b") || "light";
   state.cursor  = p.get("cur") || "precise";
   const pinned = p.has("lat") && p.has("lng");
   return {
@@ -1254,6 +1266,13 @@ function hereUrl(latlng, km){
   return "species.html?" + p.toString();
 }
 
+// The pin, centred in Google Maps — just the coordinates, since a search radius has no
+// equivalent there and the tapped point is the only thing worth carrying across.
+function gmapsUrl(latlng){
+  const p = new URLSearchParams({ api: "1", query: `${latlng.lat.toFixed(6)},${latlng.lng.toFixed(6)}` });
+  return "https://www.google.com/maps/search/?" + p.toString();
+}
+
 function resultsHtml(list, km, latlng){
   if(!list.length){
     return `<div class="eyebrow"><span>Nothing here</span></div>
@@ -1293,6 +1312,7 @@ function resultsHtml(list, km, latlng){
     <span class="eyebrow-actions">
       <button class="linkish" id="toHere" data-url="${esc(hereUrl(latlng, km))}">Species here</button>
       <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">On iNat</button>
+      <button class="linkish" id="toGmaps" data-url="${esc(gmapsUrl(latlng))}">Open in GMaps</button>
     </span></div>${rows}`;
 }
 
@@ -1358,8 +1378,9 @@ async function probe(latlng){
 function wireResults(){
   const toF = document.getElementById("toFilters");
   if(toF) toF.addEventListener("click", openFilters);
-  // Two ways out of a pin: this app's own species list, or the same circle on iNat.
-  ["toHere", "toSpecies"].forEach(id => {
+  // Three ways out of a pin: this app's own species list, the same circle on iNat, or the
+  // bare coordinates in Google Maps.
+  ["toHere", "toSpecies", "toGmaps"].forEach(id => {
     const b = document.getElementById(id);
     if(b) b.addEventListener("click", () => window.open(b.dataset.url, "_blank", "noopener"));
   });
@@ -1488,6 +1509,7 @@ document.getElementById("locate").addEventListener("click", function(){
   map = L.map("map", {
     center: [v.lat, v.lng],
     zoom: v.z,
+    maxZoom: MAX_ZOOM,
     zoomControl: false,
     worldCopyJump: true,
     tap: false
@@ -1496,7 +1518,8 @@ document.getElementById("locate").addEventListener("click", function(){
   setBase(state.base);
 
   overlay = L.tileLayer(tileUrl(), {
-    maxZoom: 19,
+    maxNativeZoom: 19,
+    maxZoom: MAX_ZOOM,
     opacity: 0.85,
     crossOrigin: true
   });
