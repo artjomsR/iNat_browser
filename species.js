@@ -201,9 +201,17 @@ function areaScope(){
   return o;
 }
 
+// A pin dropped at deep zoom carries a radius of metres, not kilometres, so the label
+// switches units rather than rounding the whole area away to "0.0 km".
+function fmtRadius(km){
+  const m = Math.round(km * 1000);
+  if(m >= 1000) return (m / 1000).toFixed(1) + " km";
+  return Math.max(1, m) + " m";
+}
+
 function areaLabel(){
   if(view.place) return view.pname || ("place " + view.place);
-  if(hasPin) return `${(+view.radius).toFixed(1)} km around ${(+view.lat).toFixed(3)}, ${(+view.lng).toFixed(3)}`;
+  if(hasPin) return `${fmtRadius(+view.radius)} around ${(+view.lat).toFixed(3)}, ${(+view.lng).toFixed(3)}`;
   return "nowhere yet";
 }
 

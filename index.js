@@ -245,8 +245,9 @@ function legendGradientCss(){
 
 function fmtAcc(m){
   if(m == null || !isFinite(m)) return "No accuracy data";
-  if(m < 1000) return Math.round(m) + " m";
-  return (m/1000).toFixed(1) + " km";
+  const r = Math.round(m);
+  if(r < 1000) return r + " m";
+  return (r/1000).toFixed(1) + " km";
 }
 
 /* ---------------- basemaps ---------------- */
@@ -810,14 +811,17 @@ document.getElementById("labelBar").addEventListener("click", () => {
 
 // Tap radius, in km. "precise" keeps a fixed 28px reach; "large" scales with the
 // viewport so the circle spans ~80% of its shorter edge (0.4 = 80% diameter), which
-// keeps the whole ring on screen at any zoom.
+// keeps the whole ring on screen at any zoom. The lower bound is only there to keep the
+// radius the API sees above zero — deep zoom is exactly where a tap should stay a small
+// ring rather than swell into a floor measured in metres.
+const MIN_PROBE_KM = 0.001;
 function probeRadiusKm(lat, zoom){
   const mPerPx = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
   const big = state.cursor === "large";
   const size = map.getSize();
   const px  = big ? Math.min(size.x, size.y) * 0.4 : 28;
   const cap = big ? 5000 : 60;
-  return Math.min(cap, Math.max(0.05, mPerPx * px / 1000));
+  return Math.min(cap, Math.max(MIN_PROBE_KM, mPerPx * px / 1000));
 }
 
 const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
@@ -868,7 +872,7 @@ function resultsHtml(list, km, latlng){
   if(!list.length){
     return `<div class="eyebrow"><span>Nothing here</span><button class="linkish" id="toGmaps" data-url="${esc(gmapsUrl(latlng))}">Open in GMaps</button></div>
       <div class="state">
-        <div class="state-lede">No observations within ${km.toFixed(1)} km.</div>
+        <div class="state-lede">No observations within ${esc(fmtAcc(km * 1000))}.</div>
         <div class="state-hint">Zoom out and tap again, or loosen the filters.</div>
       </div>`;
   }
@@ -899,7 +903,7 @@ function resultsHtml(list, km, latlng){
       </span>
     </button>`;
   }).join("");
-  return `<div class="eyebrow"><span>${list.length} selected &middot; ${km.toFixed(1)} km</span>
+  return `<div class="eyebrow"><span>${list.length} selected &middot; ${esc(fmtAcc(km * 1000))}</span>
     <span class="eyebrow-actions">
       <button class="linkish" id="toHere" data-url="${esc(hereUrl(latlng, km))}">Species here</button>
       <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">On iNat</button>
