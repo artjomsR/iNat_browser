@@ -1,0 +1,167 @@
+:root{--ink:#0D1714;--raise:#1B2C26;--rule:#26382F;--text:#E8F0EB;--mute:#7C9389;--mark:#FF3E7C;
+  --verified:#6FD3A8;
+  --ui:"Archivo Narrow","Helvetica Neue",Arial,sans-serif;--lit:"Newsreader",Georgia,"Times New Roman",serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--text);font-family:var(--ui);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:36px 30px 80px}
+header{padding-bottom:16px;margin-bottom:4px;border-bottom:1px solid var(--rule)}
+h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
+  font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase}
+.act{margin-left:auto;flex:0 0 auto;display:flex;gap:7px}
+.act button,.act a{padding:6px 13px;cursor:pointer;text-decoration:none;
+  font:inherit;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--mute);background:var(--raise);border:1px solid var(--rule);border-radius:5px}
+.act button:hover,.act a:hover{color:var(--mark);border-color:var(--mark)}
+.act button[disabled]{opacity:.45;cursor:default;color:var(--mute);border-color:var(--rule)}
+.lozenge{width:11px;height:11px;flex:0 0 auto;transform:rotate(45deg);border:1.5px solid var(--mark)}
+/* tab strip — each tab is a real address, so switching keeps the scope in the URL */
+.tabs{display:flex;gap:6px;margin:0 0 13px}
+.tabs a{padding:8px 14px;text-decoration:none;border-radius:6px;
+  font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--mute);background:var(--raise);border:1px solid var(--rule)}
+.tabs a:hover{color:var(--text);border-color:var(--mute)}
+.tabs a.on{color:var(--ink);background:var(--mark);border-color:var(--mark)}
+.sub{margin:0;font-family:var(--lit);font-size:17px;color:var(--mute)}
+.sub b{color:var(--text);font-weight:600}
+.note{margin:9px 0 0;font-size:11px;letter-spacing:.05em;line-height:1.5;color:var(--mute)}
+/* place finder */
+.finder{position:relative;margin-top:14px;max-width:420px}
+.finder input{width:100%;padding:10px 13px;font:inherit;font-size:14px;color:var(--text);
+  background:var(--raise);border:1px solid var(--rule);border-radius:7px}
+.finder input:focus{outline:none;border-color:var(--mark)}
+.hits{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:20;max-height:270px;
+  overflow-y:auto;background:var(--raise);border:1px solid var(--rule);border-radius:7px}
+.hits button{display:block;width:100%;padding:10px 13px;text-align:left;cursor:pointer;
+  font:inherit;font-size:13.5px;color:var(--text);background:none;border:0;
+  border-bottom:1px solid var(--rule)}
+.hits button:last-child{border-bottom:0}
+.hits button:hover{background:var(--ink);color:var(--mark)}
+.hits button span{display:block;margin-top:2px;font-size:9.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--mute)}
+.sortbar{display:flex;align-items:center;gap:7px;margin:15px 0 4px;
+  font-size:9.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--mute)}
+.sortbar button{padding:6px 12px;cursor:pointer;font:inherit;letter-spacing:.1em;
+  color:var(--mute);background:var(--raise);border:1px solid var(--rule);border-radius:5px}
+.sortbar button:hover{color:var(--text);border-color:var(--mute)}
+.sortbar button.on{color:var(--ink);background:var(--mark);border-color:var(--mark)}
+.sortbar .thresh{display:flex;align-items:center;gap:6px;margin-left:auto;
+  letter-spacing:.12em;color:var(--mute)}
+/* the clear sits inside the field, between the number and the spinner arrows */
+.sortbar .minWrap{position:relative;display:inline-flex;align-items:center}
+.sortbar .thresh input{width:92px;padding:5px 38px 5px 8px;font:inherit;font-size:12px;
+  letter-spacing:.04em;color:var(--text);background:var(--raise);
+  border:1px solid var(--rule);border-radius:5px;font-variant-numeric:tabular-nums}
+.sortbar .thresh input:focus{outline:none;border-color:var(--mark)}
+.sortbar .minClear{position:absolute;right:19px;top:50%;transform:translateY(-50%);
+  padding:0 4px;font-size:13px;line-height:1;letter-spacing:0;
+  color:var(--mute);background:none;border:0;cursor:pointer}
+.sortbar .minClear:hover{color:var(--mark)}
+@media (max-width:520px){ .sortbar{flex-wrap:wrap} .sortbar .thresh{margin-left:0} }
+/* index rail — sticky beside the tiers on a wide window, a wrapping strip on a narrow one */
+.cols{display:grid;grid-template-columns:186px minmax(0,1fr);gap:34px;align-items:start;margin-top:14px}
+.index{position:sticky;top:22px;display:flex;flex-direction:column;gap:3px}
+.index a{display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  padding:9px 11px;text-decoration:none;border:1px solid transparent;border-radius:6px;
+  font-size:9.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--mute)}
+.index a:hover{color:var(--text);border-color:var(--rule)}
+.index a.on{color:var(--mark);background:var(--raise);border-color:var(--rule)}
+.index a .n{font-size:10px;letter-spacing:.05em;color:var(--rule);font-variant-numeric:tabular-nums}
+.index a.on .n{color:var(--mute)}
+@media (max-width:780px){
+  .cols{grid-template-columns:minmax(0,1fr);gap:6px}
+  .index{position:static;flex-direction:row;flex-wrap:wrap}
+  .index a{flex:1 1 auto;background:var(--raise);border-color:var(--rule)}
+}
+.tier{margin-top:30px;scroll-margin-top:18px}
+.tier h2{display:flex;align-items:baseline;gap:9px;margin:0;
+  font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--mark)}
+.tier h2 a{color:inherit;text-decoration:none;border-bottom:1px solid transparent}
+.tier h2 a:hover{border-bottom-color:var(--mark)}
+.tier h2 .n{font-size:10px;letter-spacing:.1em;color:var(--mute);font-variant-numeric:tabular-nums}
+.tier .blurb{margin:5px 0 2px;font-family:var(--lit);font-size:14px;color:var(--mute)}
+.tier .clear{margin:10px 0 0;padding:14px 2px;font-family:var(--lit);font-size:15px;
+  color:var(--rule);border-top:1px solid var(--rule)}
+ul{margin:0;padding:0;list-style:none}
+li{display:flex;align-items:flex-start;gap:14px;padding:13px 2px;border-bottom:1px solid var(--rule)}
+li:last-child{border-bottom:0}
+li[hidden]{display:none}   /* the flex above outruns the built-in [hidden] rule */
+.num{flex:0 0 34px;padding-top:5px;text-align:right;font-size:11px;color:var(--rule);
+  font-variant-numeric:tabular-nums}
+/* family band, taxonomic order only */
+li.fam{display:block;padding:22px 2px 7px;border-bottom:1px solid var(--rule)}
+li.fam b{font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--text)}
+li.fam span{margin-left:9px;font-family:var(--lit);font-size:13px;color:var(--mute)}
+/* the thumbnail is a second handle on the same link — hidden from the reading order, since
+   the name right beside it already carries it */
+.shot{flex:0 0 auto;display:block;line-height:0}
+.shot:hover img,.shot:hover .nophoto{border-color:var(--mark)}
+li img,.nophoto{width:78px;height:78px;border-radius:5px;object-fit:cover;
+  background:var(--raise);border:1px solid var(--rule);transition:border-color .14s}
+.nophoto{display:grid;place-items:center;color:var(--rule);font-size:24px}
+.body{flex:1 1 auto;min-width:0}
+.body > span{display:block}
+.common{font-size:18px;line-height:1.25}
+.common a{color:var(--text);text-decoration:none}
+.common a:hover{color:var(--mark)}
+.common.as-sci a{font-family:var(--lit);font-style:italic;font-size:17px}
+.sci{margin-top:1px;font-family:var(--lit);font-style:italic;font-size:14.5px;color:var(--mute)}
+.meta{margin-top:6px;font-size:9.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+/* already-recorded badge, place tab only — a filled disc, so a row reads as ticked off at
+   a glance down the column rather than needing the name to be read first. The glyph says
+   what is held on that species; the colour ramps with it, bronze through gold, so the
+   column can be skimmed without stopping to read each letter. */
+.tick{display:inline-grid;place-items:center;vertical-align:2px;cursor:pointer;
+  width:21px;height:21px;border-radius:50%;
+  background:var(--badge,var(--verified));color:var(--ink);
+  font-size:12px;font-weight:700;line-height:1;
+  transition:transform .12s ease,opacity .12s ease}
+.tick:hover{transform:scale(1.14)}
+.tick:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+/* pressed = this badge's rank is currently cut from view — a ring rather than a colour
+   change, since the colour is what says which tier this is in the first place */
+.tick[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ink),0 0 0 3.5px var(--badge,var(--verified))}
+/* the rail entry outlives its own section being hidden — dimming it is the only sign,
+   short of the vanished section itself, that a cutoff is active */
+.index a.hidden-from{opacity:.4}
+.index a.hidden-from:hover{opacity:.7}
+.common .tick{margin-left:9px}
+.tick svg{width:13px;height:13px}
+.tick-audio{--badge:#2D9CFF}
+.tick-c{--badge:#C08457}     /* bronze */
+.tick-b{--badge:#AFBAC4}     /* silver */
+.tick-s{--badge:#E8C468}     /* gold */
+/* the row number follows its badge, so the ramp reads down the left edge too */
+li.seen .num{color:var(--badge,var(--verified))}
+li[data-standing="audio"]{--badge:#2D9CFF}
+li[data-standing="c"]{--badge:#C08457}
+li[data-standing="b"]{--badge:#AFBAC4}
+li[data-standing="s"]{--badge:#E8C468}
+.legend{display:flex;flex-wrap:wrap;gap:7px 16px;margin:10px 0 0;
+  font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.legend-item{display:flex;align-items:center;gap:6px}
+/* the same badge standing in for a whole band, on the Lvl tab's headings and rail — scaled
+   to each, and centred rather than sat on the baseline the flex rows otherwise align to */
+.tier h2 .tick{flex:0 0 auto;align-self:center;width:19px;height:19px;font-size:11px}
+.tier h2 .tick svg{width:12px;height:12px}
+.index a .tick{flex:0 0 auto;width:15px;height:15px;font-size:9px}
+.index a .tick svg{width:9px;height:9px}
+.ix-name{display:flex;align-items:center;gap:7px;min-width:0}
+.url{margin-top:5px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10.5px;
+  color:var(--mute);word-break:break-all}
+.url a{color:inherit;text-decoration:none}
+.url a:hover{color:var(--mark)}
+.state{padding:70px 0;text-align:center;color:var(--mute)}
+.state-lede{margin-bottom:8px;font-family:var(--lit);font-size:21px;color:var(--text)}
+.state-hint{font-size:12px;letter-spacing:.05em;line-height:1.6}
+/* quick groups — both tabs' standing filter, and the way out of an unscoped area */
+.picks{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.picks button{padding:8px 14px;cursor:pointer;font:inherit;
+  font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--mute);background:var(--raise);border:1px solid var(--rule);border-radius:6px}
+.picks button:hover{color:var(--text);border-color:var(--mute)}
+.picks button.on{color:var(--ink);background:var(--mark);border-color:var(--mark)}
+.picks button.on:hover{color:var(--ink);border-color:var(--mark)}
+.state-hint input{margin-top:14px;padding:9px 12px;width:min(280px,80vw);
+  font:inherit;font-size:14px;color:var(--text);background:var(--raise);
+  border:1px solid var(--rule);border-radius:6px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
