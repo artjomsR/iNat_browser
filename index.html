@@ -815,6 +815,25 @@ function esc(s){
     ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 }
 
+/* ---------------- outbound links ---------------- */
+
+// Added to the home screen, this runs with no tab bar and no back button, and `_blank` has
+// nowhere to put a second view but on top of the first one — chromeless, and with no way
+// to dismiss it. When the address is one iNaturalist claims, iOS then hands off to their
+// native app and that borrowed view is simply abandoned: the white page you come back to.
+//
+// Navigating the view we already have avoids making one. A claimed link is intercepted
+// before it commits, so the native app opens and this app is left untouched behind it; an
+// unclaimed one loads in place, where the edge-swipe still goes back. Only the home-screen
+// case changes — in a real browser tab `_blank` behaves, so it keeps its new tab.
+const STANDALONE = window.navigator.standalone === true ||
+  (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
+
+function openOut(url){
+  if(STANDALONE){ location.href = url; return true; }
+  return !!window.open(url, "_blank", "noopener");
+}
+
 /* ---------------- filters panel ---------------- */
 
 function segHtml(id, opts, current){
@@ -864,7 +883,7 @@ function filtersHtml(){
     <div class="seg act" id="lvlListRow">
       <button type="button" id="lvlListBtn"
               title="List every species this user has recorded, banded by its best Lvl tag"
-              >List species</button>
+              >List desired species</button>
     </div>
     <p class="field-hint" id="lvlListHint" hidden></p>
   </div>
@@ -1013,7 +1032,7 @@ async function refreshAccuracyLayer(){
       );
       marker.on("click", e => {
         L.DomEvent.stopPropagation(e);
-        window.open("https://www.inaturalist.org/observations/" + o.id, "_blank", "noopener");
+        openOut("https://www.inaturalist.org/observations/" + o.id);
       });
       marker.addTo(accLayer);
     });
@@ -1187,7 +1206,7 @@ function wireFilters(){
     const say = msg => { hint.textContent = msg; hint.hidden = false; };
     if(!user){ say("Enter an iNaturalist username above first."); $("unobsInput").focus(); return; }
     hint.hidden = true;
-    if(!window.open(lvlReportUrl(user), "_blank", "noopener")){
+    if(!openOut(lvlReportUrl(user))){
       say("Allow pop-ups for this page to open the list.");
     }
   });
@@ -1382,11 +1401,11 @@ function wireResults(){
   // bare coordinates in Google Maps.
   ["toHere", "toSpecies", "toGmaps"].forEach(id => {
     const b = document.getElementById(id);
-    if(b) b.addEventListener("click", () => window.open(b.dataset.url, "_blank", "noopener"));
+    if(b) b.addEventListener("click", () => openOut(b.dataset.url));
   });
   sheetBody.querySelectorAll(".result").forEach(b => {
     b.addEventListener("click", () => {
-      window.open("https://www.inaturalist.org/observations/" + b.dataset.id, "_blank", "noopener");
+      openOut("https://www.inaturalist.org/observations/" + b.dataset.id);
     });
   });
 }

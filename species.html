@@ -276,6 +276,22 @@ function esc(s){
     ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 }
 
+// Reached from the map's home-screen app, this page runs with no tab bar and no back
+// button, where a `_blank` link has nowhere to open but a chromeless view on top of this
+// one — and iNaturalist's own addresses then hand off to their native app, abandoning that
+// view as a white page with no way out. The rows stay ordinary links, opening ordinary tabs
+// in an ordinary browser; only on the home screen does the target come off, so the hand-off
+// happens from this view and leaves nothing behind. The Map link goes back afterwards.
+if(window.navigator.standalone === true ||
+   (window.matchMedia && matchMedia("(display-mode: standalone)").matches)){
+  addEventListener("click", e => {
+    const a = e.target.closest && e.target.closest('a[target="_blank"]');
+    if(!a) return;
+    e.preventDefault();
+    location.href = a.href;
+  });
+}
+
 // Sort and threshold belong in the address too, so a link carries the list as it was read.
 // replaceState, not a reload — the rows are already in the DOM and only get reordered or
 // hidden.
@@ -543,8 +559,8 @@ async function standingLookup(user){
 // via `tag || "seen"`, which badge heads the section. Both vocabularies are the same one
 // standingLookup speaks, so a band and a badge can never drift apart.
 const TIERS = [
-  ["Untagged",   "Not one observation carries a Lvl tag.",           ""],
   ["Audio only", "Recorded by sound alone — no photograph to tag.",  "audio"],
+  ["Untagged",   "Not one observation carries a Lvl tag.",           ""],
   ["Lvl C",      "C is the best tag on it — nothing tagged B or S.", "c"],
   ["Lvl B",      "B is the best tag on it — nothing tagged S.",      "b"],
   ["Lvl S",      "Carries an S tag, the top tier.",                  "s"]
