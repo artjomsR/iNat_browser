@@ -123,10 +123,20 @@ li img,.nophoto{width:78px;height:78px;border-radius:5px;object-fit:cover;
    a glance down the column rather than needing the name to be read first. The glyph says
    what is held on that species; the colour ramps with it, bronze through gold, so the
    column can be skimmed without stopping to read each letter. */
-.tick{display:inline-grid;place-items:center;vertical-align:2px;
+.tick{display:inline-grid;place-items:center;vertical-align:2px;cursor:pointer;
   width:21px;height:21px;border-radius:50%;
   background:var(--badge,var(--verified));color:var(--ink);
-  font-size:12px;font-weight:700;line-height:1}
+  font-size:12px;font-weight:700;line-height:1;
+  transition:transform .12s ease,opacity .12s ease}
+.tick:hover{transform:scale(1.14)}
+.tick:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+/* pressed = this badge's rank is currently cut from view — a ring rather than a colour
+   change, since the colour is what says which tier this is in the first place */
+.tick[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ink),0 0 0 3.5px var(--badge,var(--verified))}
+/* the rail entry outlives its own section being hidden — dimming it is the only sign,
+   short of the vanished section itself, that a cutoff is active */
+.index a.hidden-from{opacity:.4}
+.index a.hidden-from:hover{opacity:.7}
 .common .tick{margin-left:9px}
 .tick svg{width:13px;height:13px}
 .tick-audio{--badge:#2D9CFF}
@@ -191,7 +201,7 @@ li[data-standing="s"]{--badge:#E8C468}
       <div class="hits" id="placeHits" hidden></div>
     </div>
     <div class="finder" id="userBar" hidden>
-      <input id="userQuick" type="text" placeholder="Your iNaturalist username &mdash; for the ticks"
+      <input id="userQuick" type="text" placeholder="Your iNaturalist username &mdash; to display lvl badges"
              autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
     </div>
   </div>
@@ -254,7 +264,11 @@ const view = {
   pname:  q.get("pname") || "",
   lat:    q.get("lat") || "",
   lng:    q.get("lng") || "",
-  radius: q.get("radius") || ""
+  radius: q.get("radius") || "",
+  // The hide-cascade's cutoff: null shows everything, N hides standing N and above (see
+  // STANDING_ORDER, defined once TIERS exists further down). Bounds are checked there too,
+  // not here — an out-of-range value just matches nothing, which is harmless.
+  hide:   q.has("hide") && /^\d+$/.test(q.get("hide")) ? +q.get("hide") : null
 };
 // A pin needs both halves to mean anything; a bare lat with no lng is no location at all.
 const hasPin = !!(view.lat && view.lng && view.radius);
@@ -558,19 +572,27 @@ async function standingLookup(user){
 // "audio" for the sound-only band, or "" for Untagged, which has nothing to point at — and,
 // via `tag || "seen"`, which badge heads the section. Both vocabularies are the same one
 // standingLookup speaks, so a band and a badge can never drift apart.
+// Weakest first, audio last: a tag always beats a sound recording (a tag means a photo was
+// found and judged, which a sound-only record has no equivalent of), so it sits above every
+// Lvl tier rather than beside Untagged. That ordering is also the rank the hide-cascade
+// below reads off this array — audio last means clicking its badge only ever hides itself,
+// while clicking Untagged's hides the whole list.
 const TIERS = [
   ["Audio only", "Recorded by sound alone — no photograph to tag.",  "audio"],
   ["Untagged",   "Not one observation carries a Lvl tag.",           ""],
   ["Lvl C",      "C is the best tag on it — nothing tagged B or S.", "c"],
   ["Lvl B",      "B is the best tag on it — nothing tagged S.",      "b"],
-  ["Lvl S",      "Carries an S tag, the top tier.",                  "s"]
+  ["Lvl S",      "Carries an S tag, the top tier.",                  "s"],
 ];
 
-// Band every species the user has recorded by its best tag. The tiers override downwards,
-// S over B over C, so a species tagged both S and C counts as Lvl S and appears once.
-// Audio-only sits just above Untagged: a tag always wins, since a tag means a photo was
-// found and judged, but an unheard-of photo is not what a sound-only record is. Nothing
-// drops out — the five tiers together are everything recorded in scope.
+// The same order, as standing names rather than tags — one array driving both the Lvl
+// tab's sections and the place tab's per-row rank, so "hide this and above" can never mean
+// something different depending which tab it's clicked on.
+const STANDING_ORDER = TIERS.map(([, , tag]) => tag || "seen");
+function standingRank(mark){ return STANDING_ORDER.indexOf(mark || "seen"); }
+
+// Band every species the user has recorded by its best tag. Nothing drops out — the five
+// tiers together are everything recorded in scope.
 async function speciesByLvl(user){
   const have = {};
   for(const tag of LEVELS) have[tag] = await speciesIdsWithTag(user, tag);
@@ -580,7 +602,7 @@ async function speciesByLvl(user){
   for(const x of all){
     if(!isSpeciesRow(x)) continue;
     const has = tag => have[tag].has(x.taxon.id);
-    buckets[has("s") ? 4 : has("b") ? 3 : has("c") ? 2 : audio.has(x.taxon.id) ? 1 : 0].push(x);
+    buckets[has("s") ? 3 : has("b") ? 2 : has("c") ? 1 : audio.has(x.taxon.id) ? 4 : 0].push(x);
   }
   // Heaviest-recorded first inside each tier: the species you already have the most shots
   // of are the ones most likely to hold a taggable frame. The page can flip to A–Z
@@ -616,18 +638,27 @@ const BADGE = {
   s:     ["S",          "best tag: Lvl S"]
 };
 
+// Every badge doubles as a hide-cascade trigger: click one and it, along with everything
+// ranked at or above it (see STANDING_ORDER), drops out of view — a click again on the
+// same rank brings it all back. `data-rank` is what wireHideToggle reads; the row badges
+// carry a title of their own already, so only the parts particular to each caller differ.
 function badgeHtml(mark, user){
   const hit = BADGE[mark] || BADGE.seen;
-  return ` <span class="tick tick-${esc(mark)}" title="@${esc(user)} &mdash; ${hit[1]}"
+  return ` <span class="tick tick-${esc(mark)}" data-rank="${standingRank(mark)}"
+      role="button" tabindex="0"
+      title="@${esc(user)} &mdash; ${hit[1]}. Click to hide this and every better standing."
       aria-label="${hit[1]}">${hit[0]}</span>`;
 }
 
 // The same badge standing in for a whole band, on the Lvl tab's headings and rail. Takes a
-// TIERS tag, where "" means Untagged and maps to the plain tick. Decorative here — the
-// heading beside it already names the tier — so it stays out of the reading order.
-function tierBadge(tag){
+// TIERS tag, where "" means Untagged and maps to the plain tick, and the tier's own index
+// (its rank) for the hide-cascade. No longer purely decorative — aria-hidden is dropped in
+// favour of a real label, since it now does something.
+function tierBadge(tag, i){
   const mark = tag || "seen";
-  return `<span class="tick tick-${esc(mark)}" aria-hidden="true">${BADGE[mark][0]}</span>`;
+  return `<span class="tick tick-${esc(mark)}" data-rank="${i}" role="button" tabindex="0"
+      title="Hide ${esc(BADGE[mark][1])} and above"
+      aria-label="Hide ${esc(BADGE[mark][1])} and above">${BADGE[mark][0]}</span>`;
 }
 
 // `mark` is the place tab's badge: null on the Lvl tab, where every row is the user's own
@@ -689,10 +720,12 @@ function sortRows(rows, sortBy){
 }
 
 // The badges, spelled out — the glyphs are only obvious once, and a phone has no hover to
-// fall back on.
+// fall back on. Doubles as the persistent hide-cascade control here: rows vanish once
+// hidden, so this is the one thing on the place tab that stays put to bring them back.
 function legendHtml(){
-  return `<p class="legend">${["seen","audio","c","b","s"].map(m =>
-    `<span class="legend-item"><span class="tick tick-${m}">${BADGE[m][0]}</span>${
+  return `<p class="legend">${STANDING_ORDER.map((m, i) =>
+    `<span class="legend-item"><span class="tick tick-${m}" data-rank="${i}" role="button" tabindex="0"
+        title="Hide ${esc(BADGE[m][1])} and above">${BADGE[m][0]}</span>${
       esc(BADGE[m][1].replace("best tag: ", ""))}</span>`).join("")}</p>`;
 }
 
@@ -732,7 +765,7 @@ function listHtml(buckets, user, sortBy){
   // The rail carries the same badges as the headings it jumps to, so the two read as one
   // set rather than as a list of names beside a list of icons.
   const index = `<nav class="index">` + TIERS.map(([title, , tag], i) =>
-    `<a href="#tier-${i}"><span class="ix-name">${tierBadge(tag)}${esc(title)}</span>
+    `<a href="#tier-${i}"><span class="ix-name">${tierBadge(tag, i)}${esc(title)}</span>
        <span class="n">${buckets[i].length}</span></a>`
   ).join("") + `</nav>`;
   const sections = TIERS.map(([title, blurb, tag], i) => {
@@ -744,7 +777,7 @@ function listHtml(buckets, user, sortBy){
             title="Every ${esc(title)} observation on iNaturalist">${esc(title)}</a>`
       : esc(title);
     return `<section class="tier" id="tier-${i}">
-      <h2>${tierBadge(tag)}${head}<span class="n">${rows.length}</span></h2>
+      <h2>${tierBadge(tag, i)}${head}<span class="n">${rows.length}</span></h2>
       <p class="blurb">${esc(blurb)}</p>
       ${rows.length ? "<ul>" + rows.map((x, n) => rowHtml(x, n, user)).join("") + "</ul>"
                     : `<p class="clear">All clear.</p>`}
@@ -797,8 +830,17 @@ function retally(ul, shown){
   if(rail) rail.textContent = shown;
 }
 
-// One pass over the rendered rows: order, threshold, renumber, band. Everything the two
-// controls do goes through here, so they can never disagree about the list.
+// A row's own standing, ranked against the cutoff — only meaningful on the place tab, where
+// each row carries its badge in `data-standing`. Empty (never recorded, no badge) never
+// matches: the cascade only ever touches species that have a standing to rank.
+function rankHidden(li){
+  const standing = li.dataset.standing;
+  return !!standing && view.hide != null && standingRank(standing) >= view.hide;
+}
+
+// One pass over the rendered rows: order, threshold, rank cutoff, renumber, band. Every
+// control that touches visibility goes through here, so none of them can disagree about
+// the list.
 function relist(){
   const cmp = comparator(view.sort);
   document.querySelectorAll("#main ul").forEach(ul => {
@@ -806,11 +848,57 @@ function relist(){
     let shown = 0;
     [...ul.children].sort(cmp).forEach(li => {
       ul.appendChild(li);                          // moves, does not clone
-      li.hidden = (+li.dataset.count) < view.min;
+      li.hidden = (+li.dataset.count) < view.min || rankHidden(li);
       if(!li.hidden) li.firstElementChild.textContent = ++shown;   // .num
     });
     retally(ul, shown);
     drawFamilies(ul, view.sort === "taxo");
+  });
+}
+
+// The Lvl tab's half of the cascade: whole `<section>`s disappear rather than individual
+// rows, since a tier there IS a standing — hiding "C and above" means hiding those three
+// sections outright. The place tab has no matching sections (`relist` handles it by row
+// instead), so this is a harmless no-op there.
+//
+// The badge that triggered a hide can vanish with its section; the rail's copy of the same
+// badge does not, which is what makes it the one control that can always undo this.
+function applyHideFrom(){
+  document.querySelectorAll(".tier").forEach(sec => {
+    const i = +sec.id.slice(5);                    // "tier-3" -> 3; NaN on the place tab's "here"
+    sec.hidden = view.hide != null && i >= view.hide;
+  });
+  document.querySelectorAll(".tick[data-rank]").forEach(t => {
+    const cut = view.hide != null && +t.dataset.rank >= view.hide;
+    t.setAttribute("aria-pressed", cut);
+    const rail = t.closest(".index a");
+    if(rail) rail.classList.toggle("hidden-from", cut);
+  });
+}
+
+function toggleHideFrom(i){
+  view.hide = view.hide === i ? null : i;
+  writeState({ hide: view.hide == null ? "" : String(view.hide) });
+  applyHideFrom();     // sections, on the Lvl tab
+  relist();             // rows, on the place tab (also re-applies sort/threshold, which is a no-op if neither changed)
+}
+
+// One delegated listener catches every badge on the page — section headings, the rail, the
+// place tab's own rows, and its legend — rather than binding each kind separately.
+function wireHideToggle(){
+  document.addEventListener("click", e => {
+    const t = e.target.closest(".tick[data-rank]");
+    if(!t) return;
+    e.preventDefault();
+    e.stopPropagation();   // the rail badge sits inside its <a> — this keeps that from also firing
+    toggleHideFrom(+t.dataset.rank);
+  });
+  document.addEventListener("keydown", e => {
+    if(e.key !== "Enter" && e.key !== " ") return;
+    const t = e.target.closest && e.target.closest(".tick[data-rank]");
+    if(!t) return;
+    e.preventDefault();
+    toggleHideFrom(+t.dataset.rank);
   });
 }
 
@@ -896,7 +984,8 @@ function failed(hint){
 // rather than in front of it. The headings appear when they land.
 function afterPaint(buckets){
   wireSort();
-  if(view.min) relist();       // a threshold arriving in the address applies to first paint
+  applyHideFrom();              // Lvl tab's sections; a no-op if nothing is cut and place-tab-safe
+  if(view.min || view.hide != null) relist();   // a threshold or cutoff in the address applies to first paint
   familiesReady = loadFamilies(buckets).catch(() => {});
   familiesReady.then(() => {
     if(view.sort === "taxo") document.querySelectorAll("#main ul").forEach(ul => drawFamilies(ul, true));
@@ -1011,6 +1100,10 @@ const NOTES = {
 };
 
 (function init(){
+  // Delegated on the document, so it covers every badge this page ever paints without
+  // needing to be re-bound after each render — wired once, here, rather than per paint.
+  wireHideToggle();
+
   // The tabs are two addresses over one scope, so switching carries the scope across and
   // drops only what cannot apply.
   document.querySelectorAll("#tabs a").forEach(a => {
