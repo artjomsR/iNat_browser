@@ -370,11 +370,15 @@ const TIERS = [
   ["Lvl S",      "Carries an S tag, the top tier.",                  "s"],
 ];
 
-// Hide-cascade rank — separate from TIERS on purpose, so reordering the sections above
-// never touches this. Audio sits at the floor: clicking its badge hides every standing,
-// since Untagged/C/B/S are all "above" a sound recording alone. Clicking Untagged's badge,
-// one step up, hides Untagged/C/B/S but leaves audio-only species be — a narrower broom for
-// the ones that still need an actual photograph rather than a better one.
+// Hide-cascade rank — weakest standing first, and deliberately NOT the same array as TIERS:
+// the two pages show these in different orders on purpose (Untagged first on the Lvl tab,
+// audio first on the place tab), so display order and rank have to be free to disagree.
+// Rearranging TIERS must never change what a click hides.
+//
+// Audio sits at the floor: clicking it hides every standing, since a species heard and never
+// photographed is the least you can have — on the place tab that leaves only the species you
+// have never recorded at all. The green tick one rung up hides Untagged/C/B/S but leaves
+// audio-only be. This is also the order the place tab's legend is painted in.
 const STANDING_ORDER = ["audio", "seen", "c", "b", "s"];
 function standingRank(mark){ return STANDING_ORDER.indexOf(mark || "seen"); }
 
@@ -516,6 +520,8 @@ function sortRows(rows, sortBy){
 // The badges, spelled out — the glyphs are only obvious once, and a phone has no hover to
 // fall back on. Doubles as the persistent hide-cascade control here: rows vanish once
 // hidden, so this is the one thing on the place tab that stays put to bring them back.
+// Painted in STANDING_ORDER — audio, tick, C, B, S — which is the place tab's own order and
+// deliberately not the Lvl tab's; here it doubles as the rank each badge carries.
 function legendHtml(){
   return `<p class="legend">${STANDING_ORDER.map((m, i) =>
     `<span class="legend-item"><span class="tick tick-${m}" data-rank="${i}" role="button" tabindex="0"
@@ -536,7 +542,7 @@ function placeListHtml(rows, standing, sortBy){
   }
   const tally = standing
     ? `<p class="blurb">${rows.filter(x => !standing(x.taxon.id)).length} of these
-         ${rows.length} are unticked for @${esc(view.user)}.</p>${legendHtml()}`
+         ${rows.length} are unobserved for @${esc(view.user)}.</p><p class="blurb">Click the LVLs below to hide them.</p>${legendHtml()}`
     : `<p class="blurb">Add a username to tick off the ones you have already recorded.</p>`;
   return `<section class="tier" id="here">
     <h2><a href="${esc(areaSpeciesUrl())}" target="_blank" rel="noopener"
@@ -626,7 +632,8 @@ function retally(ul, shown){
 
 // A row's own standing, ranked against the cutoff — only meaningful on the place tab, where
 // each row carries its badge in `data-standing`. Empty (never recorded, no badge) never
-// matches: the cascade only ever touches species that have a standing to rank.
+// matches: the cascade only ever touches species that have a standing to rank, so the ones
+// you have never recorded survive every cutoff — which is the point of the place tab.
 function rankHidden(li){
   const standing = li.dataset.standing;
   return !!standing && view.hide != null && standingRank(standing) >= view.hide;
@@ -652,17 +659,22 @@ function relist(){
 
 // The Lvl tab's half of the cascade: whole `<section>`s disappear rather than individual
 // rows, since a tier there IS a standing — hiding "C and above" means hiding those three
-// sections outright. The place tab has no matching sections (`relist` handles it by row
-// instead), so this is a harmless no-op there.
+// sections outright.
+//
+// Only the Lvl tab's `tier-N` sections are eligible. The place tab's one section is
+// `id="here"`, and it must never be hidden as a block: its rows carry their own standings
+// and `relist` filters them individually, leaving the never-recorded species behind. (This
+// is where the bug lived — `+"here".slice(5)` is `+""`, which is 0, not NaN, so that section
+// was read as TIERS[0] and the whole list vanished on the two lowest cutoffs.) Matching the
+// id explicitly means a section has to name a tier to be touched at all.
 //
 // The badge that triggered a hide can vanish with its section; the rail's copy of the same
 // badge does not, which is what makes it the one control that can always undo this.
 function applyHideFrom(){
   document.querySelectorAll(".tier").forEach(sec => {
-    const i = +sec.id.slice(5);                    // "tier-3" -> 3; NaN on the place tab's "here"
-    const tier = TIERS[i];                          // undefined on the place tab — sec.hidden stays false
-    const rank = tier && standingRank(tier[2]);
-    sec.hidden = tier != null && view.hide != null && rank >= view.hide;
+    const m = /^tier-(\d+)$/.exec(sec.id);
+    const tier = m && TIERS[+m[1]];
+    sec.hidden = !!tier && view.hide != null && standingRank(tier[2]) >= view.hide;
   });
   document.querySelectorAll(".tick[data-rank]").forEach(t => {
     const cut = view.hide != null && +t.dataset.rank >= view.hide;
@@ -826,7 +838,7 @@ async function runPlace(){
       : null;
     const fresh = standing ? rows.filter(x => !standing(x.taxon.id)).length : 0;
     paint(placeListHtml(rows, standing, view.sort),
-      `${rows.length} species` + (standing ? ` &middot; ${fresh} unticked` : ""));
+      `${rows.length} species` + (standing ? ` &middot; ${fresh} unobserved` : ""));
     afterPaint([rows]);
   }catch(e){
     failed("iNaturalist may be rate-limiting, or that place may be too large to tally.");

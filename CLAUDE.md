@@ -12,6 +12,7 @@ via `.claude/launch.json`'s static server) to run it.
   "Map" link. Two tabs over the same rows: `lvl` (one user's species banded by Lvl tag) and
   `place` (every species in an area, ticked off against a user). Fully addressed via query
   string (see the comment block at the top of `species.js`) so any state is bookmarkable.
+  - Category ordering is: Untagged (green tick), audio, LVLs for LVL page; and audio, observed (green tick), LVLs for species page
 
 Each page is a plain `<link rel="stylesheet">` + `<script src>` pair — no modules, no
 imports, everything in one script file per page. Keep it that way; don't introduce a build
@@ -28,7 +29,6 @@ step or split further unless a file becomes unwieldy again.
 
 - CSS custom properties for the whole palette (`--ink`, `--raise`, `--rule`, `--text`,
   `--mute`, `--mark`, `--verified`) — reuse these rather than hardcoding colors.
-- Dark theme only, `#0D1714` background, pink accent `--mark: #FF3E7C`.
 - No frameworks — vanilla DOM (`document.createElement`, template strings via `innerHTML`,
   `esc()` helper for escaping into HTML).
 - Page state lives in the URL query string / hash, not in memory-only JS state, so views are
