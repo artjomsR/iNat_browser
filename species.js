@@ -313,7 +313,7 @@ async function loadFamilies(buckets){
     const r = await fetch(`${API}/taxa?${p}`);
     if(!r.ok) throw new Error(r.status);
     const d = await r.json();
-    (d.results || []).forEach(t => families.set(t.id, { name: t.name, common: t.preferred_common_name || "" }));
+    (d.results || []).forEach(t => families.set(t.id, { id: t.id, name: t.name, common: t.preferred_common_name || "" }));
   }
   rows.forEach(x => {
     const fam = ancestorsOf(x.taxon).map(id => families.get(id)).find(Boolean);
@@ -619,8 +619,17 @@ function drawFamilies(ul, on){
     last = key;
     const head = document.createElement("li");
     head.className = "fam";
+    // The name opens this family within the current region — same place/pin scope as every
+    // row's own link. "View my" is unscoped by area on purpose: it is the one place on this
+    // page that answers "everywhere I've ever seen this family", not just here.
     head.innerHTML = fam
-      ? `<b>${esc(fam.name)}</b>${fam.common ? " <span>" + esc(fam.common) + "</span>" : ""}`
+      ? `<a class="famName" href="${esc(taxonAreaUrl(fam.id))}" target="_blank" rel="noopener"
+            title="This family's species here, on iNaturalist">
+          <b>${esc(fam.name)}</b>${fam.common ? ` <span class="famCommon">${esc(fam.common)}</span>` : ""}
+        </a>${view.user
+          ? `<span class="act"><a href="${esc(taxonObsUrl(fam.id, view.user))}" target="_blank" rel="noopener"
+                title="${esc(view.user)}'s own records of this family, everywhere">View my</a></span>`
+          : ""}`
       : `<b>Family not recorded</b>`;
     ul.insertBefore(head, li);
   });
