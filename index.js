@@ -256,6 +256,19 @@ const TAXON_ART = {
                            "M12 11.2A3.4 4 0 1 0 12 19.2A3.4 4 0 1 0 12 11.2Z"],
                     limb: ["M10 7.4L4.8 4.8M9.4 9.8L3.8 9.6M10.2 12L5.4 15.2M14 7.4L19.2 4.8M14.6 9.8L20.2 9.6M13.8 12L18.6 15.2"],
                     w: 1.7 },
+  // a crab, for the arthropods iNat leaves iconically homeless (see pinKind): carapace,
+  // two raised claws, three legs a side. Crustaceans are the bulk of them and the claws are
+  // the one arthropod silhouette that still reads at 22px — a millipede at this size is a
+  // smudge with a fringe. Claw arms are limbs so they tuck behind the carapace; the pincers
+  // themselves are body, or they'd taper away to nothing.
+  Arthropoda:     { body: ["M6.2 14.6A5.8 3.4 0 1 0 17.8 14.6A5.8 3.4 0 1 0 6.2 14.6Z",
+                           "M3.5 6.2A2.1 1.9 0 1 0 7.7 6.2A2.1 1.9 0 1 0 3.5 6.2Z",
+                           "M16.3 6.2A2.1 1.9 0 1 0 20.5 6.2A2.1 1.9 0 1 0 16.3 6.2Z"],
+                    limb: ["M8.8 12.2L6.6 8.2M7.6 13.4L3.0 12.4M7.0 15.4L2.8 16.2M8.2 17.0L5.6 20.0M15.2 12.2L17.4 8.2M16.4 13.4L21.0 12.4M17.0 15.4L21.2 16.2M15.8 17.0L18.4 20.0"],
+                    vein: ["M3.7 4.9L6.0 6.3M20.3 4.9L18.0 6.3"],
+                    dot:  ["M9.6 13.4A0.8 0.8 0 1 0 11.2 13.4A0.8 0.8 0 1 0 9.6 13.4Z",
+                           "M12.8 13.4A0.8 0.8 0 1 0 14.4 13.4A0.8 0.8 0 1 0 12.8 13.4Z"],
+                    w: 1.7 },
   // a T with the crossbar hollowed out from below
   Fungi:          { body: ["M3.6 12.8C3.6 8 7.4 4.8 12 4.8 16.6 4.8 20.4 8 20.4 12.8C17.6 11.4 14.8 10.8 12 10.8 9.2 10.8 6.4 11.4 3.6 12.8Z",
                            "M10.2 10.6L13.8 10.6 13.8 17.1C13.8 18.4 13 19.3 12 19.3 11 19.3 10.2 18.4 10.2 17.1Z"] },
@@ -265,6 +278,20 @@ const TAXON_ART = {
                     limb: ["M8.3 9C8.3 6.5 9.9 5 12.1 5 14.4 5 15.9 6.4 15.9 8.4 15.9 11.3 12 11.8 12 14.7"],
                     w: 2.4 }
 };
+
+// Which glyph a pin takes. Almost always just the observation's iconic taxon, with one
+// repair: iNat has no iconic taxon for the arthropods that are neither insects nor
+// arachnids, so crabs, prawns, woodlice, barnacles, centipedes and springtails all arrive
+// as bare Animalia and used to draw as the plain circle — the same mark as a jellyfish or a
+// worm. Their ancestry still says Arthropoda, which is all it takes to give them their own.
+// Insects and arachnids never reach this branch: their iconic name is their own, so they
+// keep their own glyphs.
+const ARTHROPODA = 47120;
+function pinKind(t){
+  const kind = t.iconic_taxon_name || "unknown";
+  if(kind !== "Animalia") return kind;
+  return (t.ancestor_ids || []).includes(ARTHROPODA) ? "Arthropoda" : kind;
+}
 
 // halo must be opaque: its strokes overlap, and a translucent one would seam where they do.
 function taxonSvg(kind, fill, halo){
@@ -700,7 +727,7 @@ async function refreshAccuracyLayer(){
               iconSize: [19,19], iconAnchor: [9.5,9.5]
             })
           : L.divIcon({
-              className: "tax-pin", html: taxonSvg(t.iconic_taxon_name || "unknown", fill, halo),
+              className: "tax-pin", html: taxonSvg(pinKind(t), fill, halo),
               iconSize: [22,22], iconAnchor: [11,11]
             })
       });
