@@ -869,7 +869,7 @@ async function runPlace(){
       : null;
     const fresh = standing ? rows.filter(x => !standing(x.taxon.id)).length : 0;
     paint(placeListHtml(rows, standing, view.sort),
-      standing ? `${fresh} / ${rows.length} species unobserved` : `${rows.length} species`);
+      standing ? `${rows.length - fresh} / ${rows.length} species observed` : `${rows.length} species`);
     afterPaint([rows]);
   }catch(e){
     failed("iNaturalist may be rate-limiting, or that place may be too large to tally.");
