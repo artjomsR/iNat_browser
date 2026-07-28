@@ -192,6 +192,80 @@ function speakerSvg(fill, ring){
   </svg>`;
 }
 
+/* ---------------- iconic taxon pin art ---------------- */
+
+// One glyph per iconic taxon, drawn in a 24×24 box, so a pin says what kind of thing was
+// found before you read the tooltip. Three roles, because the pin still has to carry the
+// accuracy colour and stay legible over any base layer:
+//   body — filled silhouette, painted in the accuracy colour
+//   limb — strokes sitting behind the body (legs, wings, a tail), same colour
+//   vein — interior lines (a midrib, a hinge), painted in the outline colour on top
+//   dot  — interior marks (an eye, a pupil), same colour, filled rather than stroked
+// Body and limb are each drawn twice: fattened in the outline colour as a halo, then in
+// the accuracy colour on top. Overlapping subpaths therefore fuse into one silhouette with
+// no seams, which is why a glyph can be built from plain circles and ellipses.
+// Anything without its own glyph (Chromista, Protozoa, and whatever iNat adds next) falls
+// back to Animalia's dot — the plain circle these pins have always been.
+const TAXON_ART = {
+  Plantae:        { body: ["M18.6 5.4C18.6 13.4 13.9 18.6 5.4 18.6 5.4 10.6 10.1 5.4 18.6 5.4Z"],
+                    vein: ["M7.2 16.8L16.8 7.2"] },
+  // a gull: two strokes, nothing else
+  Aves:           { limb: ["M3.6 15.4C6.2 8.6 9.8 9 12 14.2 14.2 9 17.8 8.6 20.4 15.4"], w: 2.4 },
+  // head and two ears, drawn as one outline
+  Mammalia:       { body: ["M12 19.4C8.3 19.4 5.9 16.7 5.9 13.2 5.9 11.8 6.1 10.5 6.5 9.4L5.3 4.3 10.2 6.9C10.8 6.7 11.4 6.6 12 6.6 12.6 6.6 13.2 6.7 13.8 6.9L18.7 4.3 17.5 9.4C17.9 10.5 18.1 11.8 18.1 13.2 18.1 16.7 15.7 19.4 12 19.4Z"] },
+  // a snake: one wriggling stroke, thickened to a head at the leading end. Legs were tried
+  // and abandoned — four of them on a 22px pin read as a stick figure, not a lizard.
+  Reptilia:       { limb: ["M3.4 20.2C7.2 20.2 6.6 14.2 10.4 14.2 14.2 14.2 13.6 8.2 17.2 8.2"],
+                    body: ["M16 8.2A2.6 2 0 1 0 21.2 8.2A2.6 2 0 1 0 16 8.2Z"],
+                    dot:  ["M18.9 7.2A0.75 0.75 0 1 0 20.4 7.2A0.75 0.75 0 1 0 18.9 7.2Z"],
+                    w: 2.3 },
+  // a frog head-on: dome plus two eyes
+  Amphibia:       { body: ["M4.6 17.8C4.6 12.8 7.9 9.6 12 9.6 16.1 9.6 19.4 12.8 19.4 17.8Z",
+                           "M5.5 9.4A2.9 2.9 0 1 0 11.3 9.4A2.9 2.9 0 1 0 5.5 9.4Z",
+                           "M12.7 9.4A2.9 2.9 0 1 0 18.5 9.4A2.9 2.9 0 1 0 12.7 9.4Z"],
+                    dot:  ["M7.4 9.4A1 1 0 1 0 9.4 9.4A1 1 0 1 0 7.4 9.4Z",
+                           "M14.6 9.4A1 1 0 1 0 16.6 9.4A1 1 0 1 0 14.6 9.4Z"] },
+  // an infinity laid on its side: round body loop, tail folded to a sharp point
+  Actinopterygii: { body: ["M15 12C12 6.4 4.2 6.6 3.4 12 4.2 17.4 12 17.6 15 12L20.6 7.2 20.6 16.8Z"],
+                    dot:  ["M5.9 10.6A1.1 1.1 0 1 0 8.1 10.6A1.1 1.1 0 1 0 5.9 10.6Z"] },
+  // a bivalve: fan from the hinge, ears either side of it, and five scallops on the rim.
+  // The scalloped rim is the whole tell — interior ribs only muddy it at pin size.
+  Mollusca:       { body: ["M12 19.6L7.8 18.6 9.2 16.4 3.8 9.4A2.4 2.4 0 0 1 6.8 7.5A2.4 2.4 0 0 1 10.2 6.5A2.4 2.4 0 0 1 13.8 6.5A2.4 2.4 0 0 1 17.2 7.5A2.4 2.4 0 0 1 20.2 9.4L14.8 16.4 16.2 18.6Z"] },
+  Arachnida:      { body: ["M7.7 12A4.3 4.3 0 1 0 16.3 12A4.3 4.3 0 1 0 7.7 12Z"],
+                    limb: ["M14.9 11.1L19.6 9.5M13.9 9.6L16.9 5.7M10.1 9.6L7.1 5.7M9.2 11.1L4.4 9.5M9.2 12.9L4.4 14.5M10.1 14.4L7.1 18.3M13.9 14.4L16.9 18.3M14.9 12.9L19.6 14.5"],
+                    w: 1.7 },
+  // thorax and abdomen overlap into one blob, six legs off the thorax
+  Insecta:        { body: ["M12 6.2A2.7 3.2 0 1 0 12 12.6A2.7 3.2 0 1 0 12 6.2Z",
+                           "M12 11.2A3.4 4 0 1 0 12 19.2A3.4 4 0 1 0 12 11.2Z"],
+                    limb: ["M10 7.4L4.8 4.8M9.4 9.8L3.8 9.6M10.2 12L5.4 15.2M14 7.4L19.2 4.8M14.6 9.8L20.2 9.6M13.8 12L18.6 15.2"],
+                    w: 1.7 },
+  // a T with the crossbar hollowed out from below
+  Fungi:          { body: ["M3.6 12.8C3.6 8 7.4 4.8 12 4.8 16.6 4.8 20.4 8 20.4 12.8C17.6 11.4 14.8 10.8 12 10.8 9.2 10.8 6.4 11.4 3.6 12.8Z",
+                           "M10.2 10.6L13.8 10.6 13.8 17.1C13.8 18.4 13 19.3 12 19.3 11 19.3 10.2 18.4 10.2 17.1Z"] },
+  Animalia:       { body: ["M5.8 12A6.2 6.2 0 1 0 18.2 12A6.2 6.2 0 1 0 5.8 12Z"] },
+  // nothing identified yet
+  unknown:        { body: ["M10.6 17.6A1.4 1.4 0 1 0 13.4 17.6A1.4 1.4 0 1 0 10.6 17.6Z"],
+                    limb: ["M8.3 9C8.3 6.5 9.9 5 12.1 5 14.4 5 15.9 6.4 15.9 8.4 15.9 11.3 12 11.8 12 14.7"],
+                    w: 2.4 }
+};
+
+// halo must be opaque: its strokes overlap, and a translucent one would seam where they do.
+function taxonSvg(kind, fill, halo){
+  const art = TAXON_ART[kind] || TAXON_ART.Animalia;
+  const w = art.w || 1.9;
+  const draw = list => (list || []).map(d => `<path d="${d}"/>`).join("");
+  const body = draw(art.body), limb = draw(art.limb), vein = draw(art.vein), dot = draw(art.dot);
+  const ends = `stroke-linecap="round" stroke-linejoin="round"`;
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">
+    ${limb ? `<g fill="none" stroke="${halo}" stroke-width="${(w + 2.4).toFixed(1)}" ${ends}>${limb}</g>` : ""}
+    ${body ? `<g fill="${halo}" stroke="${halo}" stroke-width="2.8" ${ends}>${body}</g>` : ""}
+    ${limb ? `<g fill="none" stroke="${fill}" stroke-width="${w}" ${ends}>${limb}</g>` : ""}
+    ${body ? `<g fill="${fill}">${body}</g>` : ""}
+    ${vein ? `<g fill="none" stroke="${halo}" stroke-width="1.4" ${ends}>${vein}</g>` : ""}
+    ${dot  ? `<g fill="${halo}">${dot}</g>` : ""}
+  </svg>`;
+}
+
 /* ---------------- accuracy color scale ---------------- */
 
 const ACC_STOPS = [        // [meters, hex] — log-scale interpolated between stops
@@ -586,19 +660,23 @@ async function refreshAccuracyLayer(){
       const t = o.taxon || {};
 
       const ring = known ? "rgba(255,255,255,.85)" : ACC_UNKNOWN_RING;
+      const halo = known ? "#FFFFFF" : ACC_UNKNOWN_RING;   // taxon glyphs need it opaque
       const fill = known ? accuracyColor(acc) : ACC_UNKNOWN_FILL;
       const audio = isAudioOnly(o);
 
-      const marker = audio
-        ? L.marker([lat, lng], {
-            icon: L.divIcon({
+      // A sound recording stays a speaker whatever it is; everything else takes the glyph
+      // for its iconic taxon, down to a question mark for the not-yet-identified.
+      const marker = L.marker([lat, lng], {
+        icon: audio
+          ? L.divIcon({
               className: "snd-pin", html: speakerSvg(fill, ring),
               iconSize: [19,19], iconAnchor: [9.5,9.5]
             })
-          })
-        : L.circleMarker([lat, lng], {
-            radius: 6, weight: 1.5, color: ring, fillColor: fill, fillOpacity: .9
-          });
+          : L.divIcon({
+              className: "tax-pin", html: taxonSvg(t.iconic_taxon_name || "unknown", fill, halo),
+              iconSize: [22,22], iconAnchor: [11,11]
+            })
+      });
       marker.bindTooltip(
         `${esc(t.preferred_common_name || t.name || "Unidentified")} — ${fmtAcc(known ? acc : null)}`,
         { direction: "top", offset: [0,-4], opacity: .95 }
