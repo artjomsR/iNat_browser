@@ -909,6 +909,12 @@ function fmtDate(iso){
   if(!m) return iso;
   return `${+m[3]} ${MONTHS[+m[2]-1]} ${m[1]}`;
 }
+// time_observed_at carries the clock time in the observer's own UTC offset, so this reads
+// out the hour and minute as written rather than converting to the viewer's timezone.
+function fmtTime(iso){
+  const m = /T(\d{2}):(\d{2})/.exec(iso || "");
+  return m ? `${m[1]}:${m[2]}` : "";
+}
 
 function speciesUrl(latlng, km){
   const p = obsParams();
@@ -963,7 +969,8 @@ function resultsHtml(list, km, latlng){
       ? `<span class="acc-dot" style="background:${accuracyColor(acc)}"></span>`
       : `<span class="acc-dot acc-dot-unknown"></span>`;
     const meta = [];
-    meta.push(fmtDate(o.observed_on));
+    const time = fmtTime(o.time_observed_at);
+    meta.push(fmtDate(o.observed_on) + (time ? ", " + time : ""));
     meta.push(`${accDot}${esc(fmtAcc(accKnown ? acc : null))}`);
     if(o.user && o.user.login) meta.push("@" + esc(o.user.login));
     let badges = "";
