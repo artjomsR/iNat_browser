@@ -248,13 +248,21 @@ const TAXON_ART = {
   // a bivalve: fan from the hinge, ears either side of it, and five scallops on the rim.
   // The scalloped rim is the whole tell — interior ribs only muddy it at pin size.
   Mollusca:       { body: ["M12 19.6L7.8 18.6 9.2 16.4 3.8 9.4A2.4 2.4 0 0 1 6.8 7.5A2.4 2.4 0 0 1 10.2 6.5A2.4 2.4 0 0 1 13.8 6.5A2.4 2.4 0 0 1 17.2 7.5A2.4 2.4 0 0 1 20.2 9.4L14.8 16.4 16.2 18.6Z"] },
-  Arachnida:      { body: ["M7.7 12A4.3 4.3 0 1 0 16.3 12A4.3 4.3 0 1 0 7.7 12Z"],
-                    limb: ["M14.9 11.1L19.6 9.5M13.9 9.6L16.9 5.7M10.1 9.6L7.1 5.7M9.2 11.1L4.4 9.5M9.2 12.9L4.4 14.5M10.1 14.4L7.1 18.3M13.9 14.4L16.9 18.3M14.9 12.9L19.6 14.5"],
-                    w: 1.7 },
-  // thorax and abdomen overlap into one blob, six legs off the thorax
-  Insecta:        { body: ["M12 6.2A2.7 3.2 0 1 0 12 12.6A2.7 3.2 0 1 0 12 6.2Z",
-                           "M12 11.2A3.4 4 0 1 0 12 19.2A3.4 4 0 1 0 12 11.2Z"],
-                    limb: ["M10 7.4L4.8 4.8M9.4 9.8L3.8 9.6M10.2 12L5.4 15.2M14 7.4L19.2 4.8M14.6 9.8L20.2 9.6M13.8 12L18.6 15.2"],
+  // the web, not the animal: eight radials over two rings, the radials poking out past the
+  // outer ring as anchor threads. Any spider small enough for a pin is a blob with a fringe,
+  // which is the insect's mark too, so the web carries the meaning instead. Threads have to
+  // stay thin — the halo behind each one is 2.4 wider than the thread itself, so anything
+  // heavier than about 1.5 closes the cells and the whole web fills in solid.
+  Arachnida:      { limb: ["M21.4 12L2.6 12M18.6 18.6L5.4 5.4M12 21.4L12 2.6M5.4 18.6L18.6 5.4",
+                           "M16.6 12L15.3 15.3L12 16.6L8.7 15.3L7.4 12L8.7 8.7L12 7.4L15.3 8.7Z",
+                           "M20.6 12L18.1 18.1L12 20.6L5.9 18.1L3.4 12L5.9 5.9L12 3.4L18.1 5.9Z"],
+                    w: 1.4 },
+  // one blob and six legs, a beetle from above. Both of the fancier tries lost at 22px: a
+  // separate thorax and abdomen merged into one lump anyway, and antennae read as a fourth
+  // pair of legs.
+  Insecta:        { body: ["M8.6 12A3.4 4.8 0 1 0 15.4 12A3.4 4.8 0 1 0 8.6 12Z"],
+                    limb: ["M9.6 8.6L5.8 4.2M8.7 11.6L2.9 10.4M9.4 15.2L5.2 19.2",
+                           "M14.4 8.6L18.2 4.2M15.3 11.6L21.1 10.4M14.6 15.2L18.8 19.2"],
                     w: 1.7 },
   // a crab, for the arthropods iNat leaves iconically homeless (see pinKind): carapace,
   // two raised claws, three legs a side. Crustaceans are the bulk of them and the claws are
