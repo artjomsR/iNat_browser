@@ -89,6 +89,24 @@ function obsParams(){
   return p;
 }
 
+// Unobserved mode's rank window (above) floors results at species so a subspecies can be
+// compared against its parent's rank — but a genuinely unidentified observation has no
+// taxon at all, so it never clears that floor and silently never shows, even though
+// "nothing identified yet" is the plainest case of something not yet observed. This mirrors
+// obsParams()'s other filters for that one case: quality, date range and precision still
+// apply, and the target user's own uploads are still excluded, but nothing taxon-shaped
+// (taxon_id, iconic_taxa, the rank window itself) can match a record that has no taxon.
+function unknownParams(){
+  const p = new URLSearchParams();
+  p.set("identified", "false");
+  if(state.unobs) p.set("not_user_id", state.unobs);
+  if(state.quality.length) p.set("quality_grade", state.quality.join(","));
+  if(state.precise){ p.set("geoprivacy", "open"); p.set("taxon_geoprivacy", "open"); }
+  if(state.d1)      p.set("d1", state.d1);
+  if(state.d2)      p.set("d2", state.d2);
+  return p;
+}
+
 // Desired-species levels, best first — each value is both the button's mode and the
 // observation tag it matches. The priority stacks: picking a level hides species already
 // tagged at that level *or better*, so the exclusion set for level i is tags 0..i.
@@ -704,23 +722,42 @@ async function refreshAccuracyLayer(){
   const mine = ++accSeq;
   accStatus.textContent = "Loading…";
   const b = map.getBounds();
+  const bbox = {
+    swlat: b.getSouth().toFixed(6), swlng: b.getWest().toFixed(6),
+    nelat: b.getNorth().toFixed(6), nelng: b.getEast().toFixed(6)
+  };
   const p = obsParams();
-  p.set("swlat", b.getSouth().toFixed(6));
-  p.set("swlng", b.getWest().toFixed(6));
-  p.set("nelat", b.getNorth().toFixed(6));
-  p.set("nelng", b.getEast().toFixed(6));
+  Object.entries(bbox).forEach(([k,v]) => p.set(k,v));
   p.set("per_page", "200");
   p.set("order_by", "id");
   p.set("order", "desc");
 
+  // Unobserved mode only: fold in the taxon-blind unidentified query (see unknownParams)
+  // alongside the usual one. Meaningless without a target user — "unobserved" is a question
+  // about someone in particular.
+  const up = (state.dmode === "unobserved" && state.unobs) ? unknownParams() : null;
+  if(up){
+    Object.entries(bbox).forEach(([k,v]) => up.set(k,v));
+    up.set("per_page", "200");
+    up.set("order_by", "id");
+    up.set("order", "desc");
+  }
+
   try{
-    const r = await fetch(`${API}/observations?${p.toString()}`);
+    const [r, ur] = await Promise.all([
+      fetch(`${API}/observations?${p.toString()}`),
+      up ? fetch(`${API}/observations?${up.toString()}`) : Promise.resolve(null)
+    ]);
     if(!r.ok) throw new Error(r.status);
     const d = await r.json();
+    const ud = ur ? (ur.ok ? await ur.json() : { results: [], total_results: 0 }) : null;
     if(mine !== accSeq || state.style !== "accuracy") return;
 
+    const results = ud ? (d.results || []).concat(ud.results || []) : (d.results || []);
+    const total = (d.total_results || 0) + (ud ? (ud.total_results || 0) : 0);
+
     accLayer.clearLayers();
-    (d.results || []).forEach(o => {
+    results.forEach(o => {
       if(!o.location) return;
       const [lat, lng] = o.location.split(",").map(Number);
       if(!isFinite(lat) || !isFinite(lng)) return;
@@ -762,8 +799,7 @@ async function refreshAccuracyLayer(){
       marker.addTo(accLayer);
     });
 
-    const shown = d.results ? d.results.length : 0;
-    const total = d.total_results || 0;
+    const shown = results.length;
     accStatus.textContent = total > shown
       ? `${shown} of ${total.toLocaleString()} in view — zoom in for more`
       : `${shown} in view`;
