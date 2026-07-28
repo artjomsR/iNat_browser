@@ -959,19 +959,20 @@ document.getElementById("labelBar").addEventListener("click", () => {
 
 /* ---------------- probe: what's at this point ---------------- */
 
-// Tap radius, in km. "precise" keeps a fixed 28px reach; "large" scales with the
-// viewport so the circle spans ~80% of its shorter edge (0.4 = 80% diameter), which
-// keeps the whole ring on screen at any zoom. The lower bound is only there to keep the
-// radius the API sees above zero — deep zoom is exactly where a tap should stay a small
-// ring rather than swell into a floor measured in metres.
-const MIN_PROBE_KM = 0.001;
+// Tap radius, as a fraction of the map's shorter edge — one number per cursor mode and
+// nothing else to tune. Raise it for a wider reach, lower it for a tighter one. Both rings
+// being screen-relative means each is drawn the same size at every zoom and the ground it
+// covers falls out of the zoom level itself: zoom in for a small ring, out for a broad
+// sweep. 0.4 puts "large" at 80% of the shorter edge across, so the whole ring stays on
+// screen; "precise" is a fingertip.
+const PROBE_SPAN = { precise: 0.05, large: 0.4 };
 function probeRadiusKm(lat, zoom){
   const mPerPx = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
-  const big = state.cursor === "large";
   const size = map.getSize();
-  const px  = big ? Math.min(size.x, size.y) * 0.4 : 28;
-  const cap = big ? 5000 : 60;
-  return Math.min(cap, Math.max(MIN_PROBE_KM, mPerPx * px / 1000));
+  const px = Math.min(size.x, size.y) * PROBE_SPAN[state.cursor];
+  // Floor is not a tuning knob: it just keeps the radius the API sees above zero, which
+  // three decimal places can otherwise round away at full zoom.
+  return Math.max(0.001, mPerPx * px / 1000);
 }
 
 const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
