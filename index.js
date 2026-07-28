@@ -656,6 +656,14 @@ const accStatus = document.getElementById("accStatus");
 const accBar = document.getElementById("accBar");
 const ACC_MIN_ZOOM = 9;
 
+// A finger lands within a few pixels of where it aimed — but the browser then snaps the
+// tap to the nearest small clickable thing, which is how a tap meant for the map beside a
+// pin opens the pin instead. So on a coarse pointer the pins are drawn non-interactive
+// (leaflet gives them pointer-events:none), every tap reaches the map untouched, and
+// pinAt does the hit test itself against the icon's own circle. A mouse is already exact,
+// so it keeps Leaflet's handling and the hover tooltips that come with it.
+const COARSE = matchMedia("(pointer: coarse)").matches;
+
 let accSeq = 0, accTimer = null;
 
 // Tap radius sits in the legend, which is static DOM — so it is wired once here rather
@@ -721,6 +729,7 @@ async function refreshAccuracyLayer(){
       // A sound recording stays a speaker whatever it is; everything else takes the glyph
       // for its iconic taxon, down to a question mark for the not-yet-identified.
       const marker = L.marker([lat, lng], {
+        interactive: !COARSE,
         icon: audio
           ? L.divIcon({
               className: "snd-pin", html: speakerSvg(fill, ring),
@@ -731,14 +740,17 @@ async function refreshAccuracyLayer(){
               iconSize: [22,22], iconAnchor: [11,11]
             })
       });
-      marker.bindTooltip(
-        `${esc(t.preferred_common_name || t.name || "Unidentified")} — ${fmtAcc(known ? acc : null)}`,
-        { direction: "top", offset: [0,-4], opacity: .95 }
-      );
-      marker.on("click", e => {
-        L.DomEvent.stopPropagation(e);
-        openOut("https://www.inaturalist.org/observations/" + o.id);
-      });
+      marker.obsId = o.id;                 // what pinAt opens when a tap lands on the icon
+      if(!COARSE){
+        marker.bindTooltip(
+          `${esc(t.preferred_common_name || t.name || "Unidentified")} — ${fmtAcc(known ? acc : null)}`,
+          { direction: "top", offset: [0,-4], opacity: .95 }
+        );
+        marker.on("click", e => {
+          L.DomEvent.stopPropagation(e);
+          openOut("https://www.inaturalist.org/observations/" + o.id);
+        });
+      }
       marker.addTo(accLayer);
     });
 
@@ -1073,6 +1085,20 @@ function drawAccuracyCircles(list){
   });
 }
 
+// Which pin a tap actually landed on, if any: the nearest one whose own icon circle (half
+// its icon size) covers the point. A tap outside every circle places a radius pin instead,
+// and loses nothing by it — the panel that opens lists what's in reach, that pin included.
+function pinAt(pt){
+  let hit = null, best = Infinity;
+  accLayer.eachLayer(l => {
+    if(l.obsId == null) return;
+    const r = L.point(l.options.icon.options.iconSize).x / 2;
+    const d = pt.distanceTo(map.latLngToContainerPoint(l.getLatLng()));
+    if(d <= r && d < best){ best = d; hit = l; }
+  });
+  return hit;
+}
+
 async function probe(latlng){
   const km = probeRadiusKm(latlng.lat, map.getZoom());
 
@@ -1189,6 +1215,7 @@ function showMe(ll){
       icon: L.divIcon({ className: "me-cone", html: "<i></i>", iconSize: [88,88], iconAnchor: [44,44] })
     }).addTo(map);
     meRing = L.circleMarker(ll, {
+      interactive: false,          // the dot does nothing on tap; it shouldn't swallow one
       radius: 6, color: "#6FD3A8", weight: 3, fillColor: "#2D9CFF", fillOpacity: 1
     }).addTo(map);
   }
@@ -1274,7 +1301,11 @@ document.getElementById("locate").addEventListener("click", function(){
     writeHash();
     if(state.style === "accuracy") scheduleAccRefresh();
   });
-  map.on("click", e => probe(e.latlng));
+  map.on("click", e => {
+    const pin = COARSE ? pinAt(e.containerPoint) : null;
+    if(pin) openOut("https://www.inaturalist.org/observations/" + pin.obsId);
+    else probe(e.latlng);
+  });
 
   renderLabel();
   writeHash();
