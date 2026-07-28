@@ -206,6 +206,9 @@ body{
 .input + .seg{margin-top:8px}
 .seg + .seg{margin-top:6px}
 .field-hint + .seg{margin-top:9px}
+/* The rank ticks belong to the desired-species question, so they go whole when no mode is
+   pressed — and the action row below them has to pick up the gap they were providing. */
+.subrank[hidden] + .seg{margin-top:9px}
 /* a lone action inside a seg row — reads as a button to press, not a toggle to hold */
 .seg.act button{color:var(--text);border-color:var(--mute)}
 .seg.act button:hover{color:var(--mark);border-color:var(--mark)}

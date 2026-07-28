@@ -40,6 +40,9 @@ function isDefaultQuality(){
 const state = {
   taxon:null, tname:"", iconic:[], quality:defaultQuality(),
   d1:defaultD1(), d2:"", style:"accuracy", base:"light", unobs:"", precise:"precise",
+  // dmode: "unobserved" | "s" | "b" | "c" | "own". The mode row toggles, so pressing the
+  // mode already set turns it off — "own" is that no-button-pressed state, and it asks the
+  // opposite question: not what this user is missing but what they have already recorded.
   dmode:"unobserved", tierExclude:null, cursor:"precise", ssp:""   // "" | "1" incl. | "only"
 };
 
@@ -52,23 +55,32 @@ function obsParams(){
   if(state.taxon)   p.set("taxon_id", state.taxon);
   if(state.iconic.length) p.set("iconic_taxa", state.iconic.join(","));
   if(state.unobs){
-    if(state.dmode === "unobserved"){
-      p.set("unobserved_by_user_id", state.unobs);
-    }else if(state.tierExclude && state.tierExclude.length){
-      // Level mode: hide species this user has already tagged at this level.
-      p.set("without_taxon_id", state.tierExclude.join(","));
+    if(state.dmode === "own"){
+      // No mode pressed: the field stops asking what this user is missing and simply shows
+      // what they have. Every other exclusion below belongs to the desired-species question
+      // and would fight this one — `not_user_id` most of all, which would empty the map.
+      // The rank window goes too: it exists to stop a subspecies of an already-recorded
+      // species reading as desired, and nothing here is being called desired.
+      p.set("user_id", state.unobs);
+    }else{
+      if(state.dmode === "unobserved"){
+        p.set("unobserved_by_user_id", state.unobs);
+      }else if(state.tierExclude && state.tierExclude.length){
+        // Level mode: hide species this user has already tagged at this level.
+        p.set("without_taxon_id", state.tierExclude.join(","));
+      }
+      // Rank window on the results, driven by the two tickboxes. Unticked, the list is
+      // floored at species: iNat treats a subspecies as its own leaf taxon, so without this
+      // a ssp. of an already-recorded species still reads as "desired" (genus-and-coarser
+      // IDs stay; only subspecies/variety/form go). "Include subspecies" drops the floor;
+      // "Only subspecies" swaps it for a ceiling, leaving nothing but infraspecific taxa.
+      if(state.ssp === "only") p.set("hrank", "subspecies");
+      else if(!state.ssp)      p.set("lrank", "species");
+      // Never show them their own shots. Redundant under Unobserved — a species they have
+      // recorded is already gone whole — but in a level mode their untagged species are on
+      // the map, and those pins lead back to ground they have already walked.
+      p.set("not_user_id", state.unobs);
     }
-    // Rank window on the results, driven by the two tickboxes. Unticked, the list is
-    // floored at species: iNat treats a subspecies as its own leaf taxon, so without this
-    // a ssp. of an already-recorded species still reads as "desired" (genus-and-coarser
-    // IDs stay; only subspecies/variety/form go). "Include subspecies" drops the floor;
-    // "Only subspecies" swaps it for a ceiling, leaving nothing but infraspecific taxa.
-    if(state.ssp === "only") p.set("hrank", "subspecies");
-    else if(!state.ssp)      p.set("lrank", "species");
-    // Never show them their own shots. Redundant under Unobserved — a species they have
-    // recorded is already gone whole — but in a level mode their untagged species are on
-    // the map, and those pins lead back to ground they have already walked.
-    p.set("not_user_id", state.unobs);
   }
   if(state.quality.length) p.set("quality_grade", state.quality.join(","));
   if(state.precise){ p.set("geoprivacy", "open"); p.set("taxon_geoprivacy", "open"); }
@@ -83,6 +95,12 @@ function obsParams(){
 // Note the top tier is "s", not "a": iNat's search index treats "a" as an English
 // stopword and silently drops it (search_on=tags&q=a matches nothing, site-wide).
 const LEVELS = ["s","b","c"];
+
+// Every mode the row can be in, including the one no button shows: "own", where nothing is
+// pressed. Only a level mode costs a request, so this is what the callers that re-derive
+// the exclusion set ask about.
+const DMODES = ["own","unobserved",...LEVELS];
+function isTierMode(){ return LEVELS.includes(state.dmode); }
 
 // Scope a species_counts query to one user plus the panel's taxon / quick-group filters.
 function userScope(user){
@@ -136,11 +154,10 @@ async function taggedSpeciesIds(user, level, stale){
 
 // Cache the ids of species the "Desired species for" user has already tagged at the
 // selected level or better, so obsParams can drop them via without_taxon_id. Clears the
-// cache (no-op) for Unobserved mode or when no user is set.
+// cache (no-op) for Unobserved and own-records mode, or when no user is set.
 let tierSeq = 0;
 async function syncTierExclude(){
-  if(state.dmode === "unobserved" || !state.unobs){ state.tierExclude = null; return; }
-  if(LEVELS.indexOf(state.dmode) < 0){ state.tierExclude = null; return; }
+  if(!isTierMode() || !state.unobs){ state.tierExclude = null; return; }
   const mine = ++tierSeq;
   const stale = () => mine !== tierSeq;       // a newer sync superseded this one
   try{
@@ -381,7 +398,9 @@ function readHash(){
   state.tname   = p.get("tname") || "";
   state.iconic  = (p.get("iconic") || "").split(",").filter(Boolean);
   state.unobs   = p.get("unobs") || "";
-  state.dmode   = p.get("dmode") || "unobserved";
+  // "own" rides in the hash like any other mode — an empty value would read back as the
+  // default and quietly put a filter on a shared link that was made without one.
+  state.dmode   = DMODES.includes(p.get("dmode")) ? p.get("dmode") : "unobserved";
   state.ssp     = ["1","only"].includes(p.get("ssp")) ? p.get("ssp") : "";
   state.quality = p.has("q") ? p.get("q").split(",").filter(Boolean) : defaultQuality();
   state.precise = p.has("precise") ? p.get("precise") : "precise";
@@ -423,10 +442,14 @@ function renderLabel(){
     bits.push(names.join(" + ") + " grade");
   }
   if(state.unobs){
-    if(state.dmode === "unobserved") bits.push("new for @" + esc(state.unobs));
+    if(state.dmode === "own") bits.push("@" + esc(state.unobs) + "&#39;s own records");
+    else if(state.dmode === "unobserved") bits.push("new for @" + esc(state.unobs));
     else bits.push("@" + esc(state.unobs) + " missing tier " + esc(state.dmode.toUpperCase()));
-    if(state.ssp === "only") bits.push("subspecies only");
-    else if(state.ssp)       bits.push("incl. subspecies");
+    // The rank window only applies to the desired-species modes, so it is only named there.
+    if(state.dmode !== "own"){
+      if(state.ssp === "only") bits.push("subspecies only");
+      else if(state.ssp)       bits.push("incl. subspecies");
+    }
   }
   if(!state.precise) bits.push("incl. obscured");
   if(state.d1 || state.d2){
@@ -512,21 +535,25 @@ function filtersHtml(){
   </div>
 
   <div class="field">
-    <label for="unobsInput">Desired species for</label>
+    <label for="unobsInput">Display species for</label>
     <input class="input" id="unobsInput" type="text" autocapitalize="none" autocorrect="off"
-           spellcheck="false" placeholder="Username — only desired taxa" value="${esc(state.unobs)}">
+           spellcheck="false" placeholder="iNaturalist username" value="${esc(state.unobs)}">
     <div class="seg" id="unobsModeRow">
       <button type="button" data-mode="s" aria-pressed="${state.dmode === "s"}">S Tier</button>
       <button type="button" data-mode="b" aria-pressed="${state.dmode === "b"}">B Tier</button>
       <button type="button" data-mode="c" aria-pressed="${state.dmode === "c"}">C Tier + Audio Only</button>
       <button type="button" data-mode="unobserved" aria-pressed="${state.dmode === "unobserved"}">Unobserved</button>
     </div>
-    <label class="check">
-      <input type="checkbox" id="sspBox" ${state.ssp === "1" ? "checked" : ""}>Include subspecies?
-    </label>
-    <label class="check">
-      <input type="checkbox" id="sspOnlyBox" ${state.ssp === "only" ? "checked" : ""}>Show only subspecies?
-    </label>
+    <p class="field-hint" id="ownHint" ${state.dmode === "own" ? "" : "hidden"}>Nothing selected &mdash;
+      the map shows this user&rsquo;s own observations instead of the ones they still want.</p>
+    <div class="subrank" id="sspBlock" ${state.dmode === "own" ? "hidden" : ""}>
+      <label class="check">
+        <input type="checkbox" id="sspBox" ${state.ssp === "1" ? "checked" : ""}>Include subspecies?
+      </label>
+      <label class="check">
+        <input type="checkbox" id="sspOnlyBox" ${state.ssp === "only" ? "checked" : ""}>Show only subspecies?
+      </label>
+    </div>
     <div class="seg act" id="tierListRow">
       <button type="button" id="tierListBtn"
               title="List every species this user has recorded, banded by its best tier tag"
@@ -764,14 +791,14 @@ function wireFilters(){
     state.iconic = [];
     ac.hidden = true; input.value = "";
     commit();
-    if(state.dmode !== "unobserved") syncTierExclude().then(commit);
+    if(isTierMode()) syncTierExclude().then(commit);
     openFilters();
   });
 
   $("taxonClear").addEventListener("click", () => {
     state.taxon = null; state.tname = "";
     commit();
-    if(state.dmode !== "unobserved") syncTierExclude().then(commit);
+    if(isTierMode()) syncTierExclude().then(commit);
     openFilters();
   });
 
@@ -784,7 +811,7 @@ function wireFilters(){
       : [...state.iconic, v];
     if(state.iconic.length){ state.taxon = null; state.tname = ""; }
     commit();
-    if(state.dmode !== "unobserved") syncTierExclude().then(commit);
+    if(isTierMode()) syncTierExclude().then(commit);
     openFilters();
   });
 
@@ -840,12 +867,18 @@ function wireFilters(){
     only.addEventListener("change", e => setSsp(e.target.checked ? "only" : ""));
   }
 
-  // Desired-species mode (Unobserved vs a level). Selecting a level re-derives its exclude set.
+  // Desired-species mode (Unobserved vs a level). Selecting a level re-derives its exclude
+  // set. The row toggles rather than merely choosing: pressing the mode already on turns it
+  // off, leaving no button lit and the map on this user's own records. The rank ticks go
+  // with it — they narrow a desired-species list, and there isn't one in that state.
   $("unobsModeRow").addEventListener("click", e => {
     const b = e.target.closest("button[data-mode]");
     if(!b) return;
-    state.dmode = b.dataset.mode;
-    [...$("unobsModeRow").children].forEach(c => c.setAttribute("aria-pressed", c === b));
+    state.dmode = state.dmode === b.dataset.mode ? "own" : b.dataset.mode;
+    [...$("unobsModeRow").children].forEach(c =>
+      c.setAttribute("aria-pressed", c.dataset.mode === state.dmode));
+    $("ownHint").hidden  = state.dmode !== "own";
+    $("sspBlock").hidden = state.dmode === "own";
     syncTierExclude().then(commit);
   });
 
@@ -1237,5 +1270,5 @@ document.getElementById("locate").addEventListener("click", function(){
   }
 
   // If a shared link lands in a level mode, resolve its exclude set then refresh.
-  if(state.dmode !== "unobserved" && state.unobs) syncTierExclude().then(commit);
+  if(isTierMode() && state.unobs) syncTierExclude().then(commit);
 })();
