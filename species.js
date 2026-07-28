@@ -480,6 +480,13 @@ function rowHtml(x, i, user, mark){
   // printing it twice, set in the same italic serif the second line would have used.
   const common = t.preferred_common_name || "";
   const tick = mark ? badgeHtml(mark, user) : "";
+  // Place tab only, and only where a tick is already drawn: a species with no standing has
+  // nothing of the user's to view, so the link rides beside the badge rather than floating
+  // off on its own — one more thing to read only where there's already something to read.
+  const viewMy = mark
+    ? ` <a class="viewMy" href="${esc(taxonObsUrl(t.id, user))}" target="_blank" rel="noopener"
+          title="${esc(user)}&#39;s own records of this species, everywhere">View my</a>`
+    : "";
   return `<li class="${mark ? "seen" : ""}" data-count="${x.count}" data-name="${esc(sortName(t))}"
       data-taxo="${esc(taxoKey(t))}" data-taxon="${t.id}" data-seen="${mark ? 1 : 0}"
       data-standing="${esc(mark || "")}">
@@ -489,7 +496,7 @@ function rowHtml(x, i, user, mark){
             : `<span class="nophoto">&#9673;</span>`}</a>
     <span class="body">
       <span class="common${common ? "" : " as-sci"}"><a href="${esc(url)}" target="_blank" rel="noopener">${
-        esc(common || t.name || "Unnamed")}</a>${tick}</span>
+        esc(common || t.name || "Unnamed")}</a>${tick}${viewMy}</span>
       ${common && t.name ? `<span class="sci">${esc(t.name)}</span>` : ""}
       <span class="meta">${x.count} observation${x.count === 1 ? "" : "s"}${
         t.rank ? " &middot; " + esc(t.rank) : ""}</span>
@@ -627,8 +634,8 @@ function drawFamilies(ul, on){
             title="This family's species here, on iNaturalist">
           <b>${esc(fam.name)}</b>${fam.common ? ` <span class="famCommon">${esc(fam.common)}</span>` : ""}
         </a>${view.user
-          ? `<span class="act"><a href="${esc(taxonObsUrl(fam.id, view.user))}" target="_blank" rel="noopener"
-                title="${esc(view.user)}'s own records of this family, everywhere">View my</a></span>`
+          ? `<a class="viewMy" href="${esc(taxonObsUrl(fam.id, view.user))}" target="_blank" rel="noopener"
+                title="${esc(view.user)}'s own records of this family, everywhere">View my</a>`
           : ""}`
       : `<b>Family not recorded</b>`;
     ul.insertBefore(head, li);
