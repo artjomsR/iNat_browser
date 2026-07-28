@@ -135,7 +135,7 @@ function tierUrl(tag, user){
          + "&user_id=" + encodeURIComponent(user);
   }
   return "https://www.inaturalist.org/observations?q=" + encodeURIComponent(tag)
-       + "&search_on=tags&user_id=" + encodeURIComponent(user);
+       + "&search_on=tags&verifiable=any&user_id=" + encodeURIComponent(user);
 }
 
 function scopeLabel(){
@@ -158,15 +158,16 @@ function userScope(user){
 
 // Page through species_counts and return the raw {taxon, count} rows.
 //
-// Casual records are dropped at the source, on every query this page makes: captive and
-// cultivated plants, undated and unplaced records. A species known here only from those
+// Casual records are dropped by default, on every query that doesn't say otherwise: captive
+// and cultivated plants, undated and unplaced records. A species known here only from those
 // leaves the list entirely rather than sitting in it with a count of one. `verifiable` is
 // iNat's own shorthand for research plus needs-ID, and is what their species view applies.
+// A caller can pass `verifiable` itself to override that — see speciesIdsWithTag.
 async function speciesCounts(params){
   const out = [];
   for(let page = 1; page <= 20; page++){
     const p = new URLSearchParams(params);
-    p.set("verifiable", "true");
+    if(!p.has("verifiable")) p.set("verifiable", "true");
     p.set("per_page", "500");
     p.set("page", String(page));
     const r = await fetch(`${API}/observations/species_counts?${p.toString()}`);
@@ -180,8 +181,15 @@ async function speciesCounts(params){
 
 // The species carrying one tier's tag. One request per tag: the tags index matches a
 // single term, so "s b" ORs nothing.
+//
+// The one query on this page that reaches into casual records. A tier tag is a judgement
+// the user made about their own photograph, and it stands wherever that photograph sits —
+// a captive plant or an undated shot still carries the tag, and dropping it would band the
+// species as Untagged while the tag is plainly there. Widening the tag lookup alone is
+// safe: the species lists it is matched against are still verifiable-only, so a species
+// known solely from a casual record is not dragged onto the page by its tag.
 async function speciesIdsWithTag(user, tag){
-  const rows = await speciesCounts({ ...userScope(user), search_on:"tags", q:tag });
+  const rows = await speciesCounts({ ...userScope(user), search_on:"tags", q:tag, verifiable:"any" });
   return new Set(rows.map(x => x.taxon.id));
 }
 
