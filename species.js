@@ -979,6 +979,10 @@ const NOTES = {
     back = p.toString();
   }
   document.getElementById("backLink").href = "index.html" + (back ? "#" + back : "");
+  // The gallery is one person's photos, so it needs the same username this page is reading.
+  // Without it the gallery falls back to its own default and quietly shows someone else's.
+  document.getElementById("galleryLink").href =
+    "gallery.html" + (view.user ? "?u=" + encodeURIComponent(view.user) : "");
   document.getElementById("note").innerHTML = NOTES[view.tab];
   document.getElementById("who").textContent = view.user ? "@" + view.user : "no user";
 

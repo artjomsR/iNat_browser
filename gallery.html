@@ -147,6 +147,26 @@
     word-break: break-all;
   }
 
+  .status input {
+    display: block;
+    width: 100%;
+    max-width: 240px;
+    margin: 18px auto 0;
+    padding: 9px 12px;
+    background: var(--ink-deep);
+    border: 1px solid var(--hair);
+    border-radius: 4px;
+    color: var(--paper);
+    font-family: var(--sans);
+    font-size: 16px;
+    text-align: center;
+  }
+
+  .status input:focus {
+    outline: none;
+    border-color: var(--chrome-dim);
+  }
+
   .loading {
     padding: 22px 0 34px;
     text-align: center;
@@ -323,7 +343,7 @@
   // ---------- config from the URL ----------
 
   var qs    = new URLSearchParams(location.search);
-  var user  = (qs.get('user') || qs.get('u') || qs.get('user_id') || 'artoms').trim();
+  var user  = (qs.get('user') || qs.get('u') || qs.get('user_id') || '').trim();
   var tag   = (qs.get('tag') || 's').trim();
   var grade = qs.get('grade') || 'needs_id,research';
 
@@ -344,8 +364,12 @@
   var binomial = document.getElementById('binomial');
   var metaline = document.getElementById('metaline');
 
-  document.getElementById('who').textContent = user;
-  document.title = user+'\'s iNat gallery';
+  // Left as the placeholder space when there is no user yet, so the masthead keeps its
+  // height while the page is asking who to show.
+  if (user) {
+    document.getElementById('who').textContent = user;
+    document.title = user+'\'s iNat gallery';
+  }
 
   // ---------- helpers ----------
 
@@ -572,8 +596,29 @@
 
   // ---------- go ----------
 
+  // Nothing in the address to go on, so ask rather than guess. The answer is written back
+  // into the address and the page reloads from it, which keeps the gallery a single kind of
+  // thing: a username in a link, shareable and reload-safe.
+  function ask() {
+    say('Whose gallery?',
+        'Enter an iNaturalist username.' +
+        '<input id="userInput" type="text" placeholder="username" autocapitalize="none"' +
+        ' autocorrect="off" spellcheck="false" autocomplete="off" enterkeyhint="go">');
+
+    var input = document.getElementById('userInput');
+    input.focus();
+    input.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || !input.value.trim()) return;
+      // The other spellings are dropped so the address carries one name, not two.
+      qs.delete('u');
+      qs.delete('user_id');
+      qs.set('user', input.value.trim());
+      location.search = qs.toString();
+    });
+  }
+
   if (!user) {
-    say('Add a username', 'This gallery reads the iNaturalist username from the address:<br><code>?user=artoms&amp;tag=s</code>');
+    ask();
   } else {
     load();
   }
