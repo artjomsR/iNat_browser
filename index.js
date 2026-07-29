@@ -988,6 +988,9 @@ function wireFilters(){
   debounced($("d2Input"), "d2");
 
   // Desired-species username: also re-derive level exclusions when it changes.
+  $("unobsInput").addEventListener("keydown", e => {
+    if(e.key === "Enter") $("tierListBtn").click();
+  });
   { let t = null;
     $("unobsInput").addEventListener("input", () => {
       clearTimeout(t);
