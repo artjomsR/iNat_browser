@@ -418,6 +418,21 @@ main { max-width: var(--page); margin: 0 auto; padding-bottom: calc(var(--bot) +
 }
 .meta a:hover { color: var(--paper); }
 
+.meta .copy {
+  pointer-events: auto;
+  border: 0;
+  border-bottom: 1px solid var(--chrome-dim);
+  padding: 0 0 1px;
+  margin: 0;
+  background: transparent;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--chrome);
+  cursor: pointer;
+}
+.meta .copy:hover { color: var(--paper); }
+
 .sep { color: var(--chrome-dim); padding: 0 6px; }
 
 @media (prefers-reduced-motion: reduce) {

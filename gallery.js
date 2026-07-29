@@ -405,11 +405,12 @@ function showPhoto(i) {
   counter.textContent = (i + 1) + ' / ' + photos.length;
   binomial.textContent = photo.name || photo.common || 'Unidentified';
 
+  var obsUrl = 'https://www.inaturalist.org/observations/' + photo.obsId;
   var parts = [];
   if (photo.common && photo.name) parts.push(esc(photo.common));
   if (photo.date) parts.push(prettyDate(photo.date));
-  parts.push('<a href="https://www.inaturalist.org/observations/' + photo.obsId +
-             '" target="_blank" rel="noopener">iNat</a>');
+  parts.push('<a href="' + obsUrl + '" target="_blank" rel="noopener">iNat</a>');
+  parts.push('<button type="button" class="copy" data-url="' + esc(obsUrl) + '">←Copy📋</button>');
   metaline.innerHTML = parts.join('<span class="sep">·</span>');
 
   preload(i + 1);
@@ -417,6 +418,20 @@ function showPhoto(i) {
 }
 
 hi.addEventListener('load', function () { hi.classList.add('in'); });
+
+// One listener survives every metaline.innerHTML rewrite in showPhoto(), rather than
+// re-binding a fresh one per photo.
+metaline.addEventListener('click', function (e) {
+  var btn = e.target.closest('.copy');
+  if (!btn) return;
+  var url = btn.dataset.url;
+  var label = btn.textContent;
+  var reset = function () { btn.textContent = label; };
+  navigator.clipboard.writeText(url).then(function () {
+    btn.textContent = 'Copied';
+    setTimeout(reset, 1200);
+  }).catch(function () {});
+});
 
 function openPhoto(i) {
   focusEl.classList.add('on');
