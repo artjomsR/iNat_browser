@@ -410,7 +410,7 @@ function showPhoto(i) {
   if (photo.common && photo.name) parts.push(esc(photo.common));
   if (photo.date) parts.push(prettyDate(photo.date));
   parts.push('<a href="' + obsUrl + '" target="_blank" rel="noopener">iNat</a>');
-  parts.push('<button type="button" class="copy" data-url="' + esc(obsUrl) + '">←Copy📋</button>');
+  parts.push('<button type="button" class="copy" data-url="' + esc(obsUrl) + '">Copy Photo📋</button>');
   metaline.innerHTML = parts.join('<span class="sep">·</span>');
 
   preload(i + 1);
