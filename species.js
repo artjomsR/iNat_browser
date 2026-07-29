@@ -428,7 +428,6 @@ async function speciesByTier(user){
 /* ---------------- painting ---------------- */
 
 const main = document.getElementById("main");
-const refreshBtn = document.getElementById("refresh");
 const countEl = document.getElementById("count");
 
 // A speaker, for the species heard and never seen. Same drawing as the map's audio pins,
@@ -515,7 +514,9 @@ function rowHtml(x, i, user, mark){
 
 // One sortbar per list, shared by both tabs: it re-sorts what is already rendered, so
 // flipping order never costs a refetch. On the tier tab it drives every tier at once.
-function sortbarHtml(sortBy){
+// Refresh rides the same row, but only the tier tab passes `withRefresh` — the place tab's
+// answer is a place's, not a person's, and has no per-user refetch to offer.
+function sortbarHtml(sortBy, withRefresh){
   const on = by => sortBy === by ? ` class="on"` : "";
   return `<div class="sortbar">Sort
     <button type="button" data-by="count"${on("count")}>Most observed</button>
@@ -528,6 +529,7 @@ function sortbarHtml(sortBy){
         <button type="button" class="minClear" title="Show every species"
                 aria-label="Clear the threshold"${view.min ? "" : " hidden"}>&times;</button>
       </span> obs</span>
+    ${withRefresh ? `<button type="button" id="refresh">Refresh</button>` : ""}
   </div>`;
 }
 
@@ -583,7 +585,7 @@ function listHtml(buckets, user, sortBy){
       <div class="state-hint">This user has no species recorded in this scope.</div>
     </div>`;
   }
-  const sortbar = sortbarHtml(sortBy);
+  const sortbar = sortbarHtml(sortBy, true);
   // The rail carries the same badges as the headings it jumps to, so the two read as one
   // set rather than as a list of names beside a list of icons.
   const index = `<nav class="index">` + TIERS.map(([title, , tag], i) =>
@@ -742,6 +744,12 @@ function wireHideToggle(){
 }
 
 function wireSort(){
+  // Rebound every paint, same as the sort buttons below — the button is destroyed and
+  // recreated with the rest of the sortbar, so a listener from a previous paint is gone
+  // along with it. Only the tier tab's sortbar renders it at all.
+  const refresh = document.querySelector(".sortbar #refresh");
+  if(refresh) refresh.addEventListener("click", runTier);
+
   // `[data-by]` matters: the threshold's clear button lives in the same bar, and must not
   // be mistaken for a sort choice.
   const btns = [...document.querySelectorAll(".sortbar button[data-by]")];
@@ -808,8 +816,13 @@ function wireIndex(){
 function paint(html, sub, busy){
   main.innerHTML = html;
   countEl.innerHTML = sub;
-  refreshBtn.disabled = !!busy;
-  refreshBtn.innerHTML = busy ? "Reading&hellip;" : "Refresh";
+  // Only present once the tier tab's sortbar is on screen — absent while loading or after
+  // a failed fetch, when there is no sortbar at all to carry it.
+  const refreshBtn = document.getElementById("refresh");
+  if(refreshBtn){
+    refreshBtn.disabled = !!busy;
+    refreshBtn.innerHTML = busy ? "Reading&hellip;" : "Refresh";
+  }
 }
 
 function failed(hint){
@@ -1050,9 +1063,6 @@ const NOTES = {
 
   document.getElementById("title").textContent = "Species by tier tag";
   document.title = view.user ? "Tier tags — @" + view.user : "Species by tier tag";
-  // Refresh belongs to this tab only: the place tab's answer is a place's, not a person's,
-  // and it changes on the timescale of other people's uploads.
-  refreshBtn.hidden = false;
 
   if(!view.user){
     askUser("Which user?",
@@ -1061,6 +1071,5 @@ const NOTES = {
     return;
   }
 
-  refreshBtn.addEventListener("click", runTier);
   runTier();
 })();

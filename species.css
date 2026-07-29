@@ -12,7 +12,7 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
   font:inherit;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
   color:var(--mute);background:var(--raise);border:1px solid var(--rule);border-radius:5px}
 .act button:hover,.act a:hover{color:var(--mark);border-color:var(--mark)}
-.act button[disabled]{opacity:.45;cursor:default;color:var(--mute);border-color:var(--rule)}
+.act button[disabled],.sortbar button[disabled]{opacity:.45;cursor:default;color:var(--mute);border-color:var(--rule)}
 .lozenge{width:11px;height:11px;flex:0 0 auto;transform:rotate(45deg);border:1.5px solid var(--mark)}
 /* tab strip — each tab is a real address, so switching keeps the scope in the URL */
 .tabs{display:flex;gap:6px;margin:0 0 13px}
