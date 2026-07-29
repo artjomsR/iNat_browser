@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#17181c">
+<title>iNat gallery</title>
+<style>
+  :root {
+    --ink:        #17181c;
+    --ink-deep:   #0b0c0f;
+    --paper:      #e9e7e2;
+    --chrome:     #82858e;
+    --chrome-dim: #474a52;
+    --hair:       #262931;
+    --serif: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --gap: 2px;
+    --top: env(safe-area-inset-top, 0px);
+    --bot: env(safe-area-inset-bottom, 0px);
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--sans);
+    overscroll-behavior: none;
+  }
+
+  body.focused { overflow: hidden; }
+
+  /* ---------- header ---------- */
+
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    padding: calc(var(--top) + 14px) 16px 12px;
+    background: rgba(23, 24, 28, 0.82);
+    backdrop-filter: saturate(140%) blur(14px);
+    -webkit-backdrop-filter: saturate(140%) blur(14px);
+    border-bottom: 1px solid var(--hair);
+  }
+
+  .masthead {
+    max-width: 620px;
+    margin: 0 auto;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .who {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 17px;
+    letter-spacing: 0.01em;
+  }
+
+  .tally {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--chrome);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  /* ---------- grid ---------- */
+
+  main { max-width: 620px; margin: 0 auto; padding-bottom: calc(var(--bot) + 40px); }
+
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--gap);
+  }
+
+  .tile {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    background: var(--hair);
+    border: 0;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    overflow: hidden;
+    display: block;
+  }
+
+  .tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    opacity: 0;
+    transition: opacity 260ms ease;
+  }
+
+  .tile img.in { opacity: 1; }
+
+  .tile:focus-visible { outline: 2px solid var(--paper); outline-offset: -2px; }
+
+  @media (hover: hover) {
+    .tile:hover img { opacity: 0.72; }
+  }
+
+  /* ---------- status / empty ---------- */
+
+  .status {
+    max-width: 460px;
+    margin: 0 auto;
+    padding: 64px 24px;
+    text-align: center;
+    color: var(--chrome);
+    font-size: 14px;
+    line-height: 1.65;
+  }
+
+  .status strong {
+    display: block;
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: normal;
+    font-size: 20px;
+    color: var(--paper);
+    margin-bottom: 12px;
+  }
+
+  .status code {
+    display: inline-block;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 12px;
+    color: var(--paper);
+    background: var(--hair);
+    padding: 3px 7px;
+    border-radius: 3px;
+    margin-top: 4px;
+    word-break: break-all;
+  }
+
+  .loading {
+    padding: 22px 0 34px;
+    text-align: center;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--chrome-dim);
+  }
+
+  /* ---------- focus view ---------- */
+
+  #focus {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: var(--ink-deep);
+    display: none;
+    touch-action: none;
+  }
+
+  #focus.on { display: block; }
+
+  .stage {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .stage img {
+    position: absolute;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+
+  #hi { opacity: 0; transition: opacity 200ms ease; }
+  #hi.in { opacity: 1; }
+
+  /* invisible halves */
+  .zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 50%;
+    z-index: 3;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+  }
+  #prevZone { left: 0; }
+  #nextZone { right: 0; }
+  .zone:focus-visible { outline: 1px solid var(--chrome-dim); outline-offset: -6px; }
+
+  .bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: calc(var(--top) + 12px) 16px 40px;
+    background: linear-gradient(to bottom, rgba(11,12,15,0.85), transparent);
+    pointer-events: none;
+  }
+
+  .counter {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--chrome);
+    font-variant-numeric: tabular-nums;
+  }
+
+  #close {
+    pointer-events: auto;
+    width: 40px;
+    height: 40px;
+    margin: -10px -10px -10px 0;
+    border: 0;
+    background: transparent;
+    color: var(--paper);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    border-radius: 50%;
+  }
+  #close:focus-visible { outline: 2px solid var(--paper); }
+
+  /* specimen label */
+  .label {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    padding: 52px 20px calc(var(--bot) + 20px);
+    background: linear-gradient(to top, rgba(11,12,15,0.92) 38%, transparent);
+    pointer-events: none;
+  }
+
+  .binomial {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 19px;
+    line-height: 1.25;
+    color: var(--paper);
+  }
+
+  .meta {
+    margin-top: 7px;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--chrome);
+  }
+
+  .meta a {
+    pointer-events: auto;
+    color: var(--chrome);
+    text-decoration: none;
+    border-bottom: 1px solid var(--chrome-dim);
+    padding-bottom: 1px;
+  }
+  .meta a:hover { color: var(--paper); }
+
+  .sep { color: var(--chrome-dim); padding: 0 6px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="masthead">
+    <div class="who" id="who">&nbsp;</div>
+    <div class="tally" id="tally"></div>
+  </div>
+</header>
+
+<main>
+  <div id="grid"></div>
+  <div class="loading" id="loading" hidden>Loading</div>
+  <div class="status" id="status" hidden></div>
+</main>
+
+<div id="focus" aria-hidden="true">
+  <div class="stage">
+    <img id="lo" alt="">
+    <img id="hi" alt="">
+  </div>
+  <button class="zone" id="prevZone" aria-label="Previous photo"></button>
+  <button class="zone" id="nextZone" aria-label="Next photo"></button>
+  <div class="bar">
+    <span class="counter" id="counter"></span>
+    <button id="close" aria-label="Close">&times;</button>
+  </div>
+  <div class="label">
+    <div class="binomial" id="binomial"></div>
+    <div class="meta" id="metaline"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- config from the URL ----------
+
+  var qs    = new URLSearchParams(location.search);
+  var user  = (qs.get('user') || qs.get('u') || qs.get('user_id') || 'artoms').trim();
+  var tag   = (qs.get('tag') || 's').trim();
+  var grade = qs.get('grade') || 'needs_id,research';
+
+  var PER_PAGE = 200;
+  var MAX_PAGES = 50;
+
+  var photos = [];
+  var cursor = 0;
+
+  var grid     = document.getElementById('grid');
+  var loading  = document.getElementById('loading');
+  var status   = document.getElementById('status');
+  var tally    = document.getElementById('tally');
+  var focusEl  = document.getElementById('focus');
+  var lo       = document.getElementById('lo');
+  var hi       = document.getElementById('hi');
+  var counter  = document.getElementById('counter');
+  var binomial = document.getElementById('binomial');
+  var metaline = document.getElementById('metaline');
+
+  document.getElementById('who').textContent = user;
+  document.title = user+'\'s iNat gallery';
+
+  // ---------- helpers ----------
+
+  var MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+  function sized(url, size) {
+    if (!url) return '';
+    return url.replace(/\/(square|small|medium|large|original)\./, '/' + size + '.');
+  }
+
+  function prettyDate(iso) {
+    if (!iso) return '';
+    var bits = String(iso).slice(0, 10).split('-');
+    if (bits.length !== 3) return '';
+    return Number(bits[2]) + ' ' + (MONTHS[Number(bits[1]) - 1] || '') + ' ' + bits[0];
+  }
+
+  function sleep(ms) {
+    return new Promise(function (r) { setTimeout(r, ms); });
+  }
+
+  function say(title, body) {
+    status.hidden = false;
+    status.innerHTML = '<strong></strong><span></span>';
+    status.querySelector('strong').textContent = title;
+    status.querySelector('span').innerHTML = body;
+  }
+
+  // ---------- fetching ----------
+
+  function endpoint(page) {
+    var p = new URLSearchParams({
+      user_id: user,
+      q: tag,
+      search_on: 'tags',
+      verifiable: 'true',
+      photos: 'true',
+      reviewed: 'any',
+      quality_grade: grade,
+      order_by: 'observed_on',
+      order: 'desc',
+      per_page: String(PER_PAGE),
+      page: String(page)
+    });
+    return 'https://api.inaturalist.org/v1/observations?' + p.toString();
+  }
+
+  function collect(results) {
+    var fresh = [];
+    results.forEach(function (obs) {
+      (obs.photos || []).forEach(function (ph) {
+        if (!ph.url) return;
+        fresh.push({
+          url: ph.url,
+          obsId: obs.id,
+          name: (obs.taxon && obs.taxon.name) || '',
+          common: (obs.taxon && obs.taxon.preferred_common_name) || '',
+          date: obs.observed_on || (obs.observed_on_details && obs.observed_on_details.date) || ''
+        });
+      });
+    });
+    return fresh;
+  }
+
+  function paint(fresh) {
+    var frag = document.createDocumentFragment();
+
+    fresh.forEach(function (photo) {
+      var index = photos.length;
+      photos.push(photo);
+
+      var tile = document.createElement('button');
+      tile.className = 'tile';
+      tile.setAttribute('aria-label', photo.common || photo.name || 'Photo');
+
+      var img = document.createElement('img');
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.alt = '';
+      img.src = sized(photo.url, 'small');
+      img.addEventListener('load', function () { img.classList.add('in'); });
+
+      tile.appendChild(img);
+      tile.addEventListener('click', function () { open(index); });
+      frag.appendChild(tile);
+    });
+
+    grid.appendChild(frag);
+    tally.textContent = tag.toUpperCase() + ' tier \u00b7 ' + photos.length + ' photo' + (photos.length === 1 ? '' : 's');
+  }
+
+  async function load() {
+    loading.hidden = false;
+
+    for (var page = 1; page <= MAX_PAGES; page++) {
+      var payload;
+
+      try {
+        var res = await fetch(endpoint(page), { headers: { Accept: 'application/json' } });
+
+        if (res.status === 429) {
+          await sleep(4000);
+          page--;
+          continue;
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        payload = await res.json();
+      } catch (err) {
+        loading.hidden = true;
+        if (photos.length === 0) {
+          say('Could not reach iNaturalist',
+              'The request failed &mdash; check the connection and reload. If it keeps failing, the username may be wrong.');
+        }
+        return;
+      }
+
+      var results = payload.results || [];
+      paint(collect(results));
+
+      if (results.length < PER_PAGE) break;
+      await sleep(1100);
+    }
+
+    loading.hidden = true;
+
+    if (photos.length === 0) {
+      say('Nothing tagged \u201c' + tag + '\u201d',
+          'No observations found for <b>' + user + '</b> with that tag. ' +
+          'Change the username or tag in the address:<br><code>?user=' + user + '&amp;tag=' + tag + '</code>');
+    }
+  }
+
+  // ---------- focus view ----------
+
+  function preload(i) {
+    if (i < 0 || i >= photos.length) return;
+    var im = new Image();
+    im.src = sized(photos[i].url, 'large');
+  }
+
+  function show(i) {
+    cursor = i;
+    var photo = photos[i];
+
+    lo.src = sized(photo.url, 'small');
+    hi.classList.remove('in');
+    hi.src = sized(photo.url, 'large');
+
+    counter.textContent = (i + 1) + ' / ' + photos.length;
+    binomial.textContent = photo.name || photo.common || 'Unidentified';
+
+    var parts = [];
+    if (photo.common && photo.name) parts.push(esc(photo.common));
+    if (photo.date) parts.push(prettyDate(photo.date));
+    parts.push('<a href="https://www.inaturalist.org/observations/' + photo.obsId +
+               '" target="_blank" rel="noopener">iNat</a>');
+    metaline.innerHTML = parts.join('<span class="sep">\u00b7</span>');
+
+    preload(i + 1);
+    preload(i - 1);
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  hi.addEventListener('load', function () { hi.classList.add('in'); });
+
+  function open(i) {
+    focusEl.classList.add('on');
+    focusEl.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('focused');
+    show(i);
+  }
+
+  function close() {
+    focusEl.classList.remove('on');
+    focusEl.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('focused');
+    hi.removeAttribute('src');
+    lo.removeAttribute('src');
+  }
+
+  function step(delta) {
+    var next = cursor + delta;
+    if (next < 0 || next >= photos.length) return;
+    show(next);
+  }
+
+  document.getElementById('prevZone').addEventListener('click', function () { step(-1); });
+  document.getElementById('nextZone').addEventListener('click', function () { step(1); });
+  document.getElementById('close').addEventListener('click', close);
+
+  document.addEventListener('keydown', function (e) {
+    if (!focusEl.classList.contains('on')) return;
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); step(-1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+    if (e.key === 'Escape')     { e.preventDefault(); close(); }
+  });
+
+  // swipe: sideways to move, down to close
+  var sx = 0, sy = 0, tracking = false;
+
+  focusEl.addEventListener('touchstart', function (e) {
+    if (e.touches.length !== 1) { tracking = false; return; }
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+    tracking = true;
+  }, { passive: true });
+
+  focusEl.addEventListener('touchend', function (e) {
+    if (!tracking) return;
+    tracking = false;
+    var t = e.changedTouches[0];
+    var dx = t.clientX - sx;
+    var dy = t.clientY - sy;
+
+    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)) {
+      step(dx < 0 ? 1 : -1);
+    } else if (dy > 80 && Math.abs(dy) > Math.abs(dx)) {
+      close();
+    }
+  }, { passive: true });
+
+  // ---------- go ----------
+
+  if (!user) {
+    say('Add a username', 'This gallery reads the iNaturalist username from the address:<br><code>?user=artoms&amp;tag=s</code>');
+  } else {
+    load();
+  }
+})();
+</script>
+</body>
+</html>
