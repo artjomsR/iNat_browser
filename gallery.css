@@ -1,0 +1,368 @@
+/* The gallery keeps its own palette rather than the map's: it is a dark room hung with
+   photographs, and the two pages are read in different lights. Same idea though — every
+   colour is a custom property here, and nothing below hardcodes one. */
+
+:root {
+  --ink:        #17181c;
+  --ink-deep:   #0b0c0f;
+  --paper:      #e9e7e2;
+  --chrome:     #82858e;
+  --chrome-dim: #474a52;
+  --hair:       #262931;
+  --serif: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --page: 620px;
+  --gap: 2px;
+  --top: env(safe-area-inset-top, 0px);
+  --bot: env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--sans);
+  overscroll-behavior: none;
+}
+
+body.focused { overflow: hidden; }
+
+/* ---------- header ---------- */
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: calc(var(--top) + 14px) 16px 12px;
+  background: rgba(23, 24, 28, 0.82);
+  backdrop-filter: saturate(140%) blur(14px);
+  -webkit-backdrop-filter: saturate(140%) blur(14px);
+  border-bottom: 1px solid var(--hair);
+}
+
+.masthead {
+  max-width: var(--page);
+  margin: 0 auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.who {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 17px;
+  letter-spacing: 0.01em;
+}
+
+.tally {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--chrome);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- filter ---------- */
+
+.filters {
+  max-width: var(--page);
+  margin: 11px auto 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.filters .lede { color: var(--chrome-dim); }
+
+.filters button {
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  padding: 2px 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--chrome);
+  cursor: pointer;
+}
+
+.filters button.on {
+  color: var(--paper);
+  border-bottom-color: var(--paper);
+}
+
+.filters button:focus-visible { outline: 1px solid var(--chrome); outline-offset: 3px; }
+
+/* Pushed to the far end: it undoes a session's reading, and is not one of the two views. */
+#forget { margin-left: auto; color: var(--chrome-dim); }
+
+/* ---------- grid ---------- */
+
+main { max-width: var(--page); margin: 0 auto; padding-bottom: calc(var(--bot) + 40px); }
+
+#grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--gap);
+}
+
+.tile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  background: var(--hair);
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  overflow: hidden;
+  display: block;
+}
+
+.tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+
+.tile img.in { opacity: 1; }
+
+.tile:focus-visible { outline: 2px solid var(--paper); outline-offset: -2px; }
+
+/* Never-seen, drawn only in the All view — the distinction the filter makes, kept legible
+   when the filter is off. */
+.tile.fresh::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: 0 0 0 1px rgba(11, 12, 15, 0.5);
+}
+
+@media (hover: hover) {
+  .tile:hover img { opacity: 0.72; }
+}
+
+/* ---------- status / empty ---------- */
+
+.status {
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 64px 24px;
+  text-align: center;
+  color: var(--chrome);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.status strong {
+  display: block;
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: normal;
+  font-size: 20px;
+  color: var(--paper);
+  margin-bottom: 12px;
+}
+
+.status code {
+  display: inline-block;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 12px;
+  color: var(--paper);
+  background: var(--hair);
+  padding: 3px 7px;
+  border-radius: 3px;
+  margin-top: 4px;
+  word-break: break-all;
+}
+
+/* 16px or the phone zooms the whole page in on focus. */
+.status input {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  margin: 18px auto 0;
+  padding: 9px 12px;
+  background: var(--ink-deep);
+  border: 1px solid var(--hair);
+  border-radius: 4px;
+  color: var(--paper);
+  font-family: var(--sans);
+  font-size: 16px;
+  text-align: center;
+}
+
+.status input:focus {
+  outline: none;
+  border-color: var(--chrome-dim);
+}
+
+.status button {
+  margin-top: 18px;
+  padding: 8px 15px;
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--paper);
+  font-family: var(--sans);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.loading {
+  padding: 22px 0 34px;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--chrome-dim);
+}
+
+/* ---------- focus view ---------- */
+
+#focus {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--ink-deep);
+  display: none;
+  touch-action: none;
+}
+
+#focus.on { display: block; }
+
+.stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stage img {
+  position: absolute;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+/* The small copy sits underneath and the large one fades in over it, so the step never
+   lands on an empty frame. */
+#hi { opacity: 0; transition: opacity 200ms ease; }
+#hi.in { opacity: 1; }
+
+/* invisible halves */
+.zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  z-index: 3;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+#prevZone { left: 0; }
+#nextZone { right: 0; }
+.zone:focus-visible { outline: 1px solid var(--chrome-dim); outline-offset: -6px; }
+
+.bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(var(--top) + 12px) 16px 40px;
+  background: linear-gradient(to bottom, rgba(11,12,15,0.85), transparent);
+  pointer-events: none;
+}
+
+.counter {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--chrome);
+  font-variant-numeric: tabular-nums;
+}
+
+#close {
+  pointer-events: auto;
+  width: 40px;
+  height: 40px;
+  margin: -10px -10px -10px 0;
+  border: 0;
+  background: transparent;
+  color: var(--paper);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+}
+#close:focus-visible { outline: 2px solid var(--paper); }
+
+/* specimen label */
+.label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  padding: 52px 20px calc(var(--bot) + 20px);
+  background: linear-gradient(to top, rgba(11,12,15,0.92) 38%, transparent);
+  pointer-events: none;
+}
+
+.binomial {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 19px;
+  line-height: 1.25;
+  color: var(--paper);
+}
+
+.meta {
+  margin-top: 7px;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--chrome);
+}
+
+/* The label ignores taps so the halves underneath keep working; the link inside is the one
+   thing that has to take them back. */
+.meta a {
+  pointer-events: auto;
+  color: var(--chrome);
+  text-decoration: none;
+  border-bottom: 1px solid var(--chrome-dim);
+  padding-bottom: 1px;
+}
+.meta a:hover { color: var(--paper); }
+
+.sep { color: var(--chrome-dim); padding: 0 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
