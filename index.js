@@ -609,8 +609,7 @@ function filtersHtml(){
     </div>
     <div class="seg act" id="tierListRow">
       <button type="button" id="tierListBtn"
-              title="List every species this user has recorded, banded by its best tier tag"
-              >List desired species</button>
+              >View un/seen species in an area</button>
     </div>
     <p class="field-hint" id="tierListHint" hidden></p>
   </div>
