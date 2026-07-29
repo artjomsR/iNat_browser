@@ -244,7 +244,11 @@ function render(list) {
 }
 
 function retally() {
-  tally.textContent = photos.length + (mode === 'unseen' ? ' unseen' : ' photos');
+  // The unseen count needs its denominator to mean anything: how many are left, out of every
+  // photo on the shelf. In the whole view those two numbers are the same one.
+  tally.textContent = mode === 'unseen'
+    ? photos.length + ' / ' + all.length + ' unseen'
+    : photos.length + ' photos';
 }
 
 // Redraw from what has already been fetched: the filter changes what is on screen, never
@@ -465,6 +469,12 @@ function ask() {
 }
 
 (function init() {
+  // A reload would otherwise land where the last visit left off, and the observer would tick
+  // off whatever the restored scroll happened to be sitting over — photos nobody looked at.
+  // Every opening starts at the top of the wall instead.
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  scrollTo(0, 0);
+
   // With no user the masthead keeps its placeholder space, so it holds its height while the
   // page is asking who to show.
   if (!user) {
