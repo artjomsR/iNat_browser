@@ -132,6 +132,12 @@ header {
   text-transform: uppercase;
 }
 
+/* The display above outranks the browser's own [hidden] { display: none }, so the attribute
+   needs saying again here — otherwise the row shows through on the "Whose gallery?" screen. */
+.filters[hidden] {
+  display: none;
+}
+
 .filters .lede { color: var(--chrome-dim); }
 
 .filters button {
