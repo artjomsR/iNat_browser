@@ -5,6 +5,7 @@
 
      gallery.html?user=USER
      gallery.html?user=USER&tag=b&show=all
+     gallery.html?user=USER&view=birds
 
    `user` is the iNaturalist login. `u` and `user_id` are accepted as spellings of the same
    thing, because the species page uses one and iNaturalist's own addresses use the other.
@@ -14,6 +15,12 @@
    `tag` is the tier tag an observation must carry (default `s`), `grade` the quality grades
    to accept, and `show=all` turns the unseen filter off. The rest of the query is fixed:
    verifiable observations with photos, newest first.
+
+   `view` is which shelf: `highlights`, the default, is the tagged one the gallery was built
+   for; `view=birds` drops the tag and hangs this user's birds instead. Changing it reloads the
+   page rather than re-filtering, because it is a different question put to iNaturalist rather
+   than a different slice of the same answer. What has been seen is remembered per photograph,
+   so a picture met on one shelf is already seen on the other.
 
    What has already been seen is the one piece of state too long for an address, and it
    belongs to this browser rather than to the link, so it lives in localStorage — see
@@ -28,6 +35,8 @@ var grade = qs.get('grade') || 'needs_id,research';
 // Which half of the shelf to show. Unseen is the default because the gallery is meant to be
 // worked through rather than re-read; `?show=all` is the way back to the whole thing.
 var mode  = qs.get('show') === 'all' ? 'all' : 'unseen';
+// Which shelf. Anything unrecognised falls back to the tagged one this page was built around.
+var view  = qs.get('view') === 'birds' ? 'birds' : 'highlights';
 
 var PER_PAGE = 200;
 var MAX_PAGES = 50;
@@ -39,6 +48,8 @@ var cursor = 0;
 var grid     = document.getElementById('grid');
 var filters  = document.getElementById('filters');
 var forget   = document.getElementById('forget');
+var picker   = document.getElementById('picker');
+var viewSel  = document.getElementById('view');
 var loading  = document.getElementById('loading');
 var statusEl = document.getElementById('status');
 var tally    = document.getElementById('tally');
@@ -167,8 +178,6 @@ function watch(tile, photo) {
 function endpoint(page) {
   var p = new URLSearchParams({
     user_id: user,
-    q: tag,
-    search_on: 'tags',
     verifiable: 'true',
     photos: 'true',
     reviewed: 'any',
@@ -178,6 +187,12 @@ function endpoint(page) {
     per_page: String(PER_PAGE),
     page: String(page)
   });
+
+  // All the two shelves differ by: a tag search, or a whole class of animal. Newest first
+  // either way, so "most recent" needs nothing added.
+  if (view === 'birds') p.set('iconic_taxa', 'Aves');
+  else { p.set('q', tag); p.set('search_on', 'tags'); }
+
   return 'https://api.inaturalist.org/v1/observations?' + p.toString();
 }
 
@@ -303,6 +318,10 @@ async function load() {
 
   if (photos.length === 0) {
     if (all.length) nothingNew();
+    // The tag is the highlights shelf's doing, so only that shelf explains itself by it.
+    else if (view === 'birds')
+      say('No birds', 'No photographed bird observations found for <b>' + esc(user) + '</b>. ' +
+                      'The username may be wrong.');
     else say('Nothing tagged “' + tag + '”',
              'No observations found for <b>' + esc(user) + '</b> with that tag. ' +
              'Change the username or tag in the address:<br><code>?user=' + esc(user) +
@@ -341,6 +360,16 @@ function setMode(next) {
 filters.addEventListener('click', function (e) {
   var b = e.target.closest('button[data-show]');
   if (b) setMode(b.dataset.show);
+});
+
+// Changing shelf is a new question for iNaturalist, not a new slice of the answer already
+// here, so it goes through the address and the page comes back on the other one — same as
+// answering "whose gallery?" does. Anything still unwritten goes to storage first.
+viewSel.addEventListener('change', function () {
+  if (viewSel.value === 'birds') qs.set('view', 'birds');
+  else qs.delete('view');
+  flush();
+  location.search = qs.toString();
 });
 
 // The one way back out of a record that only this browser holds, so it asks first.
@@ -485,6 +514,8 @@ function ask() {
   document.getElementById('who').textContent = user;
   document.title = user + '\'s iNat gallery';
 
+  viewSel.value = view;
+  picker.hidden = false;
   filters.hidden = false;
   forget.hidden = seenAtLoad.size === 0;
   syncFilter();

@@ -16,7 +16,15 @@
 <header>
   <div class="masthead">
     <div class="who" id="who">&nbsp;</div>
-    <div class="tally" id="tally"></div>
+    <div class="stat">
+      <div class="tally" id="tally"></div>
+      <span class="picker" id="picker" hidden>
+        <select id="view" aria-label="Which photographs to show">
+          <option value="highlights">Highlights</option>
+          <option value="birds">Most recent bird observations</option>
+        </select>
+      </span>
+    </div>
   </div>
   <div class="filters" id="filters" hidden>
     <span class="lede">Show</span>

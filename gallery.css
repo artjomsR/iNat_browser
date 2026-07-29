@@ -49,7 +49,10 @@ header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  /* Wraps rather than squeezes: the longer of the two view names is wider than a phone can
+     spare next to a username, and would otherwise crush it. */
+  flex-wrap: wrap;
+  gap: 4px 12px;
 }
 
 .who {
@@ -57,6 +60,15 @@ header {
   font-style: italic;
   font-size: 17px;
   letter-spacing: 0.01em;
+}
+
+/* Count and view sit together on the right: how much there is, and of what. */
+.stat {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+  margin-left: auto;   /* holds the right edge on the second line too, once the masthead wraps */
 }
 
 .tally {
@@ -67,6 +79,45 @@ header {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* Which question was put to iNaturalist. A native select stripped back to the same micro-caps
+   as the rest of the chrome, with its caret drawn on the wrapper since `appearance: none`
+   takes the browser's away. The wrapper declares no `display`, so the `hidden` attribute still
+   works on it while the page is asking whose gallery this is. */
+.picker { position: relative; min-width: 0; }
+
+.picker::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  margin-top: -1px;
+  border: 3px solid transparent;
+  border-top-color: var(--chrome-dim);
+  pointer-events: none;
+}
+
+.picker select {
+  appearance: none;
+  -webkit-appearance: none;
+  max-width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 13px 0 0;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--chrome);
+  cursor: pointer;
+  color-scheme: dark;   /* so the list the browser opens is lit like the room it opens in */
+}
+
+.picker select:focus-visible { outline: 1px solid var(--chrome); outline-offset: 3px; }
+
+/* The open list is the browser's own, at its own size: the caps belong to the closed line. */
+.picker option { background: var(--ink); color: var(--paper); text-transform: none; }
 
 /* ---------- filter ---------- */
 
