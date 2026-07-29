@@ -43,32 +43,41 @@ header {
   border-bottom: 1px solid var(--hair);
 }
 
+/* One line at any width: whose gallery, how much of it, and which shelf it came off. A phone
+   cannot spare the room all three would ask for, so rather than break the line in two the
+   picker is the one that gives — see the three rules below, which say in what order. */
 .masthead {
   max-width: var(--page);
   margin: 0 auto;
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  /* Wraps rather than squeezes: the longer of the two view names is wider than a phone can
-     spare next to a username, and would otherwise crush it. */
-  flex-wrap: wrap;
-  gap: 4px 12px;
+  gap: 12px;
 }
 
+/* The name asks for exactly the width it needs, up to three-fifths of the line; a name longer
+   than that has stopped being a heading and sets in an ellipsis instead. */
 .who {
   font-family: var(--serif);
   font-style: italic;
   font-size: 17px;
   letter-spacing: 0.01em;
+  max-width: 60%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* Count and view sit together on the right: how much there is, and of what. */
+/* Count and view sit together on the right: how much there is, and of what. They take what the
+   name leaves rather than asking for a width of their own, so the name is never squeezed to
+   make room for them. */
 .stat {
   display: flex;
   align-items: baseline;
+  justify-content: flex-end;
   gap: 12px;
   min-width: 0;
-  margin-left: auto;   /* holds the right edge on the second line too, once the masthead wraps */
+  flex: 1 1 0;
 }
 
 .tally {
@@ -100,7 +109,12 @@ header {
 .picker select {
   appearance: none;
   -webkit-appearance: none;
+  /* A select is as wide as its longest option, selected or not — more than a phone can spare
+     for a line that usually reads "Highlights". Capped at whatever room is left, and the
+     label that overruns it is cut with an ellipsis. */
   max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   border: 0;
   border-radius: 0;
   background: transparent;
