@@ -307,6 +307,96 @@ main { max-width: var(--page); margin: 0 auto; padding-bottom: calc(var(--bot) +
   color: var(--chrome-dim);
 }
 
+/* ---------- date rail ----------
+
+   A ruler down the right edge, reading the years the wall runs through. It costs iNaturalist
+   nothing: the dates came with the photographs and the wall is already in date order, so this
+   is a reading of the page rather than another question. Dimmed at rest — a photograph should
+   not have a scale printed down it while it is being looked at — and lit while the wall moves
+   or a thumb is on it. */
+
+.rail {
+  position: fixed;
+  right: 0;
+  top: var(--railtop, 0px);
+  bottom: 0;
+  z-index: 15;
+  width: 34px;
+  opacity: 0.5;
+  transition: opacity 200ms ease;
+  /* On a wide screen the rail hangs in the margin beside the wall; on a phone it lies over the
+     last column, and this is what keeps the figures off the photographs. */
+  background: linear-gradient(to right, transparent, rgba(11, 12, 15, 0.62) 60%);
+  touch-action: none;   /* a drag down the rail scrubs the wall rather than scrolling it */
+  cursor: ns-resize;
+}
+
+.rail[hidden] { display: none; }
+.rail.live { opacity: 1; }
+
+/* One photograph at a time, full screen: nothing else belongs on it. */
+body.focused .rail { display: none; }
+
+@media (hover: hover) {
+  .rail:hover { opacity: 1; }
+}
+
+/* The marks' own stretch of the rail, held off both ends so the first and last still read. */
+.track {
+  position: absolute;
+  inset: 12px 0 calc(var(--bot) + 16px);
+}
+
+.mark, .tick {
+  position: absolute;
+  right: 7px;
+  transform: translateY(-50%);
+}
+
+.mark {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  color: var(--chrome);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rail.live .mark { color: var(--paper); }
+
+/* The months between, where there is room for them: how thick the year is, without saying so
+   in words. */
+.tick {
+  width: 3px;
+  height: 3px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--chrome-dim);
+}
+
+/* What is under the top of the screen, shown only while the wall is moving — it answers a
+   question nobody is asking once they have stopped. */
+.now {
+  position: absolute;
+  right: calc(100% - 2px);
+  transform: translateY(-50%);
+  padding: 4px 9px;
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  background: rgba(11, 12, 15, 0.9);
+  color: var(--paper);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transition: opacity 160ms ease;
+  pointer-events: none;
+}
+
+.rail.live .now { opacity: 1; }
+
 /* ---------- focus view ---------- */
 
 #focus {

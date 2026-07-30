@@ -256,6 +256,7 @@ function render(list) {
 
   grid.appendChild(frag);
   retally();
+  drawRail();
 }
 
 function retally() {
@@ -328,6 +329,226 @@ async function load() {
              '&amp;tag=' + esc(tag) + '</code>');
   }
 }
+
+/* ---------------- the date rail ----------------
+
+   The wall runs newest to oldest and every photograph arrived with its date on it, so where
+   the years fall is already known: the rail is a reading of the page, not a second question
+   put to iNaturalist. Nothing is fetched to draw it.
+
+   Nor is anything measured tile by tile. The grid is a fixed number of squares to a row, so a
+   photograph's place in the document is arithmetic on its index — two measurements draw the
+   whole rail, however many thousand pictures are hanging on it. */
+
+var rail    = document.getElementById('rail');
+var track   = document.getElementById('track');
+var nowChip = document.getElementById('now');
+var masthead = document.querySelector('header');
+
+var stops = [];    // one per month on the wall, newest first: where it starts, and what to call it
+var span  = 0;     // how far the page scrolls, which is the length the rail stands for
+var head  = 0;     // the sticky header, which the rail hangs below and scrolling stops under
+
+var MIN_LABEL = 18;   // px of rail a year needs to itself
+var MIN_TICK  = 9;    // and a month dot, which never crowds a year out
+
+// Where each month begins. Dates are ISO, so they compare as strings, and the wall being in
+// descending order means anything not older than the last is a repeat or a stray — either way
+// not the start of a month, and not a mark.
+function findStops() {
+  stops = [];
+  var last = '';
+
+  for (var i = 0; i < photos.length; i++) {
+    var d = photos[i].date;
+    if (!d || d.length < 7) continue;
+    var month = d.slice(0, 7);
+    if (last && month >= last) continue;
+    last = month;
+    stops.push({
+      at: i,
+      year: d.slice(0, 4),
+      label: MONTHS[Number(d.slice(5, 7)) - 1] + ' ' + d.slice(0, 4)
+    });
+  }
+}
+
+// Each stop's place in the scroll: `y` is where it would sit under the header, and `f` is that
+// as a fraction of the rail. Answers whether there is a rail worth drawing at all.
+function measure() {
+  var first = grid.firstElementChild;
+  if (!first) return false;
+
+  var style = getComputedStyle(grid);
+  var cols  = style.gridTemplateColumns.split(/\s+/).filter(Boolean).length || 3;
+  var box   = first.getBoundingClientRect();
+  var pitch = box.height + (parseFloat(style.rowGap) || 0);
+  var top   = box.top + scrollY;
+
+  head = masthead.offsetHeight;
+  span = document.documentElement.scrollHeight - innerHeight;
+  document.documentElement.style.setProperty('--railtop', head + 'px');
+
+  // Half a screen of scroll, or a single month, is a wall with nothing to scrub through.
+  if (span < 400 || pitch <= 0 || stops.length < 2) return false;
+
+  stops.forEach(function (s) {
+    s.y = top + Math.floor(s.at / cols) * pitch - head;
+    // Clamped: the last screenful cannot be scrolled past, so what is in it shares the end of
+    // the rail rather than running off it. `y` stays unclamped — the chip reads that instead.
+    s.f = Math.max(0, Math.min(1, s.y / span));
+  });
+
+  return true;
+}
+
+function drawRail() {
+  findStops();
+  rail.hidden = false;
+
+  if (!measure()) { rail.hidden = true; return; }
+
+  var h = track.clientHeight;
+  var frag = document.createDocumentFragment();
+
+  // Every year that begins on the wall, and how much of the rail it then owns — which is what
+  // settles the argument when two of them want the same place.
+  var years = [];
+  var year = '';
+
+  stops.forEach(function (s) {
+    if (s.year === year) return;
+    year = s.year;
+    years.push({ year: s.year, y: s.f * h });
+  });
+
+  years.forEach(function (v, i) {
+    v.owns = (i + 1 < years.length ? years[i + 1].y : h) - v.y;
+  });
+
+  // The years are what the rail is for and take the room first. Each needs a figure's height
+  // to itself; two inside that is a wall too short to print both, and the one that keeps the
+  // place is the one with more of the rail under it. A fortnight either side of New Year would
+  // otherwise put a whole year off the ruler on the strength of being nearer the top.
+  var labels = [];
+
+  years.forEach(function (v) {
+    var prev = labels[labels.length - 1];
+    // Only ever swapped for a mark further down, so this can never crowd the one above.
+    if (prev && v.y - prev.y < MIN_LABEL) {
+      if (v.owns > prev.owns) labels[labels.length - 1] = v;
+      return;
+    }
+    labels.push(v);
+  });
+
+  var taken = [];   // where the years landed, ascending, so the dots can keep out of them
+
+  labels.forEach(function (v) {
+    taken.push(v.y);
+    var el = document.createElement('span');
+    el.className = 'mark';
+    el.textContent = v.year;
+    el.style.top = v.y + 'px';
+    frag.appendChild(el);
+  });
+
+  // Then the months, into whatever the years left. Both lists ascend, so one pointer walks
+  // them together rather than each dot searching the whole rail.
+  var k = 0;
+  var lastTick = -MIN_TICK;
+
+  stops.forEach(function (s) {
+    var y = s.f * h;
+    while (k < taken.length && taken[k] < y - MIN_TICK) k++;
+    if (k < taken.length && taken[k] - y < MIN_TICK) return;
+    if (y - lastTick < MIN_TICK) return;
+    lastTick = y;
+
+    var dot = document.createElement('i');
+    dot.className = 'tick';
+    dot.style.top = y + 'px';
+    frag.appendChild(dot);
+  });
+
+  track.innerHTML = '';
+  track.appendChild(frag);
+  track.appendChild(nowChip);   // put back after the wipe, so it lives in the track's own space
+  place();
+}
+
+// Where the reader is, and what date is under the top of the screen. Read off the same stops
+// the marks were drawn from, so the chip and the rail can never disagree.
+function place() {
+  if (rail.hidden || !stops.length || span <= 0) return;
+
+  var at = Math.max(0, Math.min(span, scrollY));
+  nowChip.style.top = (at / span) * track.clientHeight + 'px';
+
+  var label = stops[0].label;
+  for (var i = 0; i < stops.length && stops[i].y <= at + 1; i++) label = stops[i].label;
+  nowChip.textContent = label;
+}
+
+/* ---------------- reading the rail ---------------- */
+
+var railTimer = null;
+var scrubbing = false;
+var ticking = false;
+
+// Lit while the wall is moving, and settling back once it has stopped.
+function wake() {
+  rail.classList.add('live');
+  clearTimeout(railTimer);
+  railTimer = setTimeout(function () {
+    if (!scrubbing) rail.classList.remove('live');
+  }, 1100);
+}
+
+addEventListener('scroll', function () {
+  if (rail.hidden) return;
+  wake();
+  if (ticking) return;
+  ticking = true;
+  requestAnimationFrame(function () { ticking = false; place(); });
+}, { passive: true });
+
+// A phone's address bar sliding away is a resize, and so is turning the thing sideways: both
+// change how far the page scrolls, which is the one number the whole rail is drawn from.
+var sizing = null;
+addEventListener('resize', function () {
+  clearTimeout(sizing);
+  sizing = setTimeout(function () { if (photos.length) drawRail(); }, 150);
+});
+
+function scrubTo(clientY) {
+  var box = track.getBoundingClientRect();
+  var f = box.height ? (clientY - box.top) / box.height : 0;
+  scrollTo(0, Math.max(0, Math.min(1, f)) * span);
+}
+
+rail.addEventListener('pointerdown', function (e) {
+  if (span <= 0) return;
+  scrubbing = true;
+  try { rail.setPointerCapture(e.pointerId); } catch (err) {}
+  e.preventDefault();   // no text selection, and no scroll started underneath the drag
+  wake();
+  scrubTo(e.clientY);
+});
+
+rail.addEventListener('pointermove', function (e) {
+  if (scrubbing) scrubTo(e.clientY);
+});
+
+function endScrub(e) {
+  if (!scrubbing) return;
+  scrubbing = false;
+  try { rail.releasePointerCapture(e.pointerId); } catch (err) {}
+  wake();
+}
+
+rail.addEventListener('pointerup', endScrub);
+rail.addEventListener('pointercancel', endScrub);
 
 /* ---------------- the filter ---------------- */
 
