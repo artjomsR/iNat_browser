@@ -791,7 +791,7 @@ function showPhoto(i) {
   var parts = [];
   if (photo.common && photo.name) parts.push(esc(photo.common));
   if (photo.date) parts.push(prettyDate(photo.date));
-  parts.push('<a href="' + obsUrl + '" target="_blank" rel="noopener">iNat</a>');
+  parts.push('<a href="' + obsUrl + '" target="_blank" rel="noopener">View on iNaturalist</a>');
   parts.push('<button type="button" class="copy" data-url="' + esc(shareLink()) + '">Copy Photo📋</button>');
   metaline.innerHTML = parts.join('<span class="sep">·</span>');
 
