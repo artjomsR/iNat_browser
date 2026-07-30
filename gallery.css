@@ -176,6 +176,54 @@ header {
 /* Pushed to the far end: it undoes a session's reading, and is not one of the two views. */
 #forget { margin-left: auto; color: var(--chrome-dim); }
 
+/* Iconic taxon chips, the same quick groups and the same toggle as the species report's —
+   ported to this room's own palette rather than its. Several may be lit at once, so they wrap
+   rather than scroll: picking is worth the extra line a phone sometimes needs for it. */
+.taxa {
+  max-width: var(--page);
+  margin: 11px auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.taxa[hidden] { display: none; }
+
+.taxa .lede {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--chrome-dim);
+  margin-right: 2px;
+}
+
+.taxa button {
+  padding: 6px 12px;
+  border: 1px solid var(--hair);
+  border-radius: 20px;
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--chrome);
+  cursor: pointer;
+}
+
+.taxa button.on {
+  color: var(--ink);
+  background: var(--paper);
+  border-color: var(--paper);
+}
+
+@media (hover: hover) {
+  .taxa button:hover { color: var(--paper); border-color: var(--chrome); }
+  .taxa button.on:hover { color: var(--ink); }
+}
+
+.taxa button:focus-visible { outline: 1px solid var(--chrome); outline-offset: 2px; }
+
 /* ---------- grid ---------- */
 
 main { max-width: var(--page); margin: 0 auto; padding-bottom: calc(var(--bot) + 40px); }

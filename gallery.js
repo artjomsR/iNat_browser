@@ -23,9 +23,27 @@
    a different slice of the same answer. What has been seen is remembered per photograph, so a
    picture met on one shelf is already seen on the other.
 
+   `iconic` narrows either of those shelves to one or more iconic taxa (`Aves`, `Mammalia`,
+   and so on — iNaturalist's own names, comma-separated), the same key and the same quick
+   groups as the species report's. It is a slice of the answer already on the page rather
+   than a new question, so it filters rather than reloads. It only applies outside the
+   highlights shelf, which is one tag rather than a spread of kinds, so the row that sets it
+   is hidden there too. Missing from the address it starts however the shelf is already
+   scoped — just `Aves` on the birds shelf, every group on all's — so the address only has to
+   say anything once that starting point is changed; switching shelves drops it, since one
+   shelf's starting point is not the other's.
+
    What has already been seen is the one piece of state too long for an address, and it
    belongs to this browser rather than to the link, so it lives in localStorage — see
    "what has been seen" below. */
+
+// Same quick groups as the species report's, so the two pages offer one vocabulary for
+// "kind of thing" rather than two.
+var ICONIC = [
+  ['Plantae', 'Plants'], ['Aves', 'Birds'], ['Insecta', 'Insects'], ['Fungi', 'Fungi'],
+  ['Arachnida', 'Arachnids'], ['Mammalia', 'Mammals'], ['Reptilia', 'Reptiles'],
+  ['Amphibia', 'Amphibians'], ['Actinopterygii', 'Fish'], ['Mollusca', 'Molluscs']
+];
 
 /* ---------------- config from the URL ---------------- */
 
@@ -38,6 +56,13 @@ var grade = qs.get('grade') || 'needs_id,research';
 var mode  = qs.get('show') === 'all' ? 'all' : 'unseen';
 // Which shelf. Anything unrecognised falls back to the tagged one this page was built around.
 var view  = qs.get('view') === 'birds' ? 'birds' : qs.get('view') === 'all' ? 'all' : 'highlights';
+// Narrows the shelf to a set of iconic taxa; meaningless on the tagged shelf, so it is dropped
+// there. Starts however each shelf is already scoped: birds is Aves and nothing else, since
+// that's what iNaturalist was asked for; all has no scope of its own, so every group starts
+// checked to match. The address only ever names an exception to that starting point.
+var iconic = view === 'highlights' ? [] :
+  qs.has('iconic') ? qs.get('iconic').split(',').filter(Boolean) :
+  view === 'birds' ? ['Aves'] : ICONIC.map(function (p) { return p[0]; });
 
 var PER_PAGE = 200;
 var MAX_PAGES = 50;
@@ -47,6 +72,7 @@ var photos = [];   // the ones on screen — what the focus view steps through
 var cursor = 0;
 
 var grid     = document.getElementById('grid');
+var taxaFilter = document.getElementById('taxaFilter');
 var filters  = document.getElementById('filters');
 var forget   = document.getElementById('forget');
 var picker   = document.getElementById('picker');
@@ -213,6 +239,7 @@ function collect(results) {
         obsId: obs.id,
         name: (obs.taxon && obs.taxon.name) || '',
         common: (obs.taxon && obs.taxon.preferred_common_name) || '',
+        iconic: (obs.taxon && obs.taxon.iconic_taxon_name) || '',
         date: obs.observed_on || (obs.observed_on_details && obs.observed_on_details.date) || ''
       });
     });
@@ -235,6 +262,7 @@ function render(list) {
   list.forEach(function (photo) {
     var old = seenAtLoad.has(photo.key);
     if (mode === 'unseen' && old) return;
+    if (iconic.length < ICONIC.length && iconic.indexOf(photo.iconic) === -1) return;
 
     var index = photos.length;
     photos.push(photo);
@@ -261,11 +289,21 @@ function render(list) {
   drawRail();
 }
 
+// How many of `all` belong to one of the chosen taxa — the denominator the tally and the
+// "show all" button both need once the taxa row has narrowed the shelf.
+function taxonCount(list) {
+  if (iconic.length >= ICONIC.length) return list.length;
+  var n = 0;
+  for (var i = 0; i < list.length; i++) if (iconic.indexOf(list[i].iconic) !== -1) n++;
+  return n;
+}
+
 function retally() {
   // The unseen count needs its denominator to mean anything: how many are left, out of every
-  // photo on the shelf. In the whole view those two numbers are the same one.
+  // photo on the shelf (or the taxon, once one is picked). In the whole view those two numbers
+  // are the same one.
   tally.textContent = mode === 'unseen'
-    ? photos.length + ' / ' + all.length + ' unseen'
+    ? photos.length + ' / ' + taxonCount(all) + ' unseen'
     : photos.length + ' photos';
 }
 
@@ -558,9 +596,16 @@ rail.addEventListener('pointercancel', endScrub);
 /* ---------------- the filter ---------------- */
 
 function nothingNew() {
+  // Nothing on this shelf carries the chosen taxon at all — a different case from having
+  // already seen everything that does, and one "show all" can't fix.
+  var denom = taxonCount(all);
+  if (denom === 0) {
+    say('Nothing here', 'No photos of that kind found for <b>' + esc(user) + '</b>.');
+    return;
+  }
   say('All caught up',
       'Every photo here has been seen already.' +
-      '<button type="button" id="showAll">Show all ' + all.length + '</button>');
+      '<button type="button" id="showAll">Show all ' + denom + '</button>');
   document.getElementById('showAll').addEventListener('click', function () { setMode('all'); });
 }
 
@@ -588,10 +633,51 @@ filters.addEventListener('click', function (e) {
   if (b) setMode(b.dataset.show);
 });
 
+// The same quick groups as the species report's, built once — never hunted for in the data,
+// since a group is worth offering whether or not this shelf happens to hold one yet.
+// Never built at all on the highlights shelf, one tag rather than a spread of kinds.
+function buildTaxaFilter() {
+  if (view === 'highlights') return;
+
+  taxaFilter.innerHTML = '<span class="lede">Taxa</span>' + ICONIC.map(function (pair) {
+    return '<button type="button" data-iconic="' + pair[0] + '">' + esc(pair[1]) + '</button>';
+  }).join('');
+  taxaFilter.hidden = false;
+  syncTaxaFilter();
+}
+
+function syncTaxaFilter() {
+  Array.prototype.forEach.call(taxaFilter.querySelectorAll('button[data-iconic]'), function (b) {
+    b.classList.toggle('on', iconic.indexOf(b.dataset.iconic) !== -1);
+  });
+}
+
+// Toggling, not choosing — every group starts lit, so this switches one off rather than
+// picking one on. Written out in full once touched, even down to nothing, rather than as an
+// absence — an untouched address means "whatever this shelf starts with," which after a
+// shelf switch is not the same list any longer.
+function toggleIconic(v) {
+  var i = iconic.indexOf(v);
+  if (i === -1) iconic.push(v);
+  else iconic.splice(i, 1);
+  syncTaxaFilter();
+  qs.set('iconic', iconic.join(','));
+  var query = qs.toString();
+  history.replaceState(null, '', location.pathname + (query ? '?' + query : ''));
+  relist();
+}
+
+taxaFilter.addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-iconic]');
+  if (b) toggleIconic(b.dataset.iconic);
+});
+
 // Changing shelf is a new question for iNaturalist, not a new slice of the answer already
 // here, so it goes through the address and the page comes back on the other one — same as
 // answering "whose gallery?" does. Anything still unwritten goes to storage first.
 viewSel.addEventListener('change', function () {
+  // A new shelf starts with every group lit again, whatever was unchecked on the last one.
+  qs.delete('iconic');
   if (viewSel.value === 'highlights') qs.delete('view');
   else qs.set('view', viewSel.value);
   flush();
@@ -760,5 +846,6 @@ function ask() {
   filters.hidden = false;
   forget.hidden = seenAtLoad.size === 0;
   syncFilter();
+  buildTaxaFilter();
   load();
 })();
