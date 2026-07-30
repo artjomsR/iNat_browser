@@ -6,6 +6,7 @@
      gallery.html?user=USER
      gallery.html?user=USER&tag=b&show=all
      gallery.html?user=USER&view=birds
+     gallery.html?user=USER&photo=PHOTO_ID
 
    `user` is the iNaturalist login. `u` and `user_id` are accepted as spellings of the same
    thing, because the species page uses one and iNaturalist's own addresses use the other.
@@ -32,6 +33,15 @@
    scoped — just `Aves` on the birds shelf, every group on all's — so the address only has to
    say anything once that starting point is changed; switching shelves drops it, since one
    shelf's starting point is not the other's.
+
+   `photo` is one photograph on that shelf, named by its iNaturalist photo id — the same id
+   "seen" is kept against, so it survives observations being edited or re-ordered. It is
+   written into the address whenever the full-screen view is open and taken out again when it
+   closes, so the address bar always names the picture on screen and can simply be copied. A
+   link opened elsewhere hangs the same wall and opens that photograph on it, waiting for it to
+   arrive if the wall is still being hung. Being named in the address outranks the unseen
+   filter: if the reader here has already seen the picture that the sender had not, the shelf
+   is shown whole rather than the link failing.
 
    What has already been seen is the one piece of state too long for an address, and it
    belongs to this browser rather than to the link, so it lives in localStorage — see
@@ -63,6 +73,9 @@ var view  = qs.get('view') === 'birds' ? 'birds' : qs.get('view') === 'all' ? 'a
 var iconic = view === 'highlights' ? [] :
   qs.has('iconic') ? qs.get('iconic').split(',').filter(Boolean) :
   view === 'birds' ? ['Aves'] : ICONIC.map(function (p) { return p[0]; });
+// The photograph the link asks to have open, if any. Cleared once it has been opened, or once
+// the reader has taken the wall somewhere of their own.
+var wanted = (qs.get('photo') || '').trim();
 
 var PER_PAGE = 200;
 var MAX_PAGES = 50;
@@ -119,6 +132,45 @@ function say(title, body) {
   statusEl.innerHTML = '<strong></strong><span></span>';
   statusEl.querySelector('strong').textContent = title;
   statusEl.querySelector('span').innerHTML = body;
+}
+
+/* ---------------- the address ----------------
+
+   `qs` is this page's memory, so every view it can be put into is written back into it and any
+   link taken from the bar comes back to the same place. replaceState rather than a push:
+   stepping along a wall of photographs is looking around one page, not a walk through several,
+   and nobody wants forty presses of Back to get out of a gallery. */
+
+var addrPending = null;
+
+function writeAddress() {
+  addrPending = null;
+  var query = qs.toString();
+  try {
+    history.replaceState(null, '', location.pathname + (query ? '?' + query : ''));
+  } catch (err) {
+    /* A browser that won't rewrite the address here — the page still works, the bar is
+       just a step behind. */
+  }
+}
+
+// Batched, like the seen list: a fast run through the wall would otherwise rewrite the address
+// once a keypress, and browsers put a ceiling on how often that may be done. The address only
+// has to be right once the stepping stops.
+function addressSoon() {
+  if (addrPending) return;
+  addrPending = setTimeout(writeAddress, 400);
+}
+
+function addressNow() {
+  if (addrPending) clearTimeout(addrPending);
+  writeAddress();
+}
+
+// The whole address as it stands, ready to be handed to somebody: the current query against
+// this page, taken from `qs` rather than the bar, which may still be a moment behind it.
+function shareLink() {
+  return location.href.replace(/[?#].*$/, '') + '?' + qs.toString();
 }
 
 /* ---------------- what has been seen ----------------
@@ -256,13 +308,22 @@ function paint(fresh) {
   render(fresh);
 }
 
+// Whether the taxa row is narrowing the wall at all. It is only offered off the highlights
+// shelf, which is one tag rather than a spread of kinds: `iconic` is empty there because the
+// question was never put, not because every answer was unticked. Where the row is offered an
+// empty list means the reader really has switched every group off, and an empty wall is the
+// honest answer to that.
+function narrowed() {
+  return view !== 'highlights' && iconic.length < ICONIC.length;
+}
+
 function render(list) {
   var frag = document.createDocumentFragment();
 
   list.forEach(function (photo) {
     var old = seenAtLoad.has(photo.key);
     if (mode === 'unseen' && old) return;
-    if (iconic.length < ICONIC.length && iconic.indexOf(photo.iconic) === -1) return;
+    if (narrowed() && iconic.indexOf(photo.iconic) === -1) return;
 
     var index = photos.length;
     photos.push(photo);
@@ -287,12 +348,13 @@ function render(list) {
   grid.appendChild(frag);
   retally();
   drawRail();
+  openWanted();
 }
 
 // How many of `all` belong to one of the chosen taxa — the denominator the tally and the
 // "show all" button both need once the taxa row has narrowed the shelf.
 function taxonCount(list) {
-  if (iconic.length >= ICONIC.length) return list.length;
+  if (!narrowed()) return list.length;
   var n = 0;
   for (var i = 0; i < list.length; i++) if (iconic.indexOf(list[i].iconic) !== -1) n++;
   return n;
@@ -446,6 +508,11 @@ function measure() {
 }
 
 function drawRail() {
+  // A photograph is full-screen and the rail is display:none behind it, so it would measure
+  // nothing and stack every mark at the top of a track no longer there. The wall goes on being
+  // hung underneath; closing the view draws the rail against it then.
+  if (document.body.classList.contains('focused')) return;
+
   findStops();
   rail.hidden = false;
 
@@ -619,12 +686,11 @@ function setMode(next) {
   if (next === mode) return;
   mode = next;
   syncFilter();
-  // The address is this page's memory, same as the username: a link carries the view it was
-  // read in. replaceState, not a reload — the photos are already here.
+  // A link carries the view it was read in; the photos are already here, so this is a rewrite
+  // of the address rather than a reload.
   if (mode === 'all') qs.set('show', 'all');
   else qs.delete('show');
-  var query = qs.toString();
-  history.replaceState(null, '', location.pathname + (query ? '?' + query : ''));
+  addressNow();
   relist();
 }
 
@@ -662,8 +728,7 @@ function toggleIconic(v) {
   else iconic.splice(i, 1);
   syncTaxaFilter();
   qs.set('iconic', iconic.join(','));
-  var query = qs.toString();
-  history.replaceState(null, '', location.pathname + (query ? '?' + query : ''));
+  addressNow();
   relist();
 }
 
@@ -710,6 +775,11 @@ function showPhoto(i) {
   var photo = photos[i];
   markSeen(photo);
 
+  // What is on screen is what the address says, so the bar can be copied out of at any moment
+  // without a button being pressed at all.
+  qs.set('photo', photo.key);
+  addressSoon();
+
   lo.src = sized(photo.url, 'small');
   hi.classList.remove('in');
   hi.src = sized(photo.url, 'large');
@@ -722,7 +792,7 @@ function showPhoto(i) {
   if (photo.common && photo.name) parts.push(esc(photo.common));
   if (photo.date) parts.push(prettyDate(photo.date));
   parts.push('<a href="' + obsUrl + '" target="_blank" rel="noopener">iNat</a>');
-  parts.push('<button type="button" class="copy" data-url="' + esc(obsUrl) + '">Copy Photo📋</button>');
+  parts.push('<button type="button" class="copy" data-url="' + esc(shareLink()) + '">Copy Photo📋</button>');
   metaline.innerHTML = parts.join('<span class="sep">·</span>');
 
   preload(i + 1);
@@ -758,6 +828,49 @@ function closeFocus() {
   document.body.classList.remove('focused');
   hi.removeAttribute('src');
   lo.removeAttribute('src');
+  // Nothing is open any longer, so the address stops naming a photograph — a link taken from
+  // the bar now is the wall, which is what is being looked at.
+  qs.delete('photo');
+  addressNow();
+  // Whatever arrived while the view was up is on the wall but not yet on the ruler.
+  if (photos.length) drawRail();
+}
+
+/* ---------------- a photograph asked for by name ----------------
+
+   `?photo=` is a link somebody was sent, so it is answered as soon as it can be: the wall
+   arrives a page at a time and the picture may be a thousand of them down, so every batch is
+   checked as it is hung rather than the whole load being waited out. */
+
+function findWanted() {
+  for (var i = 0; i < photos.length; i++) if (photos[i].key === wanted) return i;
+  return -1;
+}
+
+function haveWanted() {
+  for (var i = 0; i < all.length; i++) if (all[i].key === wanted) return true;
+  return false;
+}
+
+function openWanted() {
+  if (!wanted) return;
+
+  // By now the reader may have started on the wall themselves. A link opens a photograph; it
+  // does not snatch the page back off somebody already reading it.
+  if (focusEl.classList.contains('on') || scrollY > 8) { wanted = ''; return; }
+
+  var i = findWanted();
+
+  if (i === -1) {
+    // Fetched, but filtered off the wall: this reader has seen the picture that whoever sent
+    // the link had not. Being named in the address outranks the filter, so the shelf is shown
+    // whole — which hangs the picture, and comes back through here to open it.
+    if (mode === 'unseen' && haveWanted()) setMode('all');
+    return;
+  }
+
+  wanted = '';
+  openPhoto(i);
 }
 
 function step(delta) {
