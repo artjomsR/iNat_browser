@@ -17,10 +17,11 @@
    verifiable observations with photos, newest first.
 
    `view` is which shelf: `highlights`, the default, is the tagged one the gallery was built
-   for; `view=birds` drops the tag and hangs this user's birds instead. Changing it reloads the
-   page rather than re-filtering, because it is a different question put to iNaturalist rather
-   than a different slice of the same answer. What has been seen is remembered per photograph,
-   so a picture met on one shelf is already seen on the other.
+   for; `view=birds` drops the tag and hangs this user's birds instead; `view=all` drops both
+   the tag and the taxon and hangs every verifiable observation. Changing it reloads the page
+   rather than re-filtering, because it is a different question put to iNaturalist rather than
+   a different slice of the same answer. What has been seen is remembered per photograph, so a
+   picture met on one shelf is already seen on the other.
 
    What has already been seen is the one piece of state too long for an address, and it
    belongs to this browser rather than to the link, so it lives in localStorage — see
@@ -36,7 +37,7 @@ var grade = qs.get('grade') || 'needs_id,research';
 // worked through rather than re-read; `?show=all` is the way back to the whole thing.
 var mode  = qs.get('show') === 'all' ? 'all' : 'unseen';
 // Which shelf. Anything unrecognised falls back to the tagged one this page was built around.
-var view  = qs.get('view') === 'birds' ? 'birds' : 'highlights';
+var view  = qs.get('view') === 'birds' ? 'birds' : qs.get('view') === 'all' ? 'all' : 'highlights';
 
 var PER_PAGE = 200;
 var MAX_PAGES = 50;
@@ -188,9 +189,10 @@ function endpoint(page) {
     page: String(page)
   });
 
-  // All the two shelves differ by: a tag search, or a whole class of animal. Newest first
-  // either way, so "most recent" needs nothing added.
+  // The three shelves differ by: a tag search, a whole class of animal, or nothing at all.
+  // Newest first either way, so "most recent" needs nothing added.
   if (view === 'birds') p.set('iconic_taxa', 'Aves');
+  else if (view === 'all') { /* every verifiable observation, no further narrowing */ }
   else { p.set('q', tag); p.set('search_on', 'tags'); }
 
   return 'https://api.inaturalist.org/v1/observations?' + p.toString();
@@ -322,6 +324,9 @@ async function load() {
     // The tag is the highlights shelf's doing, so only that shelf explains itself by it.
     else if (view === 'birds')
       say('No birds', 'No photographed bird observations found for <b>' + esc(user) + '</b>. ' +
+                      'The username may be wrong.');
+    else if (view === 'all')
+      say('No observations', 'No photographed observations found for <b>' + esc(user) + '</b>. ' +
                       'The username may be wrong.');
     else say('Nothing tagged “' + tag + '”',
              'No observations found for <b>' + esc(user) + '</b> with that tag. ' +
@@ -587,8 +592,8 @@ filters.addEventListener('click', function (e) {
 // here, so it goes through the address and the page comes back on the other one — same as
 // answering "whose gallery?" does. Anything still unwritten goes to storage first.
 viewSel.addEventListener('change', function () {
-  if (viewSel.value === 'birds') qs.set('view', 'birds');
-  else qs.delete('view');
+  if (viewSel.value === 'highlights') qs.delete('view');
+  else qs.set('view', viewSel.value);
   flush();
   location.search = qs.toString();
 });
