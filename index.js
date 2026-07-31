@@ -120,6 +120,17 @@ const LEVELS = ["s","b","c"];
 const DMODES = ["own","unobserved",...LEVELS];
 function isTierMode(){ return LEVELS.includes(state.dmode); }
 
+// The mode row in the order it is drawn, widest question first. The modes nest: a level
+// hides only what is tagged at that level or better, so S's map contains B's, which
+// contains C's, which contains everything Unobserved would show. Lighting the whole tail
+// says so — press S and all four light, press Unobserved and only it does. Nothing but
+// state.dmode (the head of the tail) is ever queried; this is display only.
+const MODE_ROW = [...LEVELS, "unobserved"];
+function modeLit(mode){
+  const head = MODE_ROW.indexOf(state.dmode);   // -1 in "own" mode: nothing lit
+  return head !== -1 && MODE_ROW.indexOf(mode) >= head;
+}
+
 // Scope a species_counts query to one user plus the panel's taxon / quick-group filters.
 function userScope(user){
   const o = { user_id: user };
@@ -592,10 +603,14 @@ function filtersHtml(){
     <input class="input" id="unobsInput" type="text" autocapitalize="none" autocorrect="off"
            spellcheck="false" placeholder="iNaturalist username" value="${esc(state.unobs)}">
     <div class="seg" id="unobsModeRow">
-      <button type="button" data-mode="s" aria-pressed="${state.dmode === "s"}">S Tier</button>
-      <button type="button" data-mode="b" aria-pressed="${state.dmode === "b"}">B Tier</button>
-      <button type="button" data-mode="c" aria-pressed="${state.dmode === "c"}">C Tier+<br>Untagged+<br>Audio Observations</button>
-      <button type="button" data-mode="unobserved" aria-pressed="${state.dmode === "unobserved"}">Unobserved</button>
+      <button type="button" data-mode="s" aria-pressed="${modeLit("s")}">S Tier</button>
+      <button type="button" data-mode="b" aria-pressed="${modeLit("b")}">B Tier</button>
+      <!-- The third line is the map's own speaker rather than the words, so the button
+           stays the width of its neighbours. aria-label carries what the icon says. -->
+      <button type="button" data-mode="c" aria-pressed="${modeLit("c")}"
+              aria-label="C Tier + Untagged + Audio observations">C Tier+<br>Untagged+<br><span
+        class="seg-ico" title="Audio observations">${speakerSvg("currentColor","currentColor")}</span></button>
+      <button type="button" data-mode="unobserved" aria-pressed="${modeLit("unobserved")}">Unobserved</button>
     </div>
     <p class="field-hint" id="ownHint" ${state.dmode === "own" ? "" : "hidden"}>Nothing selected &mdash;
       the map shows this user&rsquo;s own observations instead of the ones they still want.</p>
@@ -953,12 +968,13 @@ function wireFilters(){
   // set. The row toggles rather than merely choosing: pressing the mode already on turns it
   // off, leaving no button lit and the map on this user's own records. The rank ticks go
   // with it — they narrow a desired-species list, and there isn't one in that state.
+  // Only the pressed button becomes the mode; the ones after it light with it (modeLit).
   $("unobsModeRow").addEventListener("click", e => {
     const b = e.target.closest("button[data-mode]");
     if(!b) return;
     state.dmode = state.dmode === b.dataset.mode ? "own" : b.dataset.mode;
     [...$("unobsModeRow").children].forEach(c =>
-      c.setAttribute("aria-pressed", c.dataset.mode === state.dmode));
+      c.setAttribute("aria-pressed", modeLit(c.dataset.mode)));
     $("ownHint").hidden  = state.dmode !== "own";
     $("sspBlock").hidden = state.dmode === "own";
     syncTierExclude().then(commit);
