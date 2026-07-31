@@ -1027,7 +1027,7 @@ document.getElementById("labelBar").addEventListener("click", () => {
 // covers falls out of the zoom level itself: zoom in for a small ring, out for a broad
 // sweep. 0.4 puts "large" at 80% of the shorter edge across, so the whole ring stays on
 // screen; "precise" is a fingertip.
-const PROBE_SPAN = { precise: 0.05, large: 0.4 };
+const PROBE_SPAN = { precise: 0.15, large: 0.4 };
 function probeRadiusKm(lat, zoom){
   const mPerPx = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
   const size = map.getSize();
