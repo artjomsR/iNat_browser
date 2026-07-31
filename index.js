@@ -594,7 +594,7 @@ function filtersHtml(){
     <div class="seg" id="unobsModeRow">
       <button type="button" data-mode="s" aria-pressed="${state.dmode === "s"}">S Tier</button>
       <button type="button" data-mode="b" aria-pressed="${state.dmode === "b"}">B Tier</button>
-      <button type="button" data-mode="c" aria-pressed="${state.dmode === "c"}">C Tier + Audio Only</button>
+      <button type="button" data-mode="c" aria-pressed="${state.dmode === "c"}">C Tier+<br>Untagged+<br>Audio Observations</button>
       <button type="button" data-mode="unobserved" aria-pressed="${state.dmode === "unobserved"}">Unobserved</button>
     </div>
     <p class="field-hint" id="ownHint" ${state.dmode === "own" ? "" : "hidden"}>Nothing selected &mdash;
