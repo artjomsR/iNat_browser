@@ -1131,18 +1131,37 @@ function resultsHtml(list, km, latlng){
     </span></div>${rows}`;
 }
 
+// Three circles, always the same three: the tightest accuracies the probe came back with,
+// whatever the size of the catch. Drawing every one of twenty would be a wash of overlapping
+// rings, and the loosest of them cover the whole screen anyway — the precise ones are the
+// only ones that say something about where the animal actually was.
+//
+// ACC_CIRCLE_MIN is a preference, not a veto. Where there is a choice, a circle at or under
+// it is passed over: at any zoom it reads as a pin, not an area, so it would spend one of the
+// three slots on a ring nobody can see. Where there isn't — a pin over two observations, or
+// twenty all recorded to the metre — the tight ones fill the rest of the three rather than
+// leave the map bare, largest first, those being the only ones with a chance of showing.
+const ACC_CIRCLE_MIN   = 10;   // metres — below this the circle is smaller than the pin on it
+const ACC_CIRCLE_COUNT = 3;
+
 function drawAccuracyCircles(list){
   probeAccLayer.clearLayers();
-  if(!list.length || list.length > 3) return;
-  list.forEach(o => {
-    if(!o.location) return;
+  const found = list.map(o => {
+    if(!o.location) return null;
     const [lat, lng] = o.location.split(",").map(Number);
-    if(!isFinite(lat) || !isFinite(lng)) return;
+    if(!isFinite(lat) || !isFinite(lng)) return null;
     const acc = o.public_positional_accuracy != null ? o.public_positional_accuracy : o.positional_accuracy;
-    if(acc == null || !isFinite(acc) || acc <= 0) return;
-    const col = accuracyColor(acc);
-    L.circle([lat, lng], {
-      radius: acc, color: col, weight: 1.5, opacity: .85,
+    if(acc == null || !isFinite(acc) || acc <= 0) return null;
+    return { lat, lng, acc };
+  }).filter(Boolean);
+
+  const wide  = found.filter(o => o.acc >  ACC_CIRCLE_MIN).sort((a, b) => a.acc - b.acc);
+  const tight = found.filter(o => o.acc <= ACC_CIRCLE_MIN).sort((a, b) => b.acc - a.acc);
+
+  wide.concat(tight).slice(0, ACC_CIRCLE_COUNT).forEach(o => {
+    const col = accuracyColor(o.acc);
+    L.circle([o.lat, o.lng], {
+      radius: o.acc, color: col, weight: 1.5, opacity: .85,
       fillColor: col, fillOpacity: .12, interactive: false
     }).addTo(probeAccLayer);
   });
