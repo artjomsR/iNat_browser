@@ -1,5 +1,8 @@
 :root{--ink:#0D1714;--raise:#1B2C26;--rule:#26382F;--text:#E8F0EB;--mute:#7C9389;--mark:#FF3E7C;
   --verified:#6FD3A8;
+  /* --ink again, half out of the way: the ring around the grid's tier badge, so it holds its
+     edge over a photograph of anything */
+  --scrim:rgba(13,23,20,.68);
   --ui:"Archivo Narrow","Helvetica Neue",Arial,sans-serif;--lit:"Newsreader",Georgia,"Times New Roman",serif}
 *{box-sizing:border-box}
 body{margin:0;background:var(--ink);color:var(--text);font-family:var(--ui);-webkit-font-smoothing:antialiased}
@@ -44,6 +47,11 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
   color:var(--mute);background:var(--raise);border:1px solid var(--rule);border-radius:5px}
 .sortbar button:hover{color:var(--text);border-color:var(--mute)}
 .sortbar button.on{color:var(--ink);background:var(--mark);border-color:var(--mark)}
+.sortbar .layout{display:flex;align-items:center;gap:7px;margin-left:13px;letter-spacing:.12em}
+/* each shape carries a small picture of itself, which takes the button's colour through
+   hover and selected because it is drawn in currentColor */
+.sortbar .layout button{display:inline-flex;align-items:center;gap:7px}
+.sortbar .layout svg{flex:0 0 auto;width:11px;height:11px}
 .sortbar .thresh{display:flex;align-items:center;gap:6px;margin-left:auto;
   letter-spacing:.12em;color:var(--mute)}
 /* the clear sits inside the field, between the number and the spinner arrows */
@@ -56,7 +64,9 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
   padding:0 4px;font-size:13px;line-height:1;letter-spacing:0;
   color:var(--mute);background:none;border:0;cursor:pointer}
 .sortbar .minClear:hover{color:var(--mark)}
-@media (max-width:520px){ .sortbar{flex-wrap:wrap} .sortbar .thresh{margin-left:0} }
+@media (max-width:520px){
+  .sortbar{flex-wrap:wrap} .sortbar .thresh,.sortbar .layout{margin-left:0}
+}
 /* index rail — sticky beside the tiers on a wide window, a wrapping strip on a narrow one */
 .cols{display:grid;grid-template-columns:186px minmax(0,1fr);gap:34px;align-items:start;margin-top:14px}
 .index{position:sticky;top:22px;display:flex;flex-direction:column;gap:3px}
@@ -158,6 +168,34 @@ li[data-standing="s"]{--badge:#E8C468}
   color:var(--mute);word-break:break-all}
 .url a{color:inherit;text-decoration:none}
 .url a:hover{color:var(--mark)}
+/* grid view — the same rows, hung as tiles.
+   One class on #main is the whole switch: there is no second copy of the row markup, so the
+   sort, the threshold, the family bands and the hide-cascade all go on working on these very
+   rows and flipping shape costs no refetch. */
+#main.grid ul{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+  gap:22px 14px;margin-top:14px}
+#main.grid li{display:block;position:relative;padding:0;border:0}
+/* restated, because this block outruns the plain li[hidden] rule above — a row cut by the
+   threshold or the cascade has to stay gone in either shape */
+#main.grid li[hidden]{display:none}
+#main.grid li img,#main.grid .nophoto{width:100%;height:auto;aspect-ratio:1;font-size:32px}
+/* no rank on a tile: an ordinal is a reading of a column, and a wall has no column to count
+   down. relist goes on writing it either way — only the showing of it stops here. */
+#main.grid .num{display:none}
+/* the badge rides on the photograph, so a tile can be read at a glance and the lines under
+   it stay the name */
+#main.grid .common .tick{position:absolute;top:6px;right:6px;margin:0;
+  box-shadow:0 0 0 2px var(--scrim)}
+#main.grid .common{margin-top:9px;font-size:14.5px;line-height:1.3}
+#main.grid .common.as-sci a{font-size:14px}
+#main.grid .sci{font-size:12.5px}
+#main.grid .meta{margin-top:4px;font-size:9px;letter-spacing:.1em}
+#main.grid .common a.viewMy{font-size:9px}
+/* the raw address is a line of monospace as wide as the whole tile — it belongs to the list */
+#main.grid .url{display:none}
+/* a family band heads the tiles rather than standing in as one of them */
+#main.grid li.fam{display:flex;grid-column:1/-1;padding:16px 2px 8px;
+  border-bottom:1px solid var(--rule)}
 .state{padding:70px 0;text-align:center;color:var(--mute)}
 .state-lede{margin-bottom:8px;font-family:var(--lit);font-size:21px;color:var(--text)}
 .state-hint{font-size:12px;letter-spacing:.05em;line-height:1.6}

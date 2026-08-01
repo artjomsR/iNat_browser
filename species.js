@@ -4,7 +4,7 @@
    bookmarked, shared, and reloaded on its own:
 
      species.html?u=USER&taxon=ID&tname=NAME&iconic=Aves,Insecta&sort=name#tier-3
-     species.html?tab=place&place_id=7122&pname=Portugal&u=USER&sort=taxo
+     species.html?tab=place&place_id=7122&pname=Portugal&u=USER&sort=taxo&layout=grid
      species.html?tab=place&lat=38.72&lng=-9.14&radius=12&u=USER
 
    Two tabs over the same rows. `tier` is about one person: their species banded by the tier
@@ -14,6 +14,10 @@
 
    `tname` is only a label — the taxon id is what scopes the query — so a stale or missing
    name costs nothing but a prettier heading. `pname` is the same for a place.
+
+   `layout=grid` hangs the rows as tiles instead of listing them. It is the same rows either
+   way — a class on the list, not a second rendering — so the sort, the threshold and the
+   hide-cascade all still apply, and switching costs no refetch.
 
    `back` holds the map's own hash, added by the map when it opens this page. It is never
    read here, only handed straight back to the Map link, so the reader returns to the
@@ -44,6 +48,8 @@ const view = {
   tname:  q.get("tname") || "",
   iconic: (q.get("iconic") || "").split(",").filter(Boolean),
   sort:   ["name","taxo"].includes(q.get("sort")) ? q.get("sort") : "count",
+  // The shape the rows are read in, not what they hold — see the note up top.
+  layout: q.get("layout") === "grid" ? "grid" : "list",
   // `min=0` in the address is an explicit "show me everything" and survives a reload.
   min:    q.has("min") ? Math.max(0, Math.floor(+q.get("min") || 0)) : DEFAULT_MIN,
   back:   q.get("back") || "",
@@ -439,6 +445,21 @@ const SPEAKER_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true">
         fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
 </svg>`;
 
+// The two shapes the list can take, drawn rather than only named: rows of thumbnail beside
+// text, and a wall of tiles. Each is a small picture of what it does, so the pair can be told
+// apart without reading either label. currentColor throughout, like the speaker above, so
+// they follow the button through hover and selected rather than needing a second drawing.
+const LAYOUT_ICON = {
+  list: `<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <rect x="1" y="2" width="4.6" height="4.6" rx="1"/><rect x="7.6" y="3.3" width="7.4" height="2" rx="1"/>
+    <rect x="1" y="9.4" width="4.6" height="4.6" rx="1"/><rect x="7.6" y="10.7" width="7.4" height="2" rx="1"/>
+  </svg>`,
+  grid: `<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <rect x="1" y="1" width="6" height="6" rx="1.2"/><rect x="9" y="1" width="6" height="6" rx="1.2"/>
+    <rect x="1" y="9" width="6" height="6" rx="1.2"/><rect x="9" y="9" width="6" height="6" rx="1.2"/>
+  </svg>`
+};
+
 // What the badge says, per standing. The glyph carries the tier and the colour ramps with
 // it — bronze, silver, gold for C, B, S — so a column of these can be read at a glance
 // without stopping on each letter.
@@ -512,15 +533,21 @@ function rowHtml(x, i, user, mark){
 }
 
 // One sortbar per list, shared by both tabs: it re-sorts what is already rendered, so
-// flipping order never costs a refetch. On the tier tab it drives every tier at once.
-// Refresh rides the same row, but only the tier tab passes `withRefresh` — the place tab's
-// answer is a place's, not a person's, and has no per-user refetch to offer.
+// flipping order never costs a refetch. On the tier tab it drives every tier at once. The
+// list/grid switch rides the same row for the same reason — it shuffles nothing and refetches
+// nothing either. Refresh is the exception: only the tier tab passes `withRefresh`, since the
+// place tab's answer is a place's, not a person's, and has no per-user refetch to offer.
 function sortbarHtml(sortBy, withRefresh){
   const on = by => sortBy === by ? ` class="on"` : "";
+  const laid = kind => view.layout === kind ? ` class="on"` : "";
   return `<div class="sortbar">Sort
     <button type="button" data-by="count"${on("count")}>Most observed</button>
     <button type="button" data-by="name"${on("name")}>A&ndash;Z</button>
     <button type="button" data-by="taxo"${on("taxo")}>Taxonomic</button>
+    <span class="layout">View
+      <button type="button" data-layout="list"${laid("list")}>${LAYOUT_ICON.list}List</button>
+      <button type="button" data-layout="grid"${laid("grid")}>${LAYOUT_ICON.grid}Grid</button>
+    </span>
     <span class="thresh">Hide under
       <span class="minWrap">
         <input type="number" class="minObs" min="0" step="1" value="${view.min || ""}"
@@ -792,6 +819,21 @@ function wireSort(){
   }));
 }
 
+// List or grid. Both are the same rows in the same order — the switch is one class on #main
+// and nothing else — so this touches neither the sort, the threshold, the family bands nor
+// the hide-cascade, and never refetches. Scroll position is left alone: the page changes
+// height enough that jumping to the top would be its own surprise.
+function wireLayout(){
+  const btns = [...document.querySelectorAll(".sortbar button[data-layout]")];
+  btns.forEach(b => b.addEventListener("click", () => {
+    view.layout = b.dataset.layout;
+    btns.forEach(x => x.classList.toggle("on", x === b));
+    // List is the default, so it leaves no key behind — same as sort's "count".
+    writeState({ layout: view.layout === "list" ? "" : view.layout });
+    main.classList.toggle("grid", view.layout === "grid");
+  }));
+}
+
 // Index rail: real fragment links now that the page has an address, so a tier can be
 // linked to directly. The highlight follows whichever heading last passed the top.
 function wireIndex(){
@@ -814,6 +856,9 @@ function wireIndex(){
 
 function paint(html, sub, busy){
   main.innerHTML = html;
+  // The rows are the same in either shape, so grid is one class re-asserted with each paint
+  // rather than anything baked into the markup.
+  main.classList.toggle("grid", view.layout === "grid");
   countEl.innerHTML = sub;
   // Only present once the tier tab's sortbar is on screen — absent while loading or after
   // a failed fetch, when there is no sortbar at all to carry it.
@@ -835,6 +880,7 @@ function failed(hint){
 // rather than in front of it. The headings appear when they land.
 function afterPaint(buckets){
   wireSort();
+  wireLayout();
   applyHideFrom();              // tier tab's sections; a no-op if nothing is cut and place-tab-safe
   if(view.min || view.hide != null) relist();   // a threshold or cutoff in the address applies to first paint
   familiesReady = loadFamilies(buckets).catch(() => {});

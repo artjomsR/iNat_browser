@@ -14,6 +14,9 @@ directly (or via `.claude/launch.json`'s static server) to run it.
   user). Fully addressed via query string (see the comment block at the top of `species.js`)
   so any state is bookmarkable.
   - Category ordering is: Untagged (green tick), audio, tiers for tier page; and audio, observed (green tick), tiers for species page
+  - `View: List / Grid` (`layout=grid`) hangs the same rows as tiles. It is one class on
+    `#main`, not a second rendering, so sort, threshold, family bands and the hide-cascade
+    keep working on the same `<li>`s — don't grow a separate grid renderer.
 - **gallery.html / gallery.css / gallery.js** — the photo wall, reached from the species
   page's "Gallery" link, which carries the username across. Every photo on one user's tagged
   observations in a three-up grid, with a full-screen viewer behind each tile (tap the halves,
