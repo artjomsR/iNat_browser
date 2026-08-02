@@ -544,10 +544,6 @@ function sortbarHtml(sortBy, withRefresh){
     <button type="button" data-by="count"${on("count")}>Most observed</button>
     <button type="button" data-by="name"${on("name")}>A&ndash;Z</button>
     <button type="button" data-by="taxo"${on("taxo")}>Taxonomic</button>
-    <span class="layout">View
-      <button type="button" data-layout="list"${laid("list")}>${LAYOUT_ICON.list}List</button>
-      <button type="button" data-layout="grid"${laid("grid")}>${LAYOUT_ICON.grid}Grid</button>
-    </span>
     <span class="thresh">Hide under
       <span class="minWrap">
         <input type="number" class="minObs" min="0" step="1" value="${view.min || ""}"
@@ -556,6 +552,10 @@ function sortbarHtml(sortBy, withRefresh){
                 aria-label="Clear the threshold"${view.min ? "" : " hidden"}>&times;</button>
       </span> obs</span>
     ${withRefresh ? `<button type="button" id="refresh">Refresh</button>` : ""}
+    <span class="layout">View
+      <button type="button" data-layout="list"${laid("list")}>${LAYOUT_ICON.list}List</button>
+      <button type="button" data-layout="grid"${laid("grid")}>${LAYOUT_ICON.grid}Grid</button>
+    </span>
   </div>`;
 }
 
