@@ -19,6 +19,11 @@
    way — a class on the list, not a second rendering — so the sort, the threshold and the
    hide-cascade all still apply, and switching costs no refetch.
 
+   `sort=tier` is the place tab's own order: the rows banded by what the named user already
+   holds on them — never recorded first, then audio, the plain tick, C, B, S — and heaviest
+   first inside each band. It needs a standing on every row to read, which only the place tab
+   with a username has, so anywhere else the address falls back to the default.
+
    `back` holds the map's own hash, added by the map when it opens this page. It is never
    read here, only handed straight back to the Map link, so the reader returns to the
    filters and viewport they left rather than to a fresh map. */
@@ -47,7 +52,7 @@ const view = {
   taxon:  q.get("taxon") || "",
   tname:  q.get("tname") || "",
   iconic: (q.get("iconic") || "").split(",").filter(Boolean),
-  sort:   ["name","taxo"].includes(q.get("sort")) ? q.get("sort") : "count",
+  sort:   ["name","taxo","tier"].includes(q.get("sort")) ? q.get("sort") : "count",
   // The shape the rows are read in, not what they hold — see the note up top.
   layout: q.get("layout") === "grid" ? "grid" : "list",
   // `min=0` in the address is an explicit "show me everything" and survives a reload.
@@ -69,6 +74,12 @@ const hasArea = !!view.place || hasPin;
 // Something narrowing the tree. Without it an area query is unbounded, so the place tab
 // declines to run one.
 const hasTaxa = !!(view.taxon || view.iconic.length);
+// Tier order needs a standing on every row, and only the place tab with a username has one —
+// on the tier tab the sections already ARE the tiers, so there is nothing left for it to
+// band. An address carrying it anywhere else drops back to the default rather than offering
+// a button that would shuffle nothing.
+const canTier = tab === "place" && !!view.user;
+if(view.sort === "tier" && !canTier) view.sort = "count";
 
 // Rebuild this page's address with a few keys changed — how the tabs, the place picker and
 // the sort control all move around without losing the rest of the scope.
@@ -404,6 +415,13 @@ const TIERS = [
 const STANDING_ORDER = ["audio", "seen", "c", "b", "s"];
 function standingRank(mark){ return STANDING_ORDER.indexOf(mark || "seen"); }
 
+// The same run of standings read as a sort key rather than a cutoff, with the species you
+// have never recorded sitting below the floor of it. Deliberately not standingRank, which
+// folds a blank into "seen" because a blank there is a tier-tab row wearing the plain tick.
+// A blank here is the opposite — a species you have nothing at all on — and this order leads
+// with those, which is what the place tab is read for.
+function tierRank(mark){ return mark ? STANDING_ORDER.indexOf(mark) + 1 : 0; }
+
 // Band every species the user has recorded by its best tag. Nothing drops out — the five
 // tiers together are everything recorded in scope. This fallback order (a tag always beats
 // a sound recording, a sound recording always beats nothing) is independent of both TIERS'
@@ -542,6 +560,9 @@ function sortbarHtml(sortBy, withRefresh){
   const laid = kind => view.layout === kind ? ` class="on"` : "";
   return `<div class="sortbar">Sort
     <button type="button" data-by="count"${on("count")}>Most observed</button>
+    ${canTier ? `<button type="button" data-by="tier"${on("tier")}
+      title="Weakest standing first &mdash; never recorded, then audio, the tick, C, B, S &mdash; and heaviest first inside each"
+      >Most observed / Tier</button>` : ""}
     <button type="button" data-by="name"${on("name")}>A&ndash;Z</button>
     <button type="button" data-by="taxo"${on("taxo")}>Taxonomic</button>
     <span class="thresh">Hide under
@@ -560,8 +581,14 @@ function sortbarHtml(sortBy, withRefresh){
 }
 
 // Order the rows for the first paint. Afterwards the sortbar shuffles the DOM instead.
-function sortRows(rows, sortBy){
-  if(sortBy === "count") return rows;
+// `standing` is the place tab's id-to-badge lookup, which only the tier order needs — and
+// without it that order has nothing to band by, so it falls through to the count the rows
+// already arrive in.
+function sortRows(rows, sortBy, standing){
+  if(sortBy === "tier" && standing) return rows.slice().sort((a, b) =>
+    tierRank(standing(a.taxon.id)) - tierRank(standing(b.taxon.id)) ||
+    b.count - a.count || sortName(a.taxon).localeCompare(sortName(b.taxon)));
+  if(sortBy === "count" || sortBy === "tier") return rows;
   return rows.slice().sort(sortBy === "taxo"
     ? (a, b) => taxoKey(a.taxon).localeCompare(taxoKey(b.taxon)) ||
                 sortName(a.taxon).localeCompare(sortName(b.taxon))
@@ -599,7 +626,7 @@ function placeListHtml(rows, standing, sortBy){
           title="The same area on iNaturalist">${esc(areaLabel())}</a><span class="n">${rows.length}</span></h2>
     ${tally}
     ${sortbarHtml(sortBy)}
-    <ul>${sortRows(rows, sortBy).map((x, n) =>
+    <ul>${sortRows(rows, sortBy, standing).map((x, n) =>
       rowHtml(x, n, view.user, standing ? standing(x.taxon.id) : "")).join("")}</ul>
   </section>`;
 }
@@ -641,6 +668,12 @@ function listHtml(buckets, user, sortBy){
 // renumbered within itself.
 function comparator(by){
   if(by === "count") return (p, r) =>
+    (+r.dataset.count) - (+p.dataset.count) || p.dataset.name.localeCompare(r.dataset.name);
+  // Count again, but banded: the standing each row already carries in `data-standing` decides
+  // the band, the count orders within it. Nothing extra had to be written onto the row for
+  // this — the badge the place tab draws is the same fact the order reads.
+  if(by === "tier") return (p, r) =>
+    tierRank(p.dataset.standing) - tierRank(r.dataset.standing) ||
     (+r.dataset.count) - (+p.dataset.count) || p.dataset.name.localeCompare(r.dataset.name);
   if(by === "taxo") return (p, r) =>
     p.dataset.taxo.localeCompare(r.dataset.taxo) || p.dataset.name.localeCompare(r.dataset.name);
