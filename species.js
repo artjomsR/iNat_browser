@@ -43,7 +43,9 @@ const tab = q.get("tab") === "place" ? "place" : "tier";
 // different things. On the place tab a count is iNaturalist's area-wide total for that
 // species — hundreds or thousands — so trimming under 20 drops only the long tail. On the
 // tier tab it is this one user's own observations of it, which is a handful even for a
-// species they photograph often, so any threshold at all empties the page.
+// species they photograph often, so any threshold at all empties the page. What it reaches
+// differs by tab too, not only what it defaults to: on the place tab it passes over anything
+// the reader has already recorded — see underMin.
 const DEFAULT_MIN = tab === "place" ? 20 : 0;
 
 const view = {
@@ -558,6 +560,13 @@ function rowHtml(x, i, user, mark){
 function sortbarHtml(sortBy, withRefresh){
   const on = by => sortBy === by ? ` class="on"` : "";
   const laid = kind => view.layout === kind ? ` class="on"` : "";
+  // The threshold reaches a different set on each tab (see underMin), so it wears a different
+  // label: on the place tab it trims only the species the reader has never recorded, which is
+  // worth saying out loud, since a ticked row staying put under any number looks like a bug
+  // otherwise. Too long to print in the bar, so it rides as a tooltip beside the short label.
+  const threshHint = tab === "place"
+    ? "Only species you have not recorded &mdash; a ticked one stays however few observations it has"
+    : "";
   return `<div class="sortbar">Sort
     <button type="button" data-by="count"${on("count")}>Most observed</button>
     ${canTier ? `<button type="button" data-by="tier"${on("tier")}
@@ -565,10 +574,12 @@ function sortbarHtml(sortBy, withRefresh){
       >Most observed / Tier</button>` : ""}
     <button type="button" data-by="name"${on("name")}>A&ndash;Z</button>
     <button type="button" data-by="taxo"${on("taxo")}>Taxonomic</button>
-    <span class="thresh">Hide under
+    <span class="thresh"${threshHint ? ` title="${threshHint}"` : ""}>Hide under
       <span class="minWrap">
         <input type="number" class="minObs" min="0" step="1" value="${view.min || ""}"
-               placeholder="0" inputmode="numeric" aria-label="Hide species under this many observations">
+               placeholder="0" inputmode="numeric" aria-label="${
+                 tab === "place" ? "Hide species you have not recorded under this many observations"
+                                 : "Hide species under this many observations"}">
         <button type="button" class="minClear" title="Show every species"
                 aria-label="Clear the threshold"${view.min ? "" : " hidden"}>&times;</button>
       </span> obs</span>
@@ -731,6 +742,19 @@ function rankHidden(li){
   return !!standing && view.hide != null && standingRank(standing) >= view.hide;
 }
 
+// The threshold, and the exact mirror of the cutoff above: it only ever trims a species the
+// reader has nothing on. A badge means they have already recorded it, and a species you hold
+// is worth seeing however thin the area's count is — the long tail the threshold is for is
+// the tail of species still to find. Between them the two controls split the list cleanly,
+// one trimming what you have, the other what you don't, and neither can take a row the other
+// is responsible for.
+// On the tier tab no row carries a badge, so there this still weighs every row — its count
+// is the reader's own tally of a species that is theirs by definition, which is a different
+// question from an area's total and the one the threshold answers on that tab.
+function underMin(li){
+  return !li.dataset.standing && (+li.dataset.count) < view.min;
+}
+
 // One pass over the rendered rows: order, threshold, rank cutoff, renumber, band. Every
 // control that touches visibility goes through here, so none of them can disagree about
 // the list.
@@ -741,7 +765,7 @@ function relist(){
     let shown = 0;
     [...ul.children].sort(cmp).forEach(li => {
       ul.appendChild(li);                          // moves, does not clone
-      li.hidden = (+li.dataset.count) < view.min || rankHidden(li);
+      li.hidden = underMin(li) || rankHidden(li);
       if(!li.hidden) li.firstElementChild.textContent = ++shown;   // .num
     });
     retally(ul, shown);
