@@ -17,6 +17,9 @@ directly (or via `.claude/launch.json`'s static server) to run it.
   - `View: List / Grid` (`layout=grid`) hangs the same rows as tiles. It is one class on
     `#main`, not a second rendering, so sort, threshold, family bands and the hide-cascade
     keep working on the same `<li>`s — don't grow a separate grid renderer.
+  - Bird rows carry an `eBird` link out to that species on eBird. The code eBird needs comes
+    from Wikidata (see External dependencies) behind the finished list, so the link appears
+    when it lands and is simply absent where no code is found — never broken.
 - **gallery.html / gallery.css / gallery.js** — the photo wall, reached from the species
   page's "Gallery" link, which carries the username across. Every photo on one user's tagged
   observations in a three-up grid, with a full-screen viewer behind each tile (tap the halves,
@@ -38,6 +41,14 @@ step or split further unless a file becomes unwieldy again.
   a wall of photographs has nothing to wait for.
 - iNaturalist API v1 (`https://api.inaturalist.org/v1`) for all data — species counts,
   taxa, place autocomplete. No API key; all requests are unauthenticated GETs.
+- Wikidata Query Service (`https://query.wikidata.org/sparql`, species page only) for one
+  thing: the eBird species code behind a bird row's `eBird` link. eBird addresses a species by
+  its own six-letter code and publishes no key-free way to look one up — their taxonomy
+  endpoint is 403 without an API key, and iNaturalist carries no eBird identifier — so the
+  join goes through Wikidata, which holds both sides and answers unauthenticated with CORS
+  open: scientific name (P225) in, eBird taxon id (P3444) out. It is a shared public endpoint
+  and has to be asked in small sequential batches; asking in parallel earns a 429. See the
+  eBird block in `species.js` before changing any of that.
 
 ## Conventions
 
@@ -58,5 +69,9 @@ step or split further unless a file becomes unwieldy again.
   taken at load rather than the live set, so tiles are never pulled out from under a scroll —
   what is seen now drops out next time the page is opened. Every read and write is wrapped:
   with no storage the gallery works and simply forgets.
+  The species page keeps eBird codes the same way, under `inat.ebird.codes`, keyed by
+  scientific name — a lookup cache rather than a reader's own record, but the same bargain: a
+  code never changes once minted, so a name is only ever asked about once per browser, and
+  with no storage the links still appear, the page just re-asks.
 - iNaturalist's `verifiable=true` (research + needs-ID, casual excluded) is the default
   filter on every query; don't drop it without a reason.

@@ -165,11 +165,19 @@ li img,.nophoto{width:78px;height:78px;border-radius:5px;object-fit:cover;
 .index a.hidden-from{opacity:.4}
 .index a.hidden-from:hover{opacity:.7}
 .common .tick{margin-left:9px}
-/* rides beside the tick rather than off in `.act` on the far right, so it reads as part of
-   the same "what I hold on this" cluster instead of a detached row action */
-.common a.viewMy,li.fam a.viewMy{margin-left:8px;vertical-align:2px;font-size:9.5px;font-weight:600;
-  letter-spacing:.1em;text-transform:uppercase;color:var(--mute);text-decoration:none}
-.common a.viewMy:hover,li.fam a.viewMy:hover{color:var(--mark)}
+/* the row's small print: `View my` on the meta line, `eBird` beside the name, `View my` again
+   on a family band. One rule on the class alone rather than one per place they sit, so all
+   three are the same small uppercase word wherever they land instead of each taking after the
+   line it happens to be on — which is what left `View my` unstyled when it moved lines. */
+a.viewMy,a.ebird{font-weight:600;text-transform:uppercase;color:var(--mute);text-decoration:none}
+a.viewMy:hover,a.ebird:hover{color:var(--mark)}
+/* the meta line is already set in this type, so `View my` there takes its size and tracking
+   from the line it sits on and stays matched to the count beside it in either layout — the dot
+   is all that parts them. Against the much larger name there is nothing to inherit, so those
+   two carry their own, and need holding off it and lifting onto its baseline. */
+.common a.ebird,li.fam a.viewMy{margin-left:8px;vertical-align:2px;font-size:9.5px;letter-spacing:.1em}
+/* dimmer than the words either side, so it parts them without being read as one of them */
+.meta .sep{margin:0 .45em;opacity:.5}
 .tick svg{width:13px;height:13px}
 .tick-audio{--badge:#2D9CFF}
 .tick-c{--badge:#C08457}     /* bronze */
@@ -217,7 +225,7 @@ li[data-standing="s"]{--badge:#E8C468}
 #main.grid .common.as-sci a{font-size:14px}
 #main.grid .sci{font-size:12.5px}
 #main.grid .meta{margin-top:4px;font-size:9px;letter-spacing:.1em}
-#main.grid .common a.viewMy{font-size:9px}
+#main.grid .common a.ebird{font-size:9px}
 /* the raw address is a line of monospace as wide as the whole tile — it belongs to the list */
 #main.grid .url{display:none}
 /* a family band heads the tiles rather than standing in as one of them */

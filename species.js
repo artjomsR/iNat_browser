@@ -303,6 +303,12 @@ function isSpeciesRow(x){ return !(x.taxon.rank_level > 10); }
 // The name the list sorts and labels by — common where iNat has one, binomial otherwise.
 function sortName(t){ return (t.preferred_common_name || t.name || "").toLowerCase(); }
 
+// Aves' own taxon id, for the eBird links further down. Read off the ancestry rather than
+// `iconic_taxon_name`, which says the same thing but only where it is set — the ancestry is
+// already what the taxonomic sort leans on being on every row.
+const AVES = 3;
+function isBird(t){ return (t.ancestor_ids || []).includes(AVES); }
+
 /* ---------------- taxonomic order ----------------
 
    Every row arrives with `ancestor_ids`, its path down iNat's tree, so the tree order is
@@ -368,6 +374,113 @@ async function loadFamilies(buckets){
     const fam = ancestorsOf(x.taxon).map(id => families.get(id)).find(Boolean);
     if(fam) familyOf.set(x.taxon.id, fam);
   });
+}
+
+/* ---------------- eBird ----------------
+
+   Bird rows carry one more link, out to the same species on eBird. eBird addresses a species
+   by its own six-letter code — `brnowl`, not `Tyto alba` — and offers no key-free way to look
+   one up: their taxonomy endpoint answers 403 without an API key, and iNaturalist holds no
+   eBird identifier to hand over. Wikidata has both sides of that join and answers
+   unauthenticated with CORS open, so the code comes from there: match the scientific name
+   (P225), read off the eBird taxon id (P3444).
+
+   Names are asked about in batches rather than a row at a time, batched by URL length the same
+   way the family lookup is — see loadEbirdLinks for why the batches are small and sequential.
+   Roughly one species in fifteen comes back empty — recent splits and renames iNaturalist has
+   taken up and Wikidata has not, and hybrids, which eBird has no page for anyway — and those
+   keep no link at all rather than being given a broken one.
+
+   A code never changes once minted, so what comes back is kept in localStorage and only names
+   never seen before are ever asked about. Misses are written too, as "", so a species Wikidata
+   cannot place is asked about once rather than on every visit. Wrapped like the gallery's
+   record of seen photos: with no storage the links still appear, the page just re-asks. */
+
+const WDQS = "https://query.wikidata.org/sparql";
+const EBIRD_STORE = "inat.ebird.codes";
+
+function readEbirdCodes(){
+  try{ return JSON.parse(localStorage.getItem(EBIRD_STORE)) || {}; }
+  catch(e){ return {}; }      // private mode, or somebody else's JSON: start clean
+}
+
+const ebirdCode = readEbirdCodes();
+
+function writeEbirdCodes(){
+  try{ localStorage.setItem(EBIRD_STORE, JSON.stringify(ebirdCode)); }
+  catch(e){ /* No room, or no storage at all. The links still work, they just aren't free. */ }
+}
+
+// A name into a SPARQL string literal. Scientific names are letters, spaces and the odd
+// hybrid ×, but a quote or a backslash arriving from the API must not be able to close the
+// literal and go on to write a query of its own.
+function sparqlStr(s){ return '"' + String(s).replace(/[\\"]/g, c => "\\" + c) + '"'; }
+
+async function ebirdCodesFor(names){
+  const q = `SELECT ?name ?code WHERE {
+    VALUES ?name { ${names.map(sparqlStr).join(" ")} }
+    ?taxon wdt:P225 ?name; wdt:P3444 ?code. }`;
+  const r = await fetch(`${WDQS}?format=json&query=${encodeURIComponent(q)}`,
+    { headers: { Accept: "application/sparql-results+json" } });
+  if(!r.ok) throw new Error(r.status);
+  const d = await r.json();
+  return ((d.results && d.results.bindings) || []).map(b => [b.name.value, b.code.value]);
+}
+
+// Hang the links on whatever is currently rendered. The anchor is already in the row, empty
+// and hidden, so this is one pass over the rendered rows rather than a repaint — it costs the
+// sort, the threshold, the family bands and the hide-cascade nothing.
+function showEbirdLinks(){
+  document.querySelectorAll("#main li[data-sci]").forEach(li => {
+    const a = li.querySelector("a.ebird");
+    const code = ebirdCode[li.dataset.sci];
+    if(!a || !code) return;
+    a.href = "https://ebird.org/map/" + encodeURIComponent(code);
+    a.hidden = false;
+  });
+}
+
+// The query service sheds load by refusing a request outright rather than queuing it, and a
+// refused batch is almost always fine a moment later. Worth one wait-and-ask-again: without it
+// a single refusal mid-list costs that batch its links until the page is next opened, and
+// refusals are common enough to see on an ordinary load.
+const pause = ms => new Promise(done => setTimeout(done, ms));
+
+async function ebirdCodesRetrying(batch){
+  try{ return await ebirdCodesFor(batch); }
+  catch(e){
+    await pause(1500);
+    return ebirdCodesFor(batch);
+  }
+}
+
+// Small batches, one at a time. The query service is a shared public endpoint and has to be
+// asked accordingly: a long VALUES list can take it tens of seconds where fifty names come
+// back in under one, and asking in parallel earns a refusal rather than a faster answer. So the
+// names go up in short runs, sequentially, and the links appear a batch at a time instead of
+// all at the end. 900 characters is roughly fifty species — a whole life list is a dozen or so
+// quick requests, once, and never again on that browser.
+//
+// A batch that fails twice is left entirely alone rather than written off as a batch of misses:
+// no code is cached for those names, so the next visit asks again. Failing soft per batch and
+// not per pass matters here, since one refusal in the middle of a life list would otherwise
+// cost every name after it too.
+async function loadEbirdLinks(buckets){
+  const names = [...new Set(buckets.flat().filter(x => isBird(x.taxon)).map(x => x.taxon.name))];
+  if(!names.length) return;
+  showEbirdLinks();                       // whatever storage already knows, before asking anything
+  const fresh = names.filter(n => !(n in ebirdCode));
+  if(!fresh.length) return;
+  for(const batch of idBatches(fresh, 900)){
+    let hits;
+    try{ hits = await ebirdCodesRetrying(batch); }
+    catch(e){ continue; }
+    // Every name in a batch that came back is answered, hit or miss — see the note on "" above.
+    batch.forEach(n => { ebirdCode[n] = ""; });
+    hits.forEach(([name, code]) => { ebirdCode[name] = code; });
+    writeEbirdCodes();
+    showEbirdLinks();
+  }
 }
 
 // Species this user has only ever recorded by sound: at least one audio-only observation,
@@ -551,24 +664,36 @@ function rowHtml(x, i, user, mark){
   const common = t.preferred_common_name || "";
   const tick = mark ? badgeHtml(mark, user) : "";
   // Place tab only, and only where a tick is already drawn: a species with no standing has
-  // nothing of the user's to view, so the link rides beside the badge rather than floating
-  // off on its own — one more thing to read only where there's already something to read.
+  // nothing of the user's to view. It rides on the meta line, parted from the area's own count
+  // by a dot, so the two counts of the same species read as the one thought — what is here,
+  // and what of it is mine. The dot belongs to the link, not to the line: on the tier tab
+  // there is no `View my` and the count must not trail a separator with nothing after it.
   const viewMy = mark
-    ? ` <a class="viewMy" href="${esc(taxonObsUrl(t.id, user))}" target="_blank" rel="noopener"
+    ? ` <span class="sep">&middot;</span><a class="viewMy" href="${esc(taxonObsUrl(t.id, user))}"
+          target="_blank" rel="noopener"
           title="${esc(user)}&#39;s own records of this species, everywhere">View my</a>`
+    : "";
+  // Birds only, and painted empty and hidden: the code eBird needs is looked up behind the
+  // finished list, the same way family names are, and the link appears if and when one lands.
+  // No href until then, so a row never holds a link that goes nowhere. `data-sci` rides along
+  // as what the lookup is keyed by, and is on the bird rows for the same reason.
+  const bird = isBird(t);
+  const ebird = bird
+    ? ` <a class="ebird" target="_blank" rel="noopener" hidden
+          title="${esc(common || t.name)} on eBird">eBird</a>`
     : "";
   return `<li class="${mark ? "seen" : ""}" data-count="${x.count}" data-name="${esc(sortName(t))}"
       data-taxo="${esc(taxoKey(t))}" data-taxon="${t.id}" data-seen="${mark ? 1 : 0}"
-      data-standing="${esc(mark || "")}">
+      data-standing="${esc(mark || "")}"${bird ? ` data-sci="${esc(t.name)}"` : ""}>
     <span class="num">${i + 1}</span>
     <a class="shot" href="${esc(url)}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">${
       photo ? `<img src="${esc(photo)}" alt="" loading="lazy">`
             : `<span class="nophoto">&#9673;</span>`}</a>
     <span class="body">
       <span class="common${common ? "" : " as-sci"}"><a href="${esc(url)}" target="_blank" rel="noopener">${
-        esc(common || t.name || "Unnamed")}</a>${tick}${viewMy}</span>
+        esc(common || t.name || "Unnamed")}</a>${tick}${ebird}</span>
       ${common && t.name ? `<span class="sci">${esc(t.name)}</span>` : ""}
-      <span class="meta">${x.count} observation${x.count === 1 ? "" : "s"}</span>
+      <span class="meta">${x.count} observations${viewMy}</span>
       <span class="url"><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></span>
     </span>
   </li>`;
@@ -955,8 +1080,9 @@ function failed(hint){
   </div>`, "failed");
 }
 
-// Family names cost their own requests, so they are fetched behind the finished list
-// rather than in front of it. The headings appear when they land.
+// Family names and eBird codes both cost their own requests, so they are fetched behind the
+// finished list rather than in front of it. The headings and the links appear when they land,
+// and a failure on either side costs only itself — the list is already on screen.
 function afterPaint(buckets){
   wireSort();
   wireLayout();
@@ -966,6 +1092,7 @@ function afterPaint(buckets){
   familiesReady.then(() => {
     if(view.sort === "taxo") document.querySelectorAll("#main ul").forEach(ul => drawFamilies(ul, true));
   });
+  loadEbirdLinks(buckets).catch(() => {});   // no code, no link — never a broken one
 }
 
 async function runTier(){
