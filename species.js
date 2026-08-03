@@ -15,6 +15,10 @@
    `tname` is only a label — the taxon id is what scopes the query — so a stale or missing
    name costs nothing but a prettier heading. `pname` is the same for a place.
 
+   `taxon` and `iconic` are one filter with two ways of setting it, so setting either here
+   drops the other and the address carries at most one of them. An older link holding both
+   still reads: the query narrows to their intersection and the scope line names the taxon.
+
    `layout=grid` hangs the rows as tiles instead of listing them. It is the same rows either
    way — a class on the list, not a second rendering — so the sort, the threshold and the
    hide-cascade all still apply, and switching costs no refetch.
@@ -258,6 +262,24 @@ async function speciesHere(){
 async function unseenHere(user){
   const rows = await speciesCounts({ ...areaScope(), unobserved_by_user_id: user });
   return new Set(rows.map(x => x.taxon.id));
+}
+
+// iNat's taxon search, the same index behind the map's species field — so a name typed here
+// and a name typed there land on the same taxon.
+async function findTaxa(text){
+  const p = new URLSearchParams({ q: text, per_page: "8" });
+  const r = await fetch(`${API}/taxa/autocomplete?${p}`);
+  if(!r.ok) throw new Error(r.status);
+  const d = await r.json();
+  return (d.results || []).map(t => ({
+    id: t.id,
+    // The scientific name is what rides in the address as `tname`, matching the map, so a
+    // link made on either page reads the same when it lands on the other.
+    name: t.name,
+    common: t.preferred_common_name || "",
+    rank: t.rank || "",
+    thumb: (t.default_photo && t.default_photo.square_url) || ""
+  }));
 }
 
 // iNat's own place search, the one behind the place field on their observation pages.
@@ -991,22 +1013,25 @@ async function runPlace(){
   }
 }
 
-/* ---------------- place finder ---------------- */
+/* ---------------- finders ----------------
 
-// iNat's place search, debounced. Picking a hit is a navigation, not a state change: the
-// place lands in the address, so the list it produces can be linked to like any other.
-function wirePlaceFinder(){
-  const input = document.getElementById("placeInput");
-  const hits = document.getElementById("placeHits");
+   Two search fields, one mechanism: type, wait, ask iNaturalist, pick a hit. All that differs
+   between them is the index searched, how a hit is drawn and what picking one means for the
+   address — so they share the debounce, the stale-response guard and the click-away close
+   rather than keeping two copies of them.
+
+   Picking is a navigation, not a state change: the choice lands in the query string, so the
+   list it produces can be linked to like any other. */
+
+function wireFinder({ input, hits, find, row, pick }){
+  const box = input.closest(".finder");
   let timer = null, seq = 0;
 
   const close = () => { hits.hidden = true; hits.innerHTML = ""; };
 
   const show = list => {
     if(!list.length){ close(); return; }
-    hits.innerHTML = list.map(p =>
-      `<button type="button" data-id="${p.id}" data-name="${esc(p.name)}">${esc(p.name)}${
-        p.kind ? `<span>${esc(p.kind)}</span>` : ""}</button>`).join("");
+    hits.innerHTML = list.map(row).join("");
     hits.hidden = false;
   };
 
@@ -1017,7 +1042,7 @@ function wirePlaceFinder(){
     timer = setTimeout(async () => {
       const mine = ++seq;
       try{
-        const list = await findPlaces(text);
+        const list = await find(text);
         if(mine === seq) show(list);
       }catch(e){ close(); }
     }, 300);
@@ -1025,16 +1050,61 @@ function wirePlaceFinder(){
 
   hits.addEventListener("click", e => {
     const b = e.target.closest("button[data-id]");
-    if(!b) return;
-    // A named place replaces any pin the map handed over — one area at a time.
-    location.href = selfUrl({
-      tab: "place", place_id: b.dataset.id, pname: b.dataset.name,
-      lat: null, lng: null, radius: null
-    });
+    if(b) pick(b);
   });
 
-  document.addEventListener("click", e => {
-    if(!e.target.closest(".finder")) close();
+  // Against this finder's own box, not `.finder` at large: a click in the other field is
+  // outside this one and has to close it, or both lists sit open over the page at once.
+  document.addEventListener("click", e => { if(!box.contains(e.target)) close(); });
+}
+
+function wirePlaceFinder(){
+  wireFinder({
+    input: document.getElementById("placeInput"),
+    hits:  document.getElementById("placeHits"),
+    find:  findPlaces,
+    row: p => `<button type="button" data-id="${p.id}" data-name="${esc(p.name)}">${esc(p.name)}${
+      p.kind ? `<span>${esc(p.kind)}</span>` : ""}</button>`,
+    // A named place replaces any pin the map handed over — one area at a time.
+    pick: b => { location.href = selfUrl({
+      tab: "place", place_id: b.dataset.id, pname: b.dataset.name,
+      lat: null, lng: null, radius: null
+    }); }
+  });
+}
+
+// The taxon filter the map hands over, now settable here too — on both tabs, since the taxon
+// scopes the tier tab's user query and the place tab's area query alike.
+function wireTaxonFinder(){
+  const sel = document.getElementById("taxonSel");
+  if(view.taxon){
+    sel.querySelector(".s-sci").textContent = view.tname || ("taxon " + view.taxon);
+    sel.hidden = false;
+  }
+  // The scope line names the taxon as well, but only the chip can take it back off.
+  document.getElementById("taxonClear").addEventListener("click", () => {
+    location.href = selfUrl({ taxon: null, tname: null });
+  });
+
+  wireFinder({
+    input: document.getElementById("taxonInput"),
+    hits:  document.getElementById("taxonHits"),
+    find:  findTaxa,
+    // Plenty of taxa have no English name, and those lead with the binomial rather than
+    // printing it on both lines — the same trade the rows below make.
+    row: t => `<button type="button" data-id="${t.id}" data-name="${esc(t.name)}">
+      ${t.thumb ? `<img src="${esc(t.thumb)}" alt="" loading="lazy">`
+                : `<span class="t-nophoto"></span>`}
+      <span class="t-name"><span class="t-common">${esc(t.common || t.name)}</span>${
+        t.common ? `<span class="t-sci">${esc(t.name)}</span>` : ""}</span>
+      <span class="t-rank">${esc(t.rank)}</span>
+    </button>`,
+    // A taxon and a quick group are one filter with two ways of setting it: the query would
+    // simply AND them and the scope line shows the taxon alone, so picking either drops the
+    // other, the same trade the map's filter sheet makes.
+    pick: b => { location.href = selfUrl({
+      taxon: b.dataset.id, tname: b.dataset.name, iconic: null
+    }); }
   });
 }
 
@@ -1088,10 +1158,14 @@ const NOTES = {
   document.getElementById("note").innerHTML = NOTES[view.tab];
   document.getElementById("who").textContent = view.user ? "@" + view.user : "no user";
 
-  // Quick groups sit on both tabs and stay put rather than only appearing when the scope
-  // is empty: they are the filter, so changing group is one tap wherever the reader is.
-  // Toggling, not choosing — the map allows several at once and so does this. The scope
-  // is the same key on either tab, so a group survives switching between them.
+  // The taxon field and the quick groups sit together because they are the same filter at two
+  // grains — one named taxon, or a handful of broad ones. Both stand on both tabs.
+  wireTaxonFinder();
+
+  // Quick groups stay put rather than only appearing when the scope is empty: they are the
+  // filter, so changing group is one tap wherever the reader is. Toggling, not choosing — the
+  // map allows several at once and so does this. The scope is the same key on either tab, so
+  // a group survives switching between them.
   const picks = document.getElementById("groupPicks");
   picks.innerHTML = ICONIC.map(([v, l]) =>
     `<button type="button" data-iconic="${v}"${
@@ -1103,7 +1177,12 @@ const NOTES = {
     const next = view.iconic.includes(v)
       ? view.iconic.filter(x => x !== v)
       : view.iconic.concat(v);
-    location.href = selfUrl({ iconic: next.join(",") });
+    // The other half of the trade the taxon field makes: turning a group on drops the taxon
+    // rather than quietly narrowing to both. Turning the last one off leaves the taxon be —
+    // there is nothing to fight over then, and it may be what the reader arrived with.
+    const over = { iconic: next.join(",") };
+    if(next.length){ over.taxon = null; over.tname = null; }
+    location.href = selfUrl(over);
   });
 
   // A username input, used by whichever tab is missing one. On the tier tab it is the whole
@@ -1159,7 +1238,7 @@ const NOTES = {
       paint(`<div class="state">
         <div class="state-lede">Which group?</div>
         <div class="state-hint">${esc(areaLabel())} holds far too many species to list at once.
-          Pick a group above &mdash; or set a species on the map first.</div>
+          Search a taxon above, or pick a group.</div>
       </div>`, "pick a group");
       return;
     }

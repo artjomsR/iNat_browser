@@ -37,6 +37,14 @@
              autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
     </div>
   </div>
+  <div class="finder" id="taxonBar">
+    <input id="taxonInput" type="search" enterkeyhint="search"
+           placeholder="Search any taxon &mdash; Odonata, Barn Owl&hellip;"
+           autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
+    <div class="hits taxa" id="taxonHits" hidden></div>
+    <div class="chosen" id="taxonSel" hidden><span class="s-sci"></span>
+      <button type="button" id="taxonClear" aria-label="Clear the taxon filter">&times;</button></div>
+  </div>
   <div class="picks" id="groupPicks"></div>
 </header>
 <main id="main"></main>
