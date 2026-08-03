@@ -676,6 +676,12 @@ function openFilters(){
 //
 // `back` is this map's whole hash, ferried along untouched so the report's Map link
 // returns to the filters, layer and viewport the reader left — the report never reads it.
+//
+// A pin still on the map goes too. This link opens the tier tab, which has no use for an
+// area, but the place tab is one tap away on the other side and reads the pin straight off
+// the address — so the reader who dropped it lands on their own patch of ground instead of
+// being asked for a location that is sitting on the map behind this sheet. Naming a place
+// over there replaces it; see wirePlaceFinder in species.js.
 
 function tierReportUrl(user){
   const p = new URLSearchParams({ u: user });
@@ -684,6 +690,12 @@ function tierReportUrl(user){
     if(state.tname) p.set("tname", state.tname);
   }
   if(state.iconic.length) p.set("iconic", state.iconic.join(","));
+  const pin = pinScope();
+  if(pin){
+    p.set("lat", pin.lat.toFixed(6));
+    p.set("lng", pin.lng.toFixed(6));
+    p.set("radius", pin.km.toFixed(3));
+  }
   const hash = location.hash.replace(/^#/, "");
   if(hash) p.set("back", hash);
   return "species.html?" + p.toString();
@@ -1035,6 +1047,16 @@ function probeRadiusKm(lat, zoom){
   // Floor is not a tuning knob: it just keeps the radius the API sees above zero, which
   // three decimal places can otherwise round away at full zoom.
   return Math.max(0.001, mPerPx * px / 1000);
+}
+
+// The pin currently on the map, read as an area — or null when there is none. The marker
+// and its ring already hold that state, so this reads it back off them rather than keeping a
+// second copy which would then have to be dropped in step with theirs (closeSheet clears the
+// lot in one place). A pin the reader can no longer see is a pin no link should carry.
+function pinScope(){
+  if(!probeMark || !probeRing) return null;
+  const ll = probeMark.getLatLng();
+  return { lat: ll.lat, lng: ll.lng, km: probeRing.getRadius() / 1000 };
 }
 
 const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
