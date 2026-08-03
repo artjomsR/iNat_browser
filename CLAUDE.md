@@ -88,5 +88,10 @@ step or split further unless a file becomes unwieldy again.
   scientific name — a lookup cache rather than a reader's own record, but the same bargain: a
   code never changes once minted, so a name is only ever asked about once per browser, and
   with no storage the links still appear, the page just re-asks.
+  The map keeps its last hash under `inat.map.last`, but only when running from an iOS home
+  screen shortcut, which launches the URL it was made from every time and so would otherwise
+  hand back the filters of the day the icon was made. A cold launch — told from a page opened
+  inside the app by an empty `inat.map.session` in sessionStorage — starts from that copy
+  instead. In a browser tab none of it runs and the address is still the only state there is.
 - iNaturalist's `verifiable=true` (research + needs-ID, casual excluded) is the default
   filter on every query; don't drop it without a reason.

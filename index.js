@@ -453,7 +453,9 @@ function writeHash(){
   if(state.style !== "accuracy") p.set("s", state.style);
   if(state.base !== "light")  p.set("b", state.base);
   if(state.cursor !== "precise") p.set("cur", state.cursor);
-  history.replaceState(null, "", "#" + p.toString());
+  const h = p.toString();
+  history.replaceState(null, "", "#" + h);
+  rememberHash(h);
 }
 
 function readHash(){
@@ -566,6 +568,39 @@ const STANDALONE = window.navigator.standalone === true ||
 function openOut(url){
   if(STANDALONE){ location.href = url; return true; }
   return !!window.open(url, "_blank", "noopener");
+}
+
+/* ---------------- the home screen's own memory ----------------
+
+   The hash is this app's whole state, and on the home screen the address is not the reader's
+   to keep: iOS bakes the URL into the shortcut the day it is made and launches that same one
+   verbatim ever after, whatever the app did to it in between. So a filter changed here lasts
+   until the app is closed and no longer — every cold launch hands back the map as it stood
+   when the icon was made. Re-making the shortcut only re-bakes it a day later.
+
+   So on the home screen the app keeps its own copy of the hash and launches from that
+   instead. What separates a launch from a page opened inside the app — the species report and
+   back again, which carries a hash that IS meant — is sessionStorage: it lives exactly as long
+   as the app does, so finding it empty is what "this is a launch" looks like. None of it runs
+   in a browser tab, where the address still belongs to whoever wrote the link. */
+
+const LAST_HASH = "inat.map.last";
+const APP_OPEN  = "inat.map.session";
+
+function rememberHash(h){
+  if(!STANDALONE) return;
+  try { localStorage.setItem(LAST_HASH, h); }
+  catch(err){ /* No room, or no storage: the shortcut's own address stands, as it used to. */ }
+}
+
+function restoreHash(){
+  if(!STANDALONE) return;
+  try {
+    if(sessionStorage.getItem(APP_OPEN)) return;   // opened from inside the app — honour the link
+    sessionStorage.setItem(APP_OPEN, "1");
+    const last = localStorage.getItem(LAST_HASH);
+    if(last) history.replaceState(null, "", "#" + last);
+  } catch(err){ /* No storage at all: launch from the shortcut, and simply forget. */ }
 }
 
 /* ---------------- filters panel ---------------- */
@@ -1375,6 +1410,7 @@ document.getElementById("locate").addEventListener("click", function(){
 /* ---------------- boot ---------------- */
 
 (function init(){
+  restoreHash();          // home screen only: launch where this reader left off, not where iOS did
   const v = readHash();
 
   map = L.map("map", {
