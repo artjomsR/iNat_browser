@@ -20,6 +20,21 @@ directly (or via `.claude/launch.json`'s static server) to run it.
   - Bird rows carry an `eBird` link out to that species on eBird. The code eBird needs comes
     from Wikidata (see External dependencies) behind the finished list, so the link appears
     when it lands and is simply absent where no code is found — never broken.
+  - `Only subspecies` (`ssp=only`) splits the list into subspecies — each row named, counted
+    and linked as itself. It is the one sortbar control that refetches, and the only list on
+    the page that is built rather than asked for: `species_counts` will not report below
+    species rank, so a subspecies list has to be assembled from `hrank=subspecies` (which
+    species have infraspecific records, and how many) plus per-subspecies counts gathered in
+    rounds of at most one candidate per species, since two subspecies of one species asked
+    together come back merged. Read the subspecies block in `species.js` before touching any
+    of it. Ticks and tier bands are read one race at a time by the same trick — the reader's
+    own records asked for by subspecies id, in waves holding at most one race per species — so
+    a race they have not recorded stays unticked under one they have, and a bird tagged S on
+    one race and untagged on another sits in two tiers. Rows still carry `parent`, but only to
+    organise that asking (`parentOf`) and to key the eBird lookup, which matches on the
+    species' scientific name.
+    `ssp` is the map's key and keeps the map's spelling — the map's `ssp=1` ("include
+    subspecies") has no meaning here and reads as off.
 - **gallery.html / gallery.css / gallery.js** — the photo wall, reached from the species
   page's "Gallery" link, which carries the username across. Every photo on one user's tagged
   observations in a three-up grid, with a full-screen viewer behind each tile (tap the halves,

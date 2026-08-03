@@ -23,6 +23,17 @@
    way — a class on the list, not a second rendering — so the sort, the threshold and the
    hide-cascade all still apply, and switching costs no refetch.
 
+   `ssp=only` splits the list into subspecies: every species carrying an infraspecific
+   identification, broken into the subspecies actually recorded, each row named, counted and
+   linked as itself. Unlike the sort, the layout and the threshold it is a different question
+   rather than a different reading of the same rows, so it refetches — and it cannot simply be
+   asked for either. See the subspecies block for how it is built.
+
+   The spelling is the map's, deliberately: over there `ssp` takes "1" for "include
+   subspecies" as well, which drops a floor this page has no way to stand on — iNaturalist
+   folds a subspecies into its species here whatever is asked. So "1" reads as off rather than
+   as a second meaning for the same word on a neighbouring page.
+
    `sort=tier` is the place tab's own order: the rows banded by what the named user already
    holds on them — never recorded first, then audio, the plain tick, C, B, S — and heaviest
    first inside each band. It needs a standing on every row to read, which only the place tab
@@ -61,6 +72,9 @@ const view = {
   sort:   ["name","taxo","tier"].includes(q.get("sort")) ? q.get("sort") : "count",
   // The shape the rows are read in, not what they hold — see the note up top.
   layout: q.get("layout") === "grid" ? "grid" : "list",
+  // Only what has been taken below species rank — a narrower question, not a narrower
+  // reading of the same rows. Boolean here, "only" on the wire, matching the map. See sspOnly.
+  ssp:    q.get("ssp") === "only",
   // `min=0` in the address is an explicit "show me everything" and survives a reload.
   min:    q.has("min") ? Math.max(0, Math.floor(+q.get("min") || 0)) : DEFAULT_MIN,
   back:   q.get("back") || "",
@@ -249,7 +263,9 @@ function areaLabel(){
 // Every species recorded in the area, heaviest first — the same count iNat's own species
 // view leads with.
 async function speciesHere(){
-  const rows = (await speciesCounts(areaScope())).filter(isSpeciesRow);
+  const rows = (await speciesCounts({ ...areaScope(), ...sspOnly() })).filter(isSpeciesRow);
+  // Already heaviest-first out of the split, and by the subspecies' own counts.
+  if(view.ssp) return splitIntoSubspecies(rows, areaScope());
   rows.sort((a, b) => b.count - a.count || sortName(a.taxon).localeCompare(sortName(b.taxon)));
   return rows;
 }
@@ -299,6 +315,210 @@ async function findPlaces(text){
 // here as its own row — drop anything coarser than species so the list reads as species.
 // rank_level: species and hybrid 10, subspecies 5. Absent rank_level fails open.
 function isSpeciesRow(x){ return !(x.taxon.rank_level > 10); }
+
+/* ---------------- subspecies ----------------
+
+   species_counts will not report a taxon below species rank, ever. An observation identified
+   to subspecies is counted under its species — ask for one subspecies by id (33603, Tarentola
+   mauritanica mauritanica) and the answer comes back as Tarentola mauritanica. Tested against
+   the live API; nothing changes the grouping (`leaf`, `rank_level`, `lrank` and `rank` all
+   leave it alone, and identifications/species_counts rolls up as well and ignores the scope).
+   So a subspecies list cannot be asked for. It has to be built.
+
+   Two behaviours of that same roll-up are what make it buildable:
+
+     - `hrank=subspecies` filters which OBSERVATIONS are counted — those identified at
+       subspecies or below — while still reporting them under their species. One query, and
+       every species carrying infraspecific records is named with the size of them.
+     - a query scoped to a subspecies by id counts THAT subspecies, and only the name it
+       answers under is rolled up. So a count per subspecies is one id away.
+
+   The catch is that two subspecies of the same species asked together come back merged under
+   the one species, indistinguishable. So the asking goes in rounds: each round takes at most
+   one candidate per species, which makes every row in the answer traceable to the id that
+   earned it. A species drops out of the rounds as soon as the counts found for it add up to
+   the `hrank` total it started with — which is why this converges instead of walking a
+   taxonomy. Portugal's reptiles: 21 species, 30 subspecies, four rounds, six requests, every
+   parent adding up exactly.
+
+   Candidates come from the taxonomy (`/taxa?parent_id=`, which takes a comma list) minus
+   everything with no observations anywhere, since a subspecies unrecorded worldwide cannot be
+   recorded here. That prune is what keeps the rounds shallow — Podarcis siculus carries 52
+   named subspecies of which 11 have ever been seen — and ordering what survives by world
+   count puts the likely one in the first round.
+
+   What a split row is: a real taxon from the taxonomy, so it sorts, bands by family, carries
+   its own photograph and points its own links at itself. It also carries `parent`, which is
+   what the asking is organised around — see the block below on reading a reader's own records
+   at this rank. */
+
+// What a row is, for the tallies that count them. Both singular and plural in English, which
+// is convenient, since these read "30 subspecies" and "1 / 30 subspecies observed" alike.
+function rowNoun(){ return view.ssp ? "subspecies" : "species"; }
+
+const SSP_RANKS = "subspecies,variety,form";
+// A backstop, not a working limit: the rounds normally end themselves within four. It bounds
+// the damage if a species' counts can never add up — a variety filed under a subspecies rather
+// than under the species would leave a remainder no candidate can settle.
+const SSP_ROUNDS = 12;
+
+function sspOnly(){ return view.ssp ? { hrank: "subspecies" } : {}; }
+
+/* ---------------- what the reader holds, per subspecies ----------------
+
+   Every user-level query on this page comes back keyed by species: the tag searches, the
+   audio pair, `unobserved_by_user_id`. Left there, a tick on a split row could only answer
+   for the parent species — the reader has THIS BIRD, not this race of it.
+
+   The way through is the same one the split itself uses: a query scoped to a subspecies by id
+   counts that subspecies, and only the name it answers under is rolled up. So the five
+   questions standingLookup asks of species can be asked of subspecies, one id at a time.
+
+   And it carries the same lock: two subspecies of one species asked together come back merged
+   under it. So the rows are dealt into waves holding at most one subspecies per parent, and
+   each question is put to a whole wave at once. Waves are shallow — a species contributes one
+   only for each of its races on the list — so this is a handful of requests, not one per row. */
+
+function parentOf(x){ return x.parent || x.taxon.id; }
+
+function sspWaves(rows){
+  const out = [];
+  const depth = new Map();
+  rows.forEach(x => {
+    const parent = parentOf(x);
+    const n = depth.get(parent) || 0;
+    depth.set(parent, n + 1);
+    (out[n] = out[n] || []).push(x);
+  });
+  return out;
+}
+
+// One question put to one wave: which of its subspecies the answer names. The reply is rolled
+// up to species as always, but a wave holds at most one subspecies per species, so a row
+// coming back under a species can only be about the id asked for it.
+async function sspAsk(wave, scope, params){
+  const asked = new Map(wave.map(x => [parentOf(x), x.taxon.id]));
+  const hits = new Set();
+  for(const batch of idBatches(wave.map(x => x.taxon.id), 6000)){
+    (await speciesCounts({ ...scope, ...params, taxon_id: batch.join(",") }))
+      .forEach(r => { const id = asked.get(r.taxon.id); if(id != null) hits.add(id); });
+  }
+  return hits;
+}
+
+// standingLookup's questions, asked of subspecies. Same vocabulary and the same order of
+// precedence, so a badge cannot mean one thing on a split list and another on a whole one.
+//
+// The first pass is skipped where every row is already known to be the reader's own — the
+// tier tab, whose rows came out of a query scoped to them to begin with. Everywhere else it
+// earns its place twice over: it says which rows get a tick, and it spares the other five
+// questions every subspecies the reader has never recorded.
+async function sspStanding(rows, user, allRecorded){
+  const scope = userScope(user);
+  const recorded = new Set();
+  if(allRecorded) rows.forEach(x => recorded.add(x.taxon.id));
+  else for(const wave of sspWaves(rows))
+    (await sspAsk(wave, scope, {})).forEach(id => recorded.add(id));
+
+  const mine = rows.filter(x => recorded.has(x.taxon.id));
+  const tag = { s: new Set(), b: new Set(), c: new Set() };
+  const heard = new Set(), shot = new Set();
+  for(const wave of sspWaves(mine)){
+    // Tags reach into casual records and the audio pair does not — the same split
+    // speciesIdsWithTag and audioOnlySpeciesIds make, and for the reasons written there.
+    const [s, b, c, h, p] = await Promise.all([
+      sspAsk(wave, scope, { search_on: "tags", q: "s", verifiable: "any" }),
+      sspAsk(wave, scope, { search_on: "tags", q: "b", verifiable: "any" }),
+      sspAsk(wave, scope, { search_on: "tags", q: "c", verifiable: "any" }),
+      sspAsk(wave, scope, { sounds: "true", photos: "false" }),
+      sspAsk(wave, scope, { photos: "true" })
+    ]);
+    s.forEach(id => tag.s.add(id));
+    b.forEach(id => tag.b.add(id));
+    c.forEach(id => tag.c.add(id));
+    h.forEach(id => heard.add(id));
+    p.forEach(id => shot.add(id));
+  }
+  // Heard and never photographed, asked of the race rather than the species — so a bird
+  // photographed as one subspecies and only recorded singing as another reads honestly on
+  // both rows.
+  return id => !recorded.has(id) ? ""
+             : tag.s.has(id) ? "s"
+             : tag.b.has(id) ? "b"
+             : tag.c.has(id) ? "c"
+             : heard.has(id) && !shot.has(id) ? "audio"
+             : "seen";
+}
+
+async function taxaPaged(params){
+  const out = [];
+  for(let page = 1; page <= 20; page++){
+    const p = new URLSearchParams(params);
+    p.set("per_page", "500");
+    p.set("page", String(page));
+    const r = await fetch(`${API}/taxa?${p}`);
+    if(!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    (d.results || []).forEach(t => out.push(t));
+    if(page * 500 >= (d.total_results || 0)) break;
+  }
+  return out;
+}
+
+// Every named subspecies of these species that has ever been recorded, filed under the
+// species it belongs to and heaviest-in-the-world first. Batched by URL length like the
+// family lookup, and for the same reason — see idBatches.
+async function sspCandidates(parentIds){
+  const parents = new Set(parentIds);
+  const byParent = new Map();
+  for(const batch of idBatches(parentIds, 6000)){
+    const kids = await taxaPaged({ parent_id: batch.join(","), rank: SSP_RANKS });
+    kids.forEach(t => {
+      if(!t.observations_count) return;
+      // The deepest of its ancestors that is one of the species asked about — a variety filed
+      // under a subspecies still belongs to the species both sit in.
+      const parent = (t.ancestor_ids || []).filter(id => parents.has(id)).pop();
+      if(parent == null) return;
+      if(!byParent.has(parent)) byParent.set(parent, []);
+      byParent.get(parent).push(t);
+    });
+  }
+  byParent.forEach(list => list.sort((a, b) => b.observations_count - a.observations_count));
+  return byParent;
+}
+
+// The rounds. `parentRows` is the hrank query's answer — one row per species, counting its
+// infraspecific records — and what comes back is those counts spent on the subspecies that
+// earned them, shaped like the species_counts rows the rest of the page reads.
+async function splitIntoSubspecies(parentRows, scope){
+  const byParent = await sspCandidates(parentRows.map(x => x.taxon.id));
+  const owed = new Map(parentRows.map(x => [x.taxon.id, { name: x.taxon.name, left: x.count }]));
+  const out = [];
+  for(let round = 0; round < SSP_ROUNDS; round++){
+    const asking = [];
+    owed.forEach((p, id) => {
+      const queue = byParent.get(id);
+      if(p.left > 0 && queue && queue.length) asking.push([id, queue.shift()]);
+    });
+    if(!asking.length) break;
+    // One id per species this round, so every row in the answer belongs to exactly one of
+    // them however the batches fall.
+    const found = new Map();
+    for(const batch of idBatches(asking.map(([, t]) => t.id), 6000)){
+      (await speciesCounts({ ...scope, taxon_id: batch.join(",") }))
+        .forEach(x => found.set(x.taxon.id, x.count));
+    }
+    asking.forEach(([id, t]) => {
+      const n = found.get(id);
+      if(!n) return;             // named in the taxonomy, not recorded in this scope
+      const p = owed.get(id);
+      out.push({ taxon: t, count: n, parent: id, parentName: p.name });
+      p.left -= n;
+    });
+  }
+  out.sort((a, b) => b.count - a.count || sortName(a.taxon).localeCompare(sortName(b.taxon)));
+  return out;
+}
 
 // The name the list sorts and labels by — common where iNat has one, binomial otherwise.
 function sortName(t){ return (t.preferred_common_name || t.name || "").toLowerCase(); }
@@ -466,7 +686,10 @@ async function ebirdCodesRetrying(batch){
 // not per pass matters here, since one refusal in the middle of a life list would otherwise
 // cost every name after it too.
 async function loadEbirdLinks(buckets){
-  const names = [...new Set(buckets.flat().filter(x => isBird(x.taxon)).map(x => x.taxon.name))];
+  // The same name the rows carry in `data-sci`, which on a split row is the parent species —
+  // the two have to agree or the codes land under keys no row ever asks for.
+  const names = [...new Set(buckets.flat().filter(x => isBird(x.taxon))
+    .map(x => x.parentName || x.taxon.name))];
   if(!names.length) return;
   showEbirdLinks();                       // whatever storage already knows, before asking anything
   const fresh = names.filter(n => !(n in ebirdCode));
@@ -565,23 +788,45 @@ function tierRank(mark){ return mark ? STANDING_ORDER.indexOf(mark) + 1 : 0; }
 // display order and STANDING_ORDER's hide rank — three separate orderings over the same
 // five names, each answering a different question.
 async function speciesByTier(user){
+  // The one list-defining query on this tab, so the one the subspecies filter narrows and
+  // then splits.
+  let all = (await speciesCounts({ ...userScope(user), ...sspOnly() })).filter(isSpeciesRow);
+  // Split rows band by their own tags, read one race at a time — so a bird tagged S on one
+  // subspecies and never tagged on another sits in two different tiers, which is the whole
+  // point of asking for the races. Every row here is already the reader's own, the list
+  // being theirs by definition, so the "have you recorded it" pass is skipped.
+  if(view.ssp){
+    all = await splitIntoSubspecies(all, userScope(user));
+    const standing = await sspStanding(all, user, true);
+    const buckets = TIERS.map(() => []);
+    all.forEach(x => {
+      const mark = standing(x.taxon.id);
+      // "seen" is this tab's Untagged — the plain tick, nothing tagged. The other four names
+      // are TIERS' own, so they index it directly.
+      const tag = mark === "seen" ? "" : mark;
+      buckets[TIERS.findIndex(t => t[2] === tag)].push(x);
+    });
+    return sortWithinTiers(buckets);
+  }
   const have = {};
   for(const tag of LEVELS) have[tag] = await speciesIdsWithTag(user, tag);
   const audio = await audioOnlySpeciesIds(user);
-  const all = await speciesCounts(userScope(user));
   const buckets = TIERS.map(() => []);
   for(const x of all){
-    if(!isSpeciesRow(x)) continue;
     const has = tag => have[tag].has(x.taxon.id);
     // Index by each tier's position in TIERS (its tag), not by a hardcoded slot — so this
     // keeps working whatever order the sections are arranged in.
     const tag2 = has("s") ? "s" : has("b") ? "b" : has("c") ? "c" : audio.has(x.taxon.id) ? "audio" : "";
     buckets[TIERS.findIndex(t => t[2] === tag2)].push(x);
   }
-  // Heaviest-recorded first inside each tier: the species you already have the most shots
-  // of are the ones most likely to hold a taggable frame. The page can flip to A–Z
-  // without a refetch.
-  buckets.forEach(rows => rows.sort((a,b) =>
+  return sortWithinTiers(buckets);
+}
+
+// Heaviest-recorded first inside each tier: the species you already have the most shots
+// of are the ones most likely to hold a taggable frame. The page can flip to A–Z
+// without a refetch.
+function sortWithinTiers(buckets){
+  buckets.forEach(rows => rows.sort((a, b) =>
     b.count - a.count || sortName(a.taxon).localeCompare(sortName(b.taxon))));
   return buckets;
 }
@@ -657,7 +902,12 @@ function rowHtml(x, i, user, mark){
   const t = x.taxon;
   // On the place tab the link has to show the species in the area, not this user's takes
   // on it — the whole point is the ones they have never recorded.
+  // `t.id` throughout, which on a split row is the subspecies — so every link a row owns
+  // points at the subspecies it names rather than at the species it was carved out of.
   const url = mark == null ? taxonObsUrl(t.id, user) : taxonAreaUrl(t.id);
+  // "View my" points at the row's own taxon too, badge and link agreeing: the tick beside it
+  // is now read one race at a time, so a green tick on a subspecies means this reader has
+  // that subspecies and the link cannot come back empty under it.
   const photo = t.default_photo && (t.default_photo.medium_url || t.default_photo.square_url);
   // Plenty of taxa have no English name; those lead with the binomial instead of
   // printing it twice, set in the same italic serif the second line would have used.
@@ -671,7 +921,7 @@ function rowHtml(x, i, user, mark){
   const viewMy = mark
     ? ` <span class="sep">&middot;</span><a class="viewMy" href="${esc(taxonObsUrl(t.id, user))}"
           target="_blank" rel="noopener"
-          title="${esc(user)}&#39;s own records of this species, everywhere">View my</a>`
+          title="${esc(user)}&#39;s own records of this ${rowNoun()}, everywhere">View my</a>`
     : "";
   // Birds only, and painted empty and hidden: the code eBird needs is looked up behind the
   // finished list, the same way family names are, and the link appears if and when one lands.
@@ -682,9 +932,14 @@ function rowHtml(x, i, user, mark){
     ? ` <a class="ebird" target="_blank" rel="noopener" hidden
           title="${esc(common || t.name)} on eBird">eBird</a>`
     : "";
+  // Wikidata is asked about the species even on a split row: it matches on scientific name,
+  // and a trinomial mostly finds nothing there, which would quietly cost every bird its eBird
+  // link the moment the checkbox went on. The link lands on the species' map — eBird codes
+  // subspecies separately and Wikidata does not hold that side of the join.
+  const sci = x.parentName || t.name;
   return `<li class="${mark ? "seen" : ""}" data-count="${x.count}" data-name="${esc(sortName(t))}"
       data-taxo="${esc(taxoKey(t))}" data-taxon="${t.id}" data-seen="${mark ? 1 : 0}"
-      data-standing="${esc(mark || "")}"${bird ? ` data-sci="${esc(t.name)}"` : ""}>
+      data-standing="${esc(mark || "")}"${bird ? ` data-sci="${esc(sci)}"` : ""}>
     <span class="num">${i + 1}</span>
     <a class="shot" href="${esc(url)}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">${
       photo ? `<img src="${esc(photo)}" alt="" loading="lazy">`
@@ -698,6 +953,10 @@ function rowHtml(x, i, user, mark){
     </span>
   </li>`;
 }
+
+const SSP_HINT = "Split every species into the subspecies recorded in this scope. Each row is "
+  + "counted, linked, ticked and tiered as itself — a race you have not recorded stays unticked "
+  + "under one you have.";
 
 // One sortbar per list, shared by both tabs: it re-sorts what is already rendered, so
 // flipping order never costs a refetch. On the tier tab it drives every tier at once. The
@@ -744,13 +1003,21 @@ function sortbarHtml(sortBy, withRefresh){
 // already arrive in.
 function sortRows(rows, sortBy, standing){
   if(sortBy === "tier" && standing) return rows.slice().sort((a, b) =>
-    tierRank(standing(a.taxon.id)) - tierRank(standing(b.taxon.id)) ||
+    tierRank(standing(a)) - tierRank(standing(b)) ||
     b.count - a.count || sortName(a.taxon).localeCompare(sortName(b.taxon)));
   if(sortBy === "count" || sortBy === "tier") return rows;
   return rows.slice().sort(sortBy === "taxo"
     ? (a, b) => taxoKey(a.taxon).localeCompare(taxoKey(b.taxon)) ||
                 sortName(a.taxon).localeCompare(sortName(b.taxon))
     : (a, b) => sortName(a.taxon).localeCompare(sortName(b.taxon)));
+}
+
+// An empty list is painted without a sortbar, and with it goes the checkbox that emptied it —
+// so where the subspecies filter is what came back with nothing, the way back out has to be
+// in the state itself. A link, not an instruction: the filter is in the address, so taking it
+// off is an address too.
+function sspWayOut(lede){
+  return `${esc(lede)} <a href="${esc(selfUrl({ ssp: null }))}">Show every species.</a>`;
 }
 
 // The badges, spelled out — the glyphs are only obvious once, and a phone has no hover to
@@ -772,8 +1039,9 @@ function placeListHtml(rows, standing, sortBy){
   if(!rows.length){
     return `<div class="state">
       <div class="state-lede">Nothing recorded here.</div>
-      <div class="state-hint">No species inside this area under the current scope.
-        Try a wider place, or drop the quick-group filter.</div>
+      <div class="state-hint">${view.ssp ? sspWayOut("Nothing inside this area has been identified below species rank.")
+        : `No species inside this area under the current scope.
+           Try a wider place, or drop the quick-group filter.`}</div>
     </div>`;
   }
   const tally = standing
@@ -784,8 +1052,10 @@ function placeListHtml(rows, standing, sortBy){
           title="The same area on iNaturalist">${esc(areaLabel())}</a><span class="n">${rows.length}</span></h2>
     ${tally}
     ${sortbarHtml(sortBy)}
+    <label class="onlySub" title="${esc(SSP_HINT)}">
+      <input type="checkbox"${view.ssp ? " checked" : ""}>Only subspecies</label>
     <ul>${sortRows(rows, sortBy, standing).map((x, n) =>
-      rowHtml(x, n, view.user, standing ? standing(x.taxon.id) : "")).join("")}</ul>
+      rowHtml(x, n, view.user, standing ? standing(x) : "")).join("")}</ul>
   </section>`;
 }
 
@@ -793,7 +1063,8 @@ function listHtml(buckets, user, sortBy){
   if(!buckets.some(rows => rows.length)){
     return `<div class="state">
       <div class="state-lede">Nothing to show.</div>
-      <div class="state-hint">This user has no species recorded in this scope.</div>
+      <div class="state-hint">${view.ssp ? sspWayOut("Nothing this user has recorded in this scope is identified below species rank.")
+        : "This user has no species recorded in this scope."}</div>
     </div>`;
   }
   const sortbar = sortbarHtml(sortBy, true);
@@ -904,7 +1175,8 @@ function underMin(li){
 
 // One pass over the rendered rows: order, threshold, rank cutoff, renumber, band. Every
 // control that touches visibility goes through here, so none of them can disagree about
-// the list.
+// the list. The subspecies checkbox is deliberately not among them — it changes which rows
+// exist, not which of them show, so it refetches instead.
 function relist(){
   const cmp = comparator(view.sort);
   document.querySelectorAll("#main ul").forEach(ul => {
@@ -1023,6 +1295,25 @@ function wireSort(){
   }));
 }
 
+// The one control on the page that asks iNaturalist something new, so the one that runs the
+// tab's query again — the rows it wants are not on the page to be sorted or hidden into view.
+// Re-run rather than reload: the address is rewritten first, so a reload from here would land
+// on exactly this list anyway, only having thrown away the header and the scroll to get there.
+// Whichever tab is on screen is the tab that painted the checkbox.
+//
+// Found by its own class rather than through the sortbar it used to sit in, so moving it
+// around the list costs nothing here.
+function wireOnlySub(){
+  const boxes = [...document.querySelectorAll(".onlySub input")];
+  boxes.forEach(box => box.addEventListener("change", () => {
+    view.ssp = box.checked;
+    boxes.forEach(other => { other.checked = view.ssp; });
+    // Off is the default, so it leaves no key behind — same as sort's "count".
+    writeState({ ssp: view.ssp ? "only" : "" });
+    if(view.tab === "place") runPlace(); else runTier();
+  }));
+}
+
 // List or grid. Both are the same rows in the same order — the switch is one class on #main
 // and nothing else — so this touches neither the sort, the threshold, the family bands nor
 // the hide-cascade, and never refetches. Scroll position is left alone: the page changes
@@ -1086,6 +1377,7 @@ function failed(hint){
 function afterPaint(buckets){
   wireSort();
   wireLayout();
+  wireOnlySub();
   applyHideFrom();              // tier tab's sections; a no-op if nothing is cut and place-tab-safe
   if(view.min || view.hide != null) relist();   // a threshold or cutoff in the address applies to first paint
   familiesReady = loadFamilies(buckets).catch(() => {});
@@ -1098,12 +1390,13 @@ function afterPaint(buckets){
 async function runTier(){
   paint(`<div class="state">
     <div class="state-lede">Compiling the list&hellip;</div>
-    <div class="state-hint">Reading every species @${esc(view.user)} has recorded, then sorting them by the tags they carry.</div>
+    <div class="state-hint">Reading every species @${esc(view.user)} has recorded, then sorting them by the tags they carry.${
+      view.ssp ? " Splitting each into its subspecies takes a few more passes." : ""}</div>
   </div>`, "reading&hellip;", true);
   try{
     const buckets = await speciesByTier(view.user);
     const total = buckets.reduce((n, rows) => n + rows.length, 0);
-    paint(listHtml(buckets, view.user, view.sort), `${total} species`);
+    paint(listHtml(buckets, view.user, view.sort), `${total} ${rowNoun()}`);
     afterPaint(buckets);
     wireIndex();
   }catch(e){
@@ -1115,25 +1408,35 @@ async function runPlace(){
   paint(`<div class="state">
     <div class="state-lede">Reading the area&hellip;</div>
     <div class="state-hint">Every species recorded in ${esc(areaLabel())}${
-      view.user ? `, then checking them against @${esc(view.user)}'s own species` : ""}.</div>
+      view.user ? `, then checking them against @${esc(view.user)}'s own species` : ""}.${
+      view.ssp ? " Splitting each into its subspecies takes a few more passes." : ""}</div>
   </div>`, "reading&hellip;", true);
   try{
-    // All at once — none depends on another. `unseen` answers which of the area's species
-    // this user is missing; `bestOf` answers what they hold on the ones they do have.
+    // Whole species can be asked about all at once, none of the three depending on another:
+    // `unseen` answers which of the area's species this user is missing, `bestOf` what they
+    // hold on the ones they do have. Subspecies cannot — the questions are asked by id, so
+    // the list has to exist first — and they replace both, so neither is fetched then.
+    const split = view.ssp && !!view.user;
     const [rows, unseen, bestOf] = await Promise.all([
       speciesHere(),
-      view.user ? unseenHere(view.user) : Promise.resolve(null),
-      view.user ? standingLookup(view.user) : Promise.resolve(null)
+      view.user && !split ? unseenHere(view.user) : Promise.resolve(null),
+      view.user && !split ? standingLookup(view.user) : Promise.resolve(null)
     ]);
-    // One lookup for the renderer: "" for a species they have never recorded, otherwise
-    // their standing on it. Missing beats standing — a species absent from their list has
-    // no tags to rank, whatever a stale tag search might say.
-    const standing = unseen
-      ? id => unseen.has(id) ? "" : (bestOf ? bestOf(id) : "seen")
-      : null;
-    const fresh = standing ? rows.filter(x => !standing(x.taxon.id)).length : 0;
+    // One lookup for the renderer, taking a row rather than an id so that each list can
+    // answer at its own rank: "" for something they have never recorded, otherwise their
+    // standing on it. Missing beats standing — a taxon absent from their list has no tags to
+    // rank, whatever a stale tag search might say.
+    let standing = null;
+    if(split){
+      const bySsp = await sspStanding(rows, view.user, false);
+      standing = x => bySsp(x.taxon.id);
+    }else if(unseen){
+      standing = x => unseen.has(x.taxon.id) ? "" : (bestOf ? bestOf(x.taxon.id) : "seen");
+    }
+    const fresh = standing ? rows.filter(x => !standing(x)).length : 0;
     paint(placeListHtml(rows, standing, view.sort),
-      standing ? `${rows.length - fresh} / ${rows.length} species observed` : `${rows.length} species`);
+      standing ? `${rows.length - fresh} / ${rows.length} ${rowNoun()} observed`
+               : `${rows.length} ${rowNoun()}`);
     afterPaint([rows]);
   }catch(e){
     failed("iNaturalist may be rate-limiting, or that place may be too large to tally.");
