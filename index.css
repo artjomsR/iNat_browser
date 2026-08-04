@@ -29,14 +29,15 @@ body{
 /* ---------- map ---------- */
 #map{position:absolute;inset:0;background:var(--ink)}
 .leaflet-container{background:var(--ink);font-family:var(--ui)}
-.leaflet-control-attribution{
+/* Leaflet paints this white from `.leaflet-container .leaflet-control-attribution`, so the
+   container has to be named here too or the dark never lands. */
+.leaflet-container .leaflet-control-attribution{
   background:rgba(13,23,20,.82);color:var(--mute);
   font-family:var(--ui);font-size:9px;letter-spacing:.02em;
   padding:2px 6px;border-radius:3px 0 0 0;
 }
 .leaflet-control-attribution a{color:var(--mute)}
 .leaflet-control-zoom{display:none}
-.leaflet-bottom.leaflet-right{margin-bottom:var(--safe-b)}
 .leaflet-tooltip{
   background:rgba(20,33,29,.95);color:var(--text);
   border:1px solid var(--rule);border-radius:6px;
@@ -110,7 +111,7 @@ body{
   background:rgba(20,33,29,.92);border:1px solid var(--rule);
   color:var(--text);display:grid;place-items:center;cursor:pointer;
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-  transition:transform .16s ease,border-color .16s ease;
+  transition:transform .16s ease,border-color .16s ease,right .26s cubic-bezier(.32,.72,0,1);
 }
 .locate:active{transform:scale(.93)}
 .locate[data-busy="1"]{border-color:var(--mark)}
@@ -147,9 +148,10 @@ body{
   border-radius:14px 14px 0 0;
   transform:translateY(101%);
   transition:transform .26s cubic-bezier(.32,.72,0,1);
-  box-shadow:0 -18px 44px rgba(0,0,0,.5);
 }
-.sheet[data-open="1"]{transform:translateY(0)}
+/* Only while it is up: the shadow points upwards, so a closed sheet parked just off the
+   bottom would otherwise cast a dark band back onto the map it has left. */
+.sheet[data-open="1"]{transform:translateY(0);box-shadow:0 -18px 44px rgba(0,0,0,.5)}
 .handle{
   flex:0 0 auto;padding:9px 0 5px;border:0;background:none;width:100%;cursor:pointer;
 }
@@ -376,5 +378,7 @@ label.check{
   .sheet{transform:translateY(calc(100% + 20px))}
   .sheet[data-open="1"]{transform:translateY(0)}
   .label-bar{max-width:640px}
-  .locate{right:410px}
+  /* The panel is a floating card here rather than the full width, so the button holds the
+     edge under the label bar and only steps aside for as long as the panel is actually up. */
+  body:has(.sheet[data-open="1"]) .locate{right:410px}
 }
