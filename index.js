@@ -2,6 +2,10 @@
 
 const API  = "https://api.inaturalist.org/v1";
 const MARK = "#FF3E7C";
+// --panel, the sheet the results list sits on. The palette lives in CSS, but a taxon glyph
+// drawn flat in that list needs a real colour string to paint its halo out of sight — see
+// the accuracy mark in resultsHtml.
+const PANEL = "#14211D";
 
 const ICONIC = [
   ["Plantae","Plants"],["Aves","Birds"],["Insecta","Insects"],["Fungi","Fungi"],
@@ -1157,13 +1161,18 @@ function resultsHtml(list, km, latlng){
     const photo = o.photos && o.photos[0] && o.photos[0].url ? o.photos[0].url.replace("square","small") : null;
     const acc = o.public_positional_accuracy != null ? o.public_positional_accuracy : o.positional_accuracy;
     const accKnown = acc != null && isFinite(acc);
-    const accDot = accKnown
-      ? `<span class="acc-dot" style="background:${accuracyColor(acc)}"></span>`
-      : `<span class="acc-dot acc-dot-unknown"></span>`;
+    // The accuracy colour rides on the row's iconic-taxon glyph — the same drawing its pin
+    // wears on the map — rather than a bare dot, so one mark says both what was found and
+    // how well it was placed. Unknown accuracy keeps the pins' white, which is no accuracy
+    // colour at all. A sound recording keeps its taxon here: the speaker is already in the
+    // tile to the left saying listen-not-look, and swapping this one too would leave the row
+    // with nothing saying what the thing was.
+    const accMark = `<span class="acc-mark">${
+      taxonSvg(pinKind(t), accKnown ? accuracyColor(acc) : ACC_UNKNOWN_FILL, PANEL)}</span>`;
     const meta = [];
     const time = fmtTime(o.time_observed_at);
     meta.push(fmtDate(o.observed_on) + (time ? ", " + time : ""));
-    meta.push(`${accDot}${esc(fmtAcc(accKnown ? acc : null))}`);
+    meta.push(`${accMark}${esc(fmtAcc(accKnown ? acc : null))}`);
     if(o.user && o.user.login) meta.push("@" + esc(o.user.login));
     let badges = "";
     if(o.quality_grade === "research") badges += `<span class="badge badge-rg">Research</span>`;

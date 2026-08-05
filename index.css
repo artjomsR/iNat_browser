@@ -69,6 +69,13 @@ body{
 }
 .acc-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
 .acc-dot-unknown{background:#fff;border:1.5px solid #101613}
+/* The same colour as the dot, worn by the row's taxon glyph in the results list. Wider than
+   the 8px dot it stands in for — a gull's wings or a beetle's legs need the room — and 16 is
+   the settlement between two pulls: the art was cut for a 22px pin and loses its finest work
+   below that (the spider's web closes to a disc, the frog's pupils shut), but this sits on a
+   9.5px line and anything larger stops reading as punctuation and starts running the row. */
+.acc-mark{flex:0 0 auto;display:flex}
+.acc-mark svg{width:16px;height:16px;display:block}
 .acc-legend-status{
   font-size:9.5px;color:var(--mute);line-height:1.4;
   padding-top:7px;border-top:1px solid var(--rule);
