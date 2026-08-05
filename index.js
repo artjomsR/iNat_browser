@@ -537,18 +537,35 @@ const sheetBody = document.getElementById("sheetBody");
 
 function openSheet(view, html){
   sheetView = view;
+  document.body.dataset.sheet = view;
   sheetBody.innerHTML = html;
   sheet.dataset.open = "1";
+  setStow(false);            // a panel just filled is a panel to read, whatever the last one did
   sheetBody.scrollTop = 0;
 }
 function closeSheet(){
   sheet.dataset.open = "0";
+  delete document.body.dataset.sheet;
+  setStow(false);
   sheetView = null;
   if(probeMark){ map.removeLayer(probeMark); probeMark = null; }
   if(probeRing){ map.removeLayer(probeRing); probeRing = null; }
   if(probeAccLayer) probeAccLayer.clearLayers();
 }
 document.getElementById("handle").addEventListener("click", closeSheet);
+
+// Stowing is not closing: nothing is cleared and nothing is refetched. The panel slides off
+// the side with its list intact and the probe still drawn on the map underneath, which is the
+// point — the pin, its radius and the accuracy circles are what you stowed the list to see.
+// The flag lives on the body because the button that flips it sits out on the map rather than
+// on the panel, so both have to read it. See the stow block in index.css.
+const stowBtn = document.getElementById("stow");
+function setStow(on){
+  document.body.dataset.stow = on ? "1" : "0";
+  stowBtn.setAttribute("aria-expanded", on ? "false" : "true");
+  stowBtn.setAttribute("aria-label", on ? "Show the list again" : "Collapse the list");
+}
+stowBtn.addEventListener("click", () => setStow(document.body.dataset.stow !== "1"));
 
 function esc(s){
   return String(s == null ? "" : s).replace(/[&<>"']/g, c =>

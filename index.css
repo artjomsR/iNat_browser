@@ -87,7 +87,7 @@ body{
 .label-bar{
   position:absolute;z-index:600;
   top:calc(var(--safe-t) + 8px);right:12px;left:auto;
-  max-width:calc(100% - 24px);
+  max-width:calc(100% - var(--bar-inset,24px));
   padding:8px 12px;border-radius:10px;
   background:rgba(20,33,29,.92);border:1px solid var(--rule);
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
@@ -125,6 +125,29 @@ body{
 .locate svg{width:19px;height:19px}
 .locate:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
 
+/* ---------- stow ----------
+   Parks the results list off the side of the map without giving it up — the probe pin, its
+   radius ring and the accuracy circles all stay drawn, and the panel comes back as it was
+   rather than being asked for again, which is the whole difference between this and the
+   handle. Only a reading is worth keeping, so the button is out for the results view alone;
+   the filters sheet is a form to finish. It rides on the map rather than on the panel, in
+   the same corner going out as coming back, and the arrow is one drawing rotated. */
+.stow{
+  position:absolute;z-index:600;left:12px;
+  top:calc(var(--safe-t) + 8px);
+  width:46px;height:46px;border-radius:50%;
+  background:rgba(20,33,29,.92);border:1px solid var(--rule);
+  color:var(--text);display:none;place-items:center;cursor:pointer;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+}
+body[data-sheet="results"] .stow{display:grid}
+/* the label bar hangs off the opposite corner and can grow far enough to meet this one */
+body[data-sheet="results"]{--bar-inset:82px}
+.stow:active{transform:scale(.93)}
+.stow svg{width:20px;height:20px;transition:transform .26s cubic-bezier(.32,.72,0,1)}
+body[data-stow="1"] .stow svg{transform:rotate(180deg)}
+.stow:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+
 /* Heading wedge under the "me" dot. Fixed pixel size, like Google Maps — it reads as
    a beam from the dot rather than a real-world distance, so it must not scale with zoom. */
 .me-cone{pointer-events:none}
@@ -159,6 +182,9 @@ body{
 /* Only while it is up: the shadow points upwards, so a closed sheet parked just off the
    bottom would otherwise cast a dark band back onto the map it has left. */
 .sheet[data-open="1"]{transform:translateY(0);box-shadow:0 -18px 44px rgba(0,0,0,.5)}
+/* Stowed: still open, still holding its list — just waiting off the left edge. The shadow
+   goes with it, having nothing left to sit above. */
+body[data-stow="1"] .sheet[data-open="1"]{transform:translateX(-101%);box-shadow:none}
 .handle{
   flex:0 0 auto;padding:9px 0 5px;border:0;background:none;width:100%;cursor:pointer;
 }
@@ -385,8 +411,12 @@ label.check{
   .sheet{left:auto;right:14px;bottom:14px;width:380px;border-radius:14px;max-height:calc(100vh - 100px)}
   .sheet{transform:translateY(calc(100% + 20px))}
   .sheet[data-open="1"]{transform:translateY(0)}
-  .label-bar{max-width:640px}
+  /* The card is anchored to the right edge here, so a percentage of its own width leaves it
+     stranded mid-map — it has to be told how far the left edge actually is. */
+  body[data-stow="1"] .sheet[data-open="1"]{transform:translateX(calc(14px - 100vw))}
+  .label-bar{max-width:min(640px, calc(100% - var(--bar-inset,24px)))}
   /* The panel is a floating card here rather than the full width, so the button holds the
-     edge under the label bar and only steps aside for as long as the panel is actually up. */
-  body:has(.sheet[data-open="1"]) .locate{right:410px}
+     edge under the label bar and only steps aside for as long as the panel is actually
+     there to step aside from — stowed, it takes its corner back. */
+  body[data-sheet]:not([data-stow="1"]) .locate{right:410px}
 }
