@@ -82,6 +82,14 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
   color:var(--mute);background:var(--raise);border:1px solid var(--rule);border-radius:5px}
 .sortbar button:hover{color:var(--text);border-color:var(--mute)}
 .sortbar button.on{color:var(--ink);background:var(--mark);border-color:var(--mark)}
+/* the two orders that read both ways wear an arrow, drawn once and turned over by the class
+   rather than redrawn — so flipping one is the same line of JS that already moves `on`. The
+   inline-flex is on every sort button, not just the two carrying an arrow, so all four keep
+   one height whichever of them is holding a glyph. */
+.sortbar button[data-by]{display:inline-flex;align-items:center;gap:6px}
+.sortbar .arrow{flex:0 0 auto;width:10px;height:10px;transition:transform .18s}
+.sortbar button.rev .arrow{transform:rotate(180deg)}
+@media (prefers-reduced-motion:reduce){ .sortbar .arrow{transition:none} }
 .sortbar .layout{display:flex;align-items:center;gap:7px;margin-left:13px;letter-spacing:.12em}
 /* each shape carries a small picture of itself, which takes the button's colour through
    hover and selected because it is drawn in currentColor */

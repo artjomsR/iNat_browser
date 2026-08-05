@@ -39,6 +39,14 @@
    first inside each band. It needs a standing on every row to read, which only the place tab
    with a username has, so anywhere else the address falls back to the default.
 
+   `rev=1` runs the chosen order backwards: `count` leads with the fewest, `name` becomes Z–A,
+   `tier` leads with the strongest standing instead of the weakest. `taxo` is the one order it
+   does not take — the tree has an order of its own — and under it the key is dropped rather
+   than kept as something nothing reads. It stands alone in the address, since `count` is the
+   default and writes no `sort`: `?rev=1` is the fewest-observed list. Like the sort and the
+   threshold it is a different reading of rows already on the page, so it costs no refetch.
+   See REVERSIBLE.
+
    `back` holds the map's own hash, added by the map when it opens this page. It is never
    read here, only handed straight back to the Map link, so the reader returns to the
    filters and viewport they left rather than to a fresh map. */
@@ -63,6 +71,18 @@ const tab = q.get("tab") === "place" ? "place" : "tier";
 // the reader has already recorded — see underMin.
 const DEFAULT_MIN = tab === "place" ? 20 : 0;
 
+// The orders that turn over, and so the ones that carry an arrow: the count runs up as
+// readily as down, A–Z becomes Z–A, and the tier bands lead with the strongest standing
+// instead of the weakest. Taxonomic is the one left out — the tree's order is not a
+// preference to be flipped. Each keeps its own tie-breakers whichever way it runs: the arrow
+// turns over the question the order is asking, not what settles a draw inside it.
+//
+// This is why the count's button names a measure rather than a direction: "Most observed"
+// over a list that can lead with the fewest is a label that lies. The tier button still says
+// "Most observed" and still means it — that half of it is the tie-break inside a band, which
+// the arrow does not touch.
+const REVERSIBLE = ["count", "name", "tier"];
+
 const view = {
   tab,
   user:   (q.get("u") || "").trim(),
@@ -70,6 +90,8 @@ const view = {
   tname:  q.get("tname") || "",
   iconic: (q.get("iconic") || "").split(",").filter(Boolean),
   sort:   ["name","taxo","tier"].includes(q.get("sort")) ? q.get("sort") : "count",
+  // Which way that order runs, not a fifth order — see REVERSIBLE for the ones that offer it.
+  rev:    q.get("rev") === "1",
   // The shape the rows are read in, not what they hold — see the note up top.
   layout: q.get("layout") === "grid" ? "grid" : "list",
   // Only what has been taken below species rank — a narrower question, not a narrower
@@ -100,6 +122,10 @@ const hasTaxa = !!(view.taxon || view.iconic.length);
 // a button that would shuffle nothing.
 const canTier = tab === "place" && !!view.user;
 if(view.sort === "tier" && !canTier) view.sort = "count";
+// After that fallback rather than before it, so this reads the order that will actually run.
+// Direction survives a fallback where it can: tier order dropping to the count keeps its
+// arrow, since the count is reversible too — only taxonomic has nothing to do with one.
+if(!REVERSIBLE.includes(view.sort)) view.rev = false;
 
 // Rebuild this page's address with a few keys changed — how the tabs, the place picker and
 // the sort control all move around without losing the rest of the scope.
@@ -860,6 +886,16 @@ const LAYOUT_ICON = {
   </svg>`
 };
 
+// The arrow every reversible order wears, drawn once pointing the way the button's own
+// label reads and turned over in CSS when the order is (see `.sortbar button.rev`) — the
+// reverse of an arrow is the same arrow upside down, so a second drawing would only be the
+// first one again. currentColor like the icons above, so it follows the button through hover
+// and selected.
+const SORT_ARROW = `<svg class="arrow" viewBox="0 0 16 16" aria-hidden="true">
+  <path d="M8 2.8v10.4M3.9 9.1L8 13.2l4.1-4.1"
+        fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
 // What the badge says, per standing. The glyph carries the tier and the colour ramps with
 // it — bronze, silver, gold for C, B, S — so a column of these can be read at a glance
 // without stopping on each letter.
@@ -958,13 +994,30 @@ const SSP_HINT = "Split every species into the subspecies recorded in this scope
   + "counted, linked, ticked and tiered as itself — a race you have not recorded stays unticked "
   + "under one you have.";
 
+// What each reversible order is actually doing, both ways round: the arrow shows that a
+// button flips, this says what the flip did. Plain text with real dashes rather than
+// entities, since wireSort assigns it straight to `title` on a flip as well as printing it
+// into the markup here.
+const SORT_TITLE = {
+  count: ["Most observed first", "Fewest observed first"],
+  name: ["A to Z", "Z to A"],
+  tier: ["Weakest standing first — never recorded, then audio, the tick, C, B, S — and heaviest first inside each",
+         "Strongest standing first — S, B, C, the tick, audio, then never recorded — and heaviest first inside each"]
+};
+
 // One sortbar per list, shared by both tabs: it re-sorts what is already rendered, so
 // flipping order never costs a refetch. On the tier tab it drives every tier at once. The
 // list/grid switch rides the same row for the same reason — it shuffles nothing and refetches
 // nothing either. Refresh is the exception: only the tier tab passes `withRefresh`, since the
 // place tab's answer is a place's, not a person's, and has no per-user refetch to offer.
 function sortbarHtml(sortBy, withRefresh){
-  const on = by => sortBy === by ? ` class="on"` : "";
+  // The chosen order carries `rev` beside `on` when it is running backwards. That class is the
+  // whole of the arrow's direction, so flipping one is the same line that moves `on` — and
+  // only a reversible order can be reversed at all, so `count` and `taxo` never see it.
+  const on = by => sortBy === by ? ` class="on${view.rev ? " rev" : ""}"` : "";
+  // Which way round each reversible order is described. Only the chosen one can be running
+  // backwards, so the other's arrow and title both read as the label does.
+  const dir = by => ` title="${esc(SORT_TITLE[by][sortBy === by && view.rev ? 1 : 0])}"`;
   const laid = kind => view.layout === kind ? ` class="on"` : "";
   // The threshold reaches a different set on each tab (see underMin), so it wears a different
   // label: on the place tab it trims only the species the reader has never recorded, which is
@@ -974,11 +1027,11 @@ function sortbarHtml(sortBy, withRefresh){
     ? "Only species you have not recorded &mdash; a ticked one stays however few observations it has"
     : "";
   return `<div class="sortbar">Sort
-    <button type="button" data-by="count"${on("count")}>Most observed</button>
-    ${canTier ? `<button type="button" data-by="tier"${on("tier")}
-      title="Weakest standing first &mdash; never recorded, then audio, the tick, C, B, S &mdash; and heaviest first inside each"
-      >Most observed / Tier</button>` : ""}
-    <button type="button" data-by="name"${on("name")}>A&ndash;Z</button>
+    <button type="button" data-by="count"${on("count")}${dir("count")}
+      >No. of observations${SORT_ARROW}</button>
+    ${canTier ? `<button type="button" data-by="tier"${on("tier")}${dir("tier")}
+      >Most observed / Tier${SORT_ARROW}</button>` : ""}
+    <button type="button" data-by="name"${on("name")}${dir("name")}>A&ndash;Z${SORT_ARROW}</button>
     <button type="button" data-by="taxo"${on("taxo")}>Taxonomic</button>
     <span class="thresh"${threshHint ? ` title="${threshHint}"` : ""}>Hide under
       <span class="minWrap">
@@ -1002,14 +1055,27 @@ function sortbarHtml(sortBy, withRefresh){
 // without it that order has nothing to band by, so it falls through to the count the rows
 // already arrive in.
 function sortRows(rows, sortBy, standing){
+  // Direction comes off `view` rather than riding in beside `sortBy`, the same way the layout
+  // does in the sortbar: it is a second reading of one order, not a fifth order to thread
+  // through both callers.
+  const rev = view.rev;
   if(sortBy === "tier" && standing) return rows.slice().sort((a, b) =>
-    tierRank(standing(a)) - tierRank(standing(b)) ||
+    (rev ? tierRank(standing(b)) - tierRank(standing(a))
+         : tierRank(standing(a)) - tierRank(standing(b))) ||
     b.count - a.count || sortName(a.taxon).localeCompare(sortName(b.taxon)));
-  if(sortBy === "count" || sortBy === "tier") return rows;
-  return rows.slice().sort(sortBy === "taxo"
-    ? (a, b) => taxoKey(a.taxon).localeCompare(taxoKey(b.taxon)) ||
-                sortName(a.taxon).localeCompare(sortName(b.taxon))
+  if(sortBy === "taxo") return rows.slice().sort((a, b) =>
+    taxoKey(a.taxon).localeCompare(taxoKey(b.taxon)) ||
+    sortName(a.taxon).localeCompare(sortName(b.taxon)));
+  if(sortBy === "name") return rows.slice().sort(rev
+    ? (a, b) => sortName(b.taxon).localeCompare(sortName(a.taxon))
     : (a, b) => sortName(a.taxon).localeCompare(sortName(b.taxon)));
+  // The count — and the tier order with nothing to band by, which falls back to it. The rows
+  // arrive heaviest-first, so read forwards this is the order they are already in and costs
+  // nothing; read backwards it has to be sorted, and by count rather than simply turned over,
+  // so that names still run A–Z where two species are level.
+  return rev
+    ? rows.slice().sort((a, b) => a.count - b.count || sortName(a.taxon).localeCompare(sortName(b.taxon)))
+    : rows;
 }
 
 // An empty list is painted without a sortbar, and with it goes the checkbox that emptied it —
@@ -1108,18 +1174,25 @@ function listHtml(buckets, user, sortBy){
 // Re-sorts by shuffling the rendered rows, so flipping order costs no refetch and needs
 // no second copy of the row markup. The one sortbar drives every tier, each sorted and
 // renumbered within itself.
-function comparator(by){
-  if(by === "count") return (p, r) =>
-    (+r.dataset.count) - (+p.dataset.count) || p.dataset.name.localeCompare(r.dataset.name);
+function comparator(by, rev){
+  // Reversed, the count leads with the fewest — but the name still runs A–Z where two rows are
+  // level, so the list is not a plain mirror of itself. Same rule as the tier order below.
+  if(by === "count") return rev
+    ? (p, r) => (+p.dataset.count) - (+r.dataset.count) || p.dataset.name.localeCompare(r.dataset.name)
+    : (p, r) => (+r.dataset.count) - (+p.dataset.count) || p.dataset.name.localeCompare(r.dataset.name);
   // Count again, but banded: the standing each row already carries in `data-standing` decides
   // the band, the count orders within it. Nothing extra had to be written onto the row for
-  // this — the badge the place tab draws is the same fact the order reads.
+  // this — the badge the place tab draws is the same fact the order reads. Reversed, the bands
+  // turn over and nothing else: the count is the tie-breaker either way, so the heaviest still
+  // leads inside a band rather than the list becoming a plain mirror of itself.
   if(by === "tier") return (p, r) =>
-    tierRank(p.dataset.standing) - tierRank(r.dataset.standing) ||
+    (rev ? tierRank(r.dataset.standing) - tierRank(p.dataset.standing)
+         : tierRank(p.dataset.standing) - tierRank(r.dataset.standing)) ||
     (+r.dataset.count) - (+p.dataset.count) || p.dataset.name.localeCompare(r.dataset.name);
   if(by === "taxo") return (p, r) =>
     p.dataset.taxo.localeCompare(r.dataset.taxo) || p.dataset.name.localeCompare(r.dataset.name);
-  return (p, r) => p.dataset.name.localeCompare(r.dataset.name);
+  return rev ? (p, r) => r.dataset.name.localeCompare(p.dataset.name)
+             : (p, r) => p.dataset.name.localeCompare(r.dataset.name);
 }
 
 // Family bands, drawn only for the taxonomic order — under the other two the rows would
@@ -1195,7 +1268,7 @@ function underMin(li){
 // the list. The subspecies checkbox is deliberately not among them — it changes which rows
 // exist, not which of them show, so it refetches instead.
 function relist(){
-  const cmp = comparator(view.sort);
+  const cmp = comparator(view.sort, view.rev);
   document.querySelectorAll("#main ul").forEach(ul => {
     [...ul.querySelectorAll("li.fam")].forEach(li => li.remove());
     let shown = 0, held = 0;
@@ -1278,9 +1351,20 @@ function wireSort(){
   if(!btns.length) return;
 
   btns.forEach(b => b.addEventListener("click", async () => {
-    view.sort = b.dataset.by;
-    btns.forEach(x => { x.className = x === b ? "on" : ""; });
-    writeState({ sort: view.sort === "count" ? "" : view.sort });
+    // A second click on the order already running turns it over rather than re-applying it;
+    // moving to a different order starts it the way its own label reads, so direction belongs
+    // to the order chosen and never follows the reader from one button to the next. Taxonomic
+    // is the one that cannot flip, so there alone a repeat click still does nothing.
+    const by = b.dataset.by;
+    view.rev = view.sort === by && REVERSIBLE.includes(by) ? !view.rev : false;
+    view.sort = by;
+    btns.forEach(x => {
+      const chosen = x === b;
+      x.className = chosen ? (view.rev ? "on rev" : "on") : "";
+      // The arrow turns with that class; the title is the one thing on a button that can't.
+      if(SORT_TITLE[x.dataset.by]) x.title = SORT_TITLE[x.dataset.by][chosen && view.rev ? 1 : 0];
+    });
+    writeState({ sort: view.sort === "count" ? "" : view.sort, rev: view.rev ? "1" : "" });
     relist();
     scrollTo(0, 0);
     // Headings may still be in flight on the first taxonomic click; redraw when they land.

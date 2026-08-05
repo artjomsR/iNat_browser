@@ -14,6 +14,17 @@ directly (or via `.claude/launch.json`'s static server) to run it.
   user). Fully addressed via query string (see the comment block at the top of `species.js`)
   so any state is bookmarkable.
   - Category ordering is: Untagged (green tick), audio, tiers for tier page; and audio, observed (green tick), tiers for species page
+  - Every order but `Taxonomic` reads both ways (`REVERSIBLE`, `rev=1`) and wears an arrow
+    saying which way it is running: clicking the order already chosen turns it over, clicking
+    a different one starts it forwards. `Taxonomic` takes no arrow and drops `rev` from the
+    address — the tree's order is not a preference. Reversing flips only what the order is
+    asking: the tier bands turn over but the count still settles a draw inside one, and the
+    count turned over still runs names A–Z where two rows are level, so no list is a plain
+    mirror of itself. The count's button is named for the measure (`Number of observations`)
+    rather than a direction, since it can lead with either end; the tier button still says
+    `Most observed / Tier` and still means it, that half being the tie-break the arrow leaves
+    alone. The arrow is one drawing rotated by `.sortbar button.rev`, so a flip is the same
+    line of JS that moves the `on` state; don't add a second glyph.
   - `View: List / Grid` (`layout=grid`) hangs the same rows as tiles. It is one class on
     `#main`, not a second rendering, so sort, threshold, family bands and the hide-cascade
     keep working on the same `<li>`s — don't grow a separate grid renderer.
