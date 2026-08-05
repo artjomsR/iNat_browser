@@ -537,8 +537,9 @@ const sheetBody = document.getElementById("sheetBody");
 
 function openSheet(view, html){
   sheetView = view;
-  document.body.dataset.sheet = view;
   sheetBody.innerHTML = html;
+  document.body.dataset.sheet = view;
+  syncSheetBox();            // after the view, which sets the results panel's floor, not before
   sheet.dataset.open = "1";
   setStow(false);            // a panel just filled is a panel to read, whatever the last one did
   sheetBody.scrollTop = 0;
@@ -557,8 +558,23 @@ document.getElementById("handle").addEventListener("click", closeSheet);
 // Stowing is not closing: nothing is cleared and nothing is refetched. The panel slides off
 // the side with its list intact and the probe still drawn on the map underneath, which is the
 // point — the pin, its radius and the accuracy circles are what you stowed the list to see.
-// The flag lives on the body because the button that flips it sits out on the map rather than
-// on the panel, so both have to read it. See the stow block in index.css.
+// The flag lives on the body because the button that flips it hangs beside the panel rather
+// than inside it, so both have to read it. See the stow block in index.css.
+//
+// That button wears the panel's top-left corner without being in the panel, so it needs told
+// where the corner is. offsetLeft/offsetTop and not getBoundingClientRect: the offsets are
+// the box the panel was laid out in and a transform doesn't touch them, which is the whole
+// trick — the panel slides away from a corner that stays where it was. The observer watches
+// the body too, since a window widened without changing the panel's height still moves it.
+function syncSheetBox(){
+  document.body.style.setProperty("--sheet-x", sheet.offsetLeft + "px");
+  document.body.style.setProperty("--sheet-y", sheet.offsetTop + "px");
+}
+{ const ro = new ResizeObserver(syncSheetBox);
+  ro.observe(sheet);
+  ro.observe(document.body);
+}
+
 const stowBtn = document.getElementById("stow");
 function setStow(on){
   document.body.dataset.stow = on ? "1" : "0";
@@ -1183,9 +1199,44 @@ function gmapsUrl(latlng){
   return `https://www.google.com/maps/place/${ll}/@${ll},17z?ucbcb=1`;
 }
 
+// The same point as a doughnut on Easily Missed, which reads two circles against each other:
+// species the wider ring has and the middle one doesn't, which is to say what this spot is
+// missing that its own region holds. The pin's ring is the middle one — it is the ground just
+// looked at — and the outer is five times it, keeping the 1:5 the tool itself defaults to.
+//
+// Both radii are clamped to what its own controls accept (0.25–20km inner, up to 100km
+// outer). A fingertip tap at full zoom is a ring of a few dozen metres: as an inner circle
+// that holds nothing, so every species in the region reads as missing from it and the list
+// says nothing at all.
+//
+// The order of the four is load-bearing, not tidiness. That page picks lat/lng/i_rad/o_rad
+// out of the query string by substring match and then drops them by count from the front,
+// passing whatever is left to iNaturalist as extra filters — so all four have to come first,
+// and anything else has to come after, or the wrong parameters go over. Hence the username
+// and the panel's taxon filters at the back, where they survive the strip and arrive as the
+// iNat filters they already are.
+function easilyMissedUrl(latlng, km){
+  const rad = n => String(+n.toFixed(3));
+  const inner = Math.min(20, Math.max(0.25, km));
+  const p = new URLSearchParams({
+    lat: latlng.lat.toFixed(6),
+    lng: latlng.lng.toFixed(6),
+    i_rad: rad(inner),
+    o_rad: rad(Math.min(100, inner * 5))
+  });
+  if(state.unobs) p.set("inat_username", state.unobs);
+  if(state.taxon) p.set("taxon_id", state.taxon);
+  if(state.iconic.length) p.set("iconic_taxa", state.iconic.join(","));
+  return "https://simonrolph.github.io/easily_missed/?" + p.toString();
+}
+
 function resultsHtml(list, km, latlng){
   if(!list.length){
-    return `<div class="eyebrow"><span>Nothing here</span><a class="linkish" ${outAttrs(gmapsUrl(latlng))}>Open in GMaps</a></div>
+    return `<div class="eyebrow"><span>Nothing here</span>
+      <span class="eyebrow-actions">
+        <a class="linkish" ${outAttrs(easilyMissedUrl(latlng, km))}>Missed</a>
+        <a class="linkish" ${outAttrs(gmapsUrl(latlng))}>Open in GMaps</a>
+      </span></div>
       <div class="state">
         <div class="state-lede">No observations within ${esc(fmtAcc(km * 1000))}.</div>
         <div class="state-hint">Zoom out and tap again, or loosen the filters.</div>
@@ -1228,6 +1279,7 @@ function resultsHtml(list, km, latlng){
     <span class="eyebrow-actions">
       <button class="linkish" id="toHere" data-url="${esc(hereUrl(latlng, km))}">Species here</button>
       <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">On iNat</button>
+      <a class="linkish" ${outAttrs(easilyMissedUrl(latlng, km))}>Missed</a>
       <a class="linkish" ${outAttrs(gmapsUrl(latlng))}>Open in GMaps</a>
     </span></div>${rows}`;
 }
@@ -1327,9 +1379,9 @@ async function probe(latlng){
 function wireResults(){
   const toF = document.getElementById("toFilters");
   if(toF) toF.addEventListener("click", openFilters);
-  // Three ways out of a pin: this app's own species list, the same circle on iNat, or the
-  // bare coordinates in Google Maps. The last of those is already a real link and needs no
-  // wiring — see outAttrs.
+  // Four ways out of a pin: this app's own species list, the same circle on iNat, the
+  // doughnut on Easily Missed, or the bare coordinates in Google Maps. The last two are
+  // already real links and need no wiring — see outAttrs.
   ["toHere", "toSpecies"].forEach(id => {
     const b = document.getElementById(id);
     if(b) b.addEventListener("click", () => openOut(b.dataset.url));
