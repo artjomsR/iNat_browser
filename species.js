@@ -1053,7 +1053,7 @@ function placeListHtml(rows, standing, sortBy){
     ${tally}
     ${sortbarHtml(sortBy)}
     <label class="onlySub" title="${esc(SSP_HINT)}">
-      <input type="checkbox"${view.ssp ? " checked" : ""}>Only subspecies</label>
+      <input type="checkbox"${view.ssp ? " checked" : ""}>Show only subspecies?</label>
     <ul>${sortRows(rows, sortBy, standing).map((x, n) =>
       rowHtml(x, n, view.user, standing ? standing(x) : "")).join("")}</ul>
   </section>`;
