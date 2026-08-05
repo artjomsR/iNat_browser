@@ -1499,7 +1499,7 @@ async function runTier(){
     <div class="state-lede">Compiling the list&hellip;</div>
     <div class="state-hint">Reading every species @${esc(view.user)} has recorded, then sorting them by the tags they carry.${
       view.ssp ? " Splitting each into its subspecies takes a few more passes." : ""}</div>
-  </div>`, "reading&hellip;", true);
+  </div>`, "", true);
   try{
     const buckets = await speciesByTier(view.user);
     const total = buckets.reduce((n, rows) => n + rows.length, 0);
@@ -1517,7 +1517,7 @@ async function runPlace(){
     <div class="state-hint">Every species recorded in ${esc(areaLabel())}${
       view.user ? `, then checking them against @${esc(view.user)}'s own species` : ""}.${
       view.ssp ? " Splitting each into its subspecies takes a few more passes." : ""}</div>
-  </div>`, "reading&hellip;", true);
+  </div>`, "", true);
   try{
     // Whole species can be asked about all at once, none of the three depending on another:
     // `unseen` answers which of the area's species this user is missing, `bestOf` what they
