@@ -1047,9 +1047,22 @@ function placeListHtml(rows, standing, sortBy){
   const tally = standing
     ? `<p class="blurb">Click the tiers below to hide them.</p>${legendHtml()}`
     : `<p class="blurb">Add a username to tick off the ones you have already recorded.</p>`;
+  // The count sits on the list rather than up in the header, because it is a count of what is
+  // actually listed and has to move as the threshold and the cascade take rows out — see
+  // retally, which rewrites it. With a username every row carries a standing to read, so it
+  // reads as a pair: how many of the species showing are already recorded.
+  const held = standing ? rows.filter(x => standing(x)).length : 0;
+  // The username reads here now too, beside the count it explains, rather than alone atop
+  // the page — standing is only ever set once view.user is (see runPlace), so the two always
+  // travel together. A `|` ahead of each marks it as its own item on the line rather than a
+  // continuation of the one before, so it still reads as three things even in one colour.
+  const sep = `<span class="sep">|</span>`;
+  const badge = standing
+    ? `${sep}<span class="who">@${esc(view.user)}</span>${sep}<span class="n have" title="Already recorded, of the species showing">${held} / ${rows.length} observed</span>`
+    : `${sep}<span class="n">${rows.length}</span>`;
   return `<section class="tier" id="here">
     <h2><a href="${esc(areaSpeciesUrl())}" target="_blank" rel="noopener"
-          title="The same area on iNaturalist">${esc(areaLabel())}</a><span class="n">${rows.length}</span></h2>
+          title="The same area on iNaturalist">${esc(areaLabel())}</a>${badge}</h2>
     ${tally}
     ${sortbarHtml(sortBy)}
     <label class="onlySub" title="${esc(SSP_HINT)}">
@@ -1142,11 +1155,15 @@ function drawFamilies(ul, on){
 
 // Every count on the page follows what is actually listed, so a threshold doesn't leave a
 // heading claiming 925 above a list of 40.
-function retally(ul, shown){
+function retally(ul, shown, held){
   const sec = ul.closest("section");
   if(!sec) return;
   const n = sec.querySelector("h2 .n");
-  if(n) n.textContent = shown;
+  // A pair where the rows carry standings to count — the place tab with a username — and a
+  // single number everywhere else. Both halves follow the visible rows: the threshold only
+  // ever trims a species the reader has nothing on, so it moves the total alone, while the
+  // rank cascade hides recorded ones and moves both.
+  if(n) n.textContent = n.classList.contains("have") ? `${held} / ${shown} observed` : shown;
   const rail = document.querySelector(`.index a[href="#${sec.id}"] .n`);
   if(rail) rail.textContent = shown;
 }
@@ -1181,13 +1198,15 @@ function relist(){
   const cmp = comparator(view.sort);
   document.querySelectorAll("#main ul").forEach(ul => {
     [...ul.querySelectorAll("li.fam")].forEach(li => li.remove());
-    let shown = 0;
+    let shown = 0, held = 0;
     [...ul.children].sort(cmp).forEach(li => {
       ul.appendChild(li);                          // moves, does not clone
       li.hidden = underMin(li) || rankHidden(li);
-      if(!li.hidden) li.firstElementChild.textContent = ++shown;   // .num
+      if(li.hidden) return;
+      li.firstElementChild.textContent = ++shown;                  // .num
+      if(li.dataset.standing) held++;
     });
-    retally(ul, shown);
+    retally(ul, shown, held);
     drawFamilies(ul, view.sort === "taxo");
   });
 }
@@ -1355,6 +1374,10 @@ function paint(html, sub, busy){
   // rather than anything baked into the markup.
   main.classList.toggle("grid", view.layout === "grid");
   countEl.innerHTML = sub;
+  // Nothing to say up here on the place tab once its list is on screen — who and count both
+  // moved onto it. The line still carries the tier tab's own who, and the place tab's own
+  // loading and empty states, so it hides only once both halves are empty, not by tab.
+  document.querySelector(".sub").hidden = !document.getElementById("who").textContent && !sub;
   // Only present once the tier tab's sortbar is on screen — absent while loading or after
   // a failed fetch, when there is no sortbar at all to carry it.
   const refreshBtn = document.getElementById("refresh");
@@ -1433,10 +1456,10 @@ async function runPlace(){
     }else if(unseen){
       standing = x => unseen.has(x.taxon.id) ? "" : (bestOf ? bestOf(x.taxon.id) : "seen");
     }
-    const fresh = standing ? rows.filter(x => !standing(x)).length : 0;
-    paint(placeListHtml(rows, standing, view.sort),
-      standing ? `${rows.length - fresh} / ${rows.length} ${rowNoun()} observed`
-               : `${rows.length} ${rowNoun()}`);
+    // No tally in the header: this tab is one list, and its count belongs on it, where it can
+    // follow what the threshold and the cascade leave showing. The tier tab keeps its own —
+    // five sections have no single heading to carry a total.
+    paint(placeListHtml(rows, standing, view.sort), "");
     afterPaint([rows]);
   }catch(e){
     failed("iNaturalist may be rate-limiting, or that place may be too large to tally.");
@@ -1585,7 +1608,6 @@ const NOTES = {
     if(tab === view.tab) a.className = "on";
   });
 
-  document.getElementById("scope").textContent = scopeLabel();
   // Straight back to the map the reader came from. Bookmarked or shared links carry no
   // `back`, so those rebuild what this page does know — the username and the scope.
   let back = view.back;
@@ -1605,7 +1627,11 @@ const NOTES = {
   document.getElementById("galleryLink").href =
     "gallery.html" + (view.user ? "?u=" + encodeURIComponent(view.user) : "");
   document.getElementById("note").innerHTML = NOTES[view.tab];
-  document.getElementById("who").textContent = view.user ? "@" + view.user : "no user";
+  // Named here only on the tier tab, where it is the whole subject of the page. The place
+  // tab folds it into the list heading instead, beside the count it explains — see
+  // placeListHtml — so this has nothing to add there, and paint() hides the line when empty.
+  document.getElementById("who").textContent =
+    view.tab === "tier" ? (view.user ? "@" + view.user : "no user") : "";
 
   // The taxon field and the quick groups sit together because they are the same filter at two
   // grains — one named taxon, or a handful of broad ones. Both stand on both tabs.
@@ -1652,10 +1678,7 @@ const NOTES = {
   };
 
   if(view.tab === "place"){
-    document.getElementById("title").textContent = "Species here";
     document.title = hasArea ? "Species — " + areaLabel() : "Species here";
-    document.getElementById("scope").textContent =
-      (hasArea ? areaLabel() : "no area") + " · " + scopeLabel();
     document.getElementById("placebar").hidden = false;
     wirePlaceFinder();
 
@@ -1695,7 +1718,6 @@ const NOTES = {
     return;
   }
 
-  document.getElementById("title").textContent = "Species by tier tag";
   document.title = view.user ? "Tier tags — @" + view.user : "Species by tier tag";
 
   if(!view.user){

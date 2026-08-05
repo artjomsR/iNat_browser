@@ -26,9 +26,15 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
 .tabs a.on{color:var(--ink);background:var(--mark);border-color:var(--mark)}
 .sub{margin:0;font-family:var(--lit);font-size:17px;color:var(--mute)}
 .sub b{color:var(--text);font-weight:600}
+/* the dot belongs between who and count, so a line missing either side of it — no who on the
+   place tab, no count once its list is on screen — doesn't show one hanging on its own */
+#who:not(:empty) + #count:not(:empty)::before{content:" · "}
 .note{margin:9px 0 0;font-size:11px;letter-spacing:.05em;line-height:1.5;color:var(--mute)}
 /* place finder */
 .finder{position:relative;margin-top:14px;max-width:420px}
+/* the divider between the place field and the username field under it, held to the same
+   width as either rather than the full header */
+#placebar hr{max-width:420px;margin:14px 0;border:0;border-top:1px solid var(--rule)}
 .finder input{width:100%;padding:10px 13px;font:inherit;font-size:14px;color:var(--text);
   background:var(--raise);border:1px solid var(--rule);border-radius:7px}
 .finder input:focus{outline:none;border-color:var(--mark)}
@@ -127,6 +133,15 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
 .tier h2 a{color:inherit;text-decoration:none;border-bottom:1px solid transparent}
 .tier h2 a:hover{border-bottom-color:var(--mark)}
 .tier h2 .n{font-size:10px;letter-spacing:.1em;color:var(--mute);font-variant-numeric:tabular-nums}
+/* the place tab's username, folded into the same heading as the count it explains — plain
+   case against the heading's own small caps, so the two don't read as one run-on word */
+.tier h2 .who{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:none;color:var(--mute)}
+/* this heading's own line — area, user, tally — reads as one set of equal parts rather than
+   a title with two footnotes hanging off it, so all three take the heading's own colour and
+   a dim `|` does the separating instead. Scoped to id="here": the tier tab's own section
+   headings keep their badge muted against a tag name, a different pairing that stays as-is. */
+#here h2 .n,#here h2 .who{color:var(--mark)}
+#here h2 .sep{opacity:.45}
 .tier .blurb{margin:5px 0 2px;font-family:var(--lit);font-size:14px;color:var(--mute)}
 .tier .clear{margin:10px 0 0;padding:14px 2px;font-family:var(--lit);font-size:15px;
   color:var(--rule);border-top:1px solid var(--rule)}

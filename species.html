@@ -15,7 +15,7 @@
 <body>
 <div class="wrap">
 <header>
-  <h1><span class="lozenge"></span><span id="title">Species</span>
+  <h1><span class="lozenge"></span><span>Species</span>
     <span class="act">
       <a id="galleryLink" href="gallery.html">Gallery</a>
       <a id="backLink" href="index.html">Back to Map</a>
@@ -24,7 +24,9 @@
     <a data-tab="tier" href="#">By tier tag</a>
     <a data-tab="place" href="#">Species here</a>
   </nav>
-  <p class="sub"><b id="who">&mdash;</b> &middot; <span id="scope">all taxa</span> &middot; <span id="count">reading&hellip;</span></p>
+  <!-- who and how many. What the list is scoped to is not named here: the fields below say
+       it, in the only place it can be changed. -->
+  <p class="sub"><b id="who">&mdash;</b><span id="count">reading&hellip;</span></p>
   <p class="note" id="note"></p>
   <div id="placebar" hidden>
     <div class="finder">
@@ -33,6 +35,7 @@
       <button type="button" class="wipe" id="placeClear" aria-label="Clear the place">&times;</button>
       <div class="hits" id="placeHits" hidden></div>
     </div>
+    <hr>
     <div class="finder" id="userBar" hidden>
       <input id="userQuick" type="text" placeholder="Your iNaturalist username &mdash; to display tier badges"
              autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
