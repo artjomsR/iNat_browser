@@ -30,6 +30,7 @@
     <div class="finder">
       <input id="placeInput" type="text" placeholder="Search a place &mdash; Portugal, Manchester&hellip;"
              autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
+      <button type="button" class="wipe" id="placeClear" aria-label="Clear the place">&times;</button>
       <div class="hits" id="placeHits" hidden></div>
     </div>
     <div class="finder" id="userBar" hidden>
@@ -41,9 +42,8 @@
     <input id="taxonInput" type="search" enterkeyhint="search"
            placeholder="Search any taxon &mdash; Odonata, Barn Owl&hellip;"
            autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
+    <button type="button" class="wipe" id="taxonClear" aria-label="Clear the taxon filter">&times;</button>
     <div class="hits taxa" id="taxonHits" hidden></div>
-    <div class="chosen" id="taxonSel" hidden><span class="s-sci"></span>
-      <button type="button" id="taxonClear" aria-label="Clear the taxon filter">&times;</button></div>
   </div>
   <div class="picks" id="groupPicks"></div>
 </header>

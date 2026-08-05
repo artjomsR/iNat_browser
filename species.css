@@ -57,17 +57,19 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
   letter-spacing:0;text-transform:none;color:var(--mute);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hits.taxa .t-rank{flex:0 0 auto;margin:0}
-/* the taxon currently in force, under its own field. The scope line names it too, but this
-   is the only place it can be taken off again. */
-.chosen{display:flex;align-items:center;gap:8px;margin-top:7px;padding:6px 8px 6px 12px;
-  background:var(--raise);border:1px solid var(--mark);border-radius:7px}
-.chosen[hidden]{display:none}
-.chosen .s-sci{flex:1 1 auto;min-width:0;font-family:var(--lit);font-style:italic;font-size:15px;
-  color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chosen button{padding:1px 7px;cursor:pointer;font:inherit;font-size:17px;line-height:1;
+/* a finder holding what it is already filtering by. The field reads the value back rather
+   than sitting empty beside a scope line that knows, and carries the clear that takes it off
+   again — the same in-field × the threshold has. Hidden until the page says a value is in
+   force, so an empty field never shows a cross with nothing behind it. */
+.finder .wipe{display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  padding:2px 7px;cursor:pointer;font:inherit;font-size:17px;line-height:1;
   color:var(--mute);background:none;border:0;border-radius:5px}
-.chosen button:hover{color:var(--mark)}
-.chosen button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+.finder.set .wipe{display:block}
+.finder.set input{padding-right:38px}
+.finder .wipe:hover{color:var(--mark)}
+.finder .wipe:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+/* the taxon field is a search box, which draws a clear of its own as soon as it has a value */
+.finder input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
 .sortbar{display:flex;align-items:center;gap:7px;margin:15px 0 4px;
   font-size:9.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--mute)}
 .sortbar button{padding:6px 12px;cursor:pointer;font:inherit;letter-spacing:.1em;

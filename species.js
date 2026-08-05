@@ -1488,9 +1488,26 @@ function wireFinder({ input, hits, find, row, pick }){
   document.addEventListener("click", e => { if(!box.contains(e.target)) close(); });
 }
 
+// What a finder is already filtering by, shown in the field itself: the value, and the clear
+// beside it. Nothing but how the field reads — the filter is the address, as it was.
+function markSet(input, label){
+  input.value = label;
+  input.closest(".finder").classList.add("set");
+}
+
 function wirePlaceFinder(){
+  const input = document.getElementById("placeInput");
+  // Whatever area is in force, however it arrived: a named place, or the map's pin and
+  // radius — which is not something anyone would type, but is still what this list is of.
+  if(hasArea) markSet(input, areaLabel());
+  // Taking the area off leaves the tab asking which place, the same state a bare link opens
+  // in — so the pin the map handed over can be put down here rather than only replaced.
+  document.getElementById("placeClear").addEventListener("click", () => {
+    location.href = selfUrl({ place_id: null, pname: null, lat: null, lng: null, radius: null });
+  });
+
   wireFinder({
-    input: document.getElementById("placeInput"),
+    input,
     hits:  document.getElementById("placeHits"),
     find:  findPlaces,
     row: p => `<button type="button" data-id="${p.id}" data-name="${esc(p.name)}">${esc(p.name)}${
@@ -1506,18 +1523,20 @@ function wirePlaceFinder(){
 // The taxon filter the map hands over, now settable here too — on both tabs, since the taxon
 // scopes the tier tab's user query and the place tab's area query alike.
 function wireTaxonFinder(){
-  const sel = document.getElementById("taxonSel");
-  if(view.taxon){
-    sel.querySelector(".s-sci").textContent = view.tname || ("taxon " + view.taxon);
-    sel.hidden = false;
-  }
-  // The scope line names the taxon as well, but only the chip can take it back off.
+  const input = document.getElementById("taxonInput");
+  // Whatever the tree is narrowed to, at whichever grain: a named taxon, or the quick groups
+  // standing in for one. scopeLabel() already chooses between them, so the field says exactly
+  // what the scope line says.
+  if(hasTaxa) markSet(input, scopeLabel());
+  // The scope line names it as well, but only this can take it back off — and it takes the
+  // whole filter, groups included, the two being one filter with two ways of setting it. A
+  // group can still be dropped on its own from its own button.
   document.getElementById("taxonClear").addEventListener("click", () => {
-    location.href = selfUrl({ taxon: null, tname: null });
+    location.href = selfUrl({ taxon: null, tname: null, iconic: null });
   });
 
   wireFinder({
-    input: document.getElementById("taxonInput"),
+    input,
     hits:  document.getElementById("taxonHits"),
     find:  findTaxa,
     // Plenty of taxa have no English name, and those lead with the binomial rather than
