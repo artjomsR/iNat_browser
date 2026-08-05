@@ -399,7 +399,7 @@ function legendGradientCss(){
 }
 
 function fmtAcc(m){
-  if(m == null || !isFinite(m)) return "No accuracy data";
+  if(m == null || !isFinite(m)) return "? M";
   const r = Math.round(m);
   if(r < 1000) return r + " m";
   return (r/1000).toFixed(1) + " km";
