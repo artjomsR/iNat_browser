@@ -574,6 +574,15 @@ function openOut(url){
   return !!window.open(url, "_blank", "noopener");
 }
 
+// The same two cases as openOut, decided in markup instead of in script — a real link, so
+// that a tap is a tap. iOS only hands a claimed address to the native app when the reader
+// activates a link; an address set from script is a navigation like any other and Safari
+// keeps it, which is the difference between the app opening and a web page loading first.
+// Worth it wherever a claimed address is on the other end.
+function outAttrs(url){
+  return `href="${esc(url)}"` + (STANDALONE ? "" : ` target="_blank" rel="noopener"`);
+}
+
 /* ---------------- the home screen's own memory ----------------
 
    The hash is this app's whole state, and on the home screen the address is not the reader's
@@ -1143,14 +1152,23 @@ function hereUrl(latlng, km){
 
 // The pin, centred in Google Maps — just the coordinates, since a search radius has no
 // equivalent there and the tapped point is the only thing worth carrying across.
+//
+// Written as the canonical place address rather than the documented `/maps/search/?api=1`
+// form, because every hop this link takes is one the reader sits through. A search has to
+// be resolved before anything is drawn, and Maps then rewrites the address to exactly this
+// one — asking for it directly skips both. `ucbcb=1` is what Google's own consent redirect
+// appends on the way back; sent up front, the "before you continue" page never loads at
+// all, which in Europe is a whole screen saved on every tap. Both `/maps/place/*` and
+// `/maps/search/*` are addresses the Google Maps app claims, so nothing about the hand-off
+// on a phone changes — it just happens without the detour.
 function gmapsUrl(latlng){
-  const p = new URLSearchParams({ api: "1", query: `${latlng.lat.toFixed(6)},${latlng.lng.toFixed(6)}` });
-  return "https://www.google.com/maps/search/?" + p.toString();
+  const ll = `${latlng.lat.toFixed(6)},${latlng.lng.toFixed(6)}`;
+  return `https://www.google.com/maps/place/${ll}/@${ll},17z?ucbcb=1`;
 }
 
 function resultsHtml(list, km, latlng){
   if(!list.length){
-    return `<div class="eyebrow"><span>Nothing here</span><button class="linkish" id="toGmaps" data-url="${esc(gmapsUrl(latlng))}">Open in GMaps</button></div>
+    return `<div class="eyebrow"><span>Nothing here</span><a class="linkish" ${outAttrs(gmapsUrl(latlng))}>Open in GMaps</a></div>
       <div class="state">
         <div class="state-lede">No observations within ${esc(fmtAcc(km * 1000))}.</div>
         <div class="state-hint">Zoom out and tap again, or loosen the filters.</div>
@@ -1193,7 +1211,7 @@ function resultsHtml(list, km, latlng){
     <span class="eyebrow-actions">
       <button class="linkish" id="toHere" data-url="${esc(hereUrl(latlng, km))}">Species here</button>
       <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">On iNat</button>
-      <button class="linkish" id="toGmaps" data-url="${esc(gmapsUrl(latlng))}">Open in GMaps</button>
+      <a class="linkish" ${outAttrs(gmapsUrl(latlng))}>Open in GMaps</a>
     </span></div>${rows}`;
 }
 
@@ -1293,8 +1311,9 @@ function wireResults(){
   const toF = document.getElementById("toFilters");
   if(toF) toF.addEventListener("click", openFilters);
   // Three ways out of a pin: this app's own species list, the same circle on iNat, or the
-  // bare coordinates in Google Maps.
-  ["toHere", "toSpecies", "toGmaps"].forEach(id => {
+  // bare coordinates in Google Maps. The last of those is already a real link and needs no
+  // wiring — see outAttrs.
+  ["toHere", "toSpecies"].forEach(id => {
     const b = document.getElementById(id);
     if(b) b.addEventListener("click", () => openOut(b.dataset.url));
   });
