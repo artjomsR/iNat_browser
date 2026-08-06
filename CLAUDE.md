@@ -67,6 +67,21 @@ step or split further unless a file becomes unwieldy again.
   a wall of photographs has nothing to wait for.
 - iNaturalist API v1 (`https://api.inaturalist.org/v1`) for all data — species counts,
   taxa, place autocomplete. No API key; all requests are unauthenticated GETs.
+  Every one of those GETs on the map and the species page goes through that page's `apiGet` —
+  a request gate holding the pace to one departure per 350ms and at most three open at once,
+  retrying the statuses that mean "later" and a connection that dropped, and throwing on
+  everything else as the raw `fetch` calls always did. It hands back parsed JSON, so a caller
+  is one `await` rather than three lines. It exists because these pages ask in bursts: a
+  place-tab load fans out to eight paged chains at once, which flat out is past what a free
+  shared API will answer, and before the gate a single 429 mid-list took the whole report
+  down. The pace only ever slows — a 429 doubles the gap for the rest of the session and it
+  never decays. Don't call `fetch` directly on these two pages; the gate is only worth having
+  if everything goes through it.
+  The gallery keeps its own arrangement — it pages one shelf sequentially and already slept
+  between pages and handled a 429 before any of this — and the Wikidata lookup stays outside
+  the gate deliberately, being a different service with its own temper and its own retry.
+  `apiGet` is duplicated per page, as `esc` and `ICONIC` are, to keep one script file per
+  page; if that ever changes it is the first thing that should move.
 - Wikidata Query Service (`https://query.wikidata.org/sparql`, species page only) for one
   thing: the eBird species code behind a bird row's `eBird` link. eBird addresses a species by
   its own six-letter code and publishes no key-free way to look one up — their taxonomy

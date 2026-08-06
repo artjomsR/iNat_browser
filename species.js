@@ -1860,10 +1860,18 @@ const NOTES = {
     if(!view.user){
       document.getElementById("userBar").hidden = false;
       const uq = document.getElementById("userQuick");
-      uq.addEventListener("keydown", e => {
-        if(e.key !== "Enter" || !uq.value.trim()) return;
+      const uqGo = document.getElementById("userQuickGo");
+      const accept = () => {
+        if(!uq.value.trim()) return;
         location.href = selfUrl({ u: uq.value.trim() });
+      };
+      // The arrow only shows once there is something to accept, the same rule the finders'
+      // own clear follows — an empty field has nothing for it to confirm.
+      uq.addEventListener("input", () => {
+        uq.closest(".finder").classList.toggle("filled", !!uq.value.trim());
       });
+      uq.addEventListener("keydown", e => { if(e.key === "Enter") accept(); });
+      uqGo.addEventListener("click", accept);
     }
 
     if(!hasArea){

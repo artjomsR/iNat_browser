@@ -76,6 +76,16 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
 .finder .wipe:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
 /* the taxon field is a search box, which draws a clear of its own as soon as it has a value */
 .finder input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
+/* userQuick takes Enter, but nothing on screen says so — a typed username needs a control to
+   confirm it, the same way the clear needs one to take a value off. Hidden until there is
+   something typed to accept, the mirror of the clear's own rule. */
+.finder .accept{display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  padding:4px 7px;cursor:pointer;background:none;border:0;border-radius:5px;color:var(--mute)}
+.finder .accept svg{display:block;width:15px;height:15px}
+.finder.filled .accept{display:block}
+.finder.filled input{padding-right:38px}
+.finder .accept:hover{color:var(--mark)}
+.finder .accept:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
 .sortbar{display:flex;align-items:center;gap:7px;margin:15px 0 4px;
   font-size:9.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--mute)}
 .sortbar button{padding:6px 12px;cursor:pointer;font:inherit;letter-spacing:.1em;
