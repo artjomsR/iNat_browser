@@ -667,7 +667,11 @@ function monthsLabel(months){
   return `${name(start)}–${name(end)}`;
 }
 
-function renderLabel(){
+// The label's words, before they are a label — each bit a phrase of HTML, in reading order.
+// Split out because the saved-views block offers one of these as the default name for a view
+// (see defaultViewName): describing a view in a few words is this function's whole job, and
+// there is no sense in a second, quietly different, set of words for the same map.
+function labelBits(){
   const bits = [];
   if(state.taxon){
     bits.push(`<span class="sci">${esc(state.tname || "Taxon " + state.taxon)}</span>`);
@@ -710,6 +714,11 @@ function renderLabel(){
   if(d1 || state.d2){
     bits.push(esc(fmtYear(d1) + " – " + (fmtYear(state.d2) || "now")));
   }
+  return bits;
+}
+
+function renderLabel(){
+  const bits = labelBits();
   document.getElementById("labelText").innerHTML =
     bits.length ? bits.join('<span class="sep">/</span>')
                 : '<span class="dim">All observations</span>';
@@ -846,6 +855,320 @@ function restoreHash(){
   } catch(err){ /* No storage at all: launch from the shortcut, and simply forget. */ }
 }
 
+/* ---------------- saved views ----------------
+
+   A reader has three or four standing questions — my patch, birds, unobserved; the whole
+   region, S tier missing — and each of them is already a string this app knows how to write.
+   writeHash puts every filter, the layer, the basemap and the viewport into the address;
+   readHash takes all of it back out. So a saved view is one of those strings kept under a
+   name, and that is the whole of it: no second state format, nothing to keep in step, and no
+   way for a saved view to drift from a shared link.
+
+   RESTORING SETS THE HASH AND RELOADS. The other option — re-reading the hash in place, then
+   re-applying the basemap, the label and the layers by hand — is faster and buys a second boot
+   path that would have to be kept honest forever. The reload is the path a pasted link already
+   takes, which is exactly the guarantee being made: a restored view lands where that address
+   lands, because it *is* that address being opened. It also leaves nothing behind — afterwards
+   the address is the saved hash and nothing else. There is no such thing here as a map that
+   arrived from a saved view.
+
+   WHAT A VIEW HOLDS is the hash verbatim, viewport and all. A standing question is nearly
+   always a place as well as a filter — "my patch, birds, unobserved" is not the same question
+   asked over the next valley — so the string is kept as writeHash wrote it and never parsed
+   apart. Saving filters alone would mean taking the hash to pieces and putting it back
+   together, which is the one thing that could make a saved view differ from the link it claims
+   to be; a reader who wants these filters somewhere else pans there and saves again.
+
+   WHERE IT LIVES is the top of the filter sheet, which is already the one panel about what am
+   I looking at. A third sheet view would be a second place to go with the same question, and
+   worse, a place to go *instead of* the filters — where the whole point is that restoring one
+   view and building another are the same errand.
+
+   localStorage, like the gallery's record of seen photos and the eBird codes: a saved view
+   belongs to this reader and this browser rather than to the link. Every read and every write
+   is wrapped, and where storage refuses outright the block is simply not drawn — the map is
+   otherwise untouched.
+
+   The species report is deliberately left out. Its state is a query string rather than a hash
+   (see selfUrl in species.js), so a shared store would have to hold two shapes and know which
+   page each one belonged to. That is a larger question than this one and is better answered
+   whole than half-built here. */
+
+const VIEWS_STORE = "inat.map.views";
+
+// Two caps, and the second is the belt to the first one's braces: a hash is a few hundred
+// characters, so twenty-four of them cannot reach 32KB unless something has gone wrong, and
+// nothing here is worth a megabyte of somebody's storage.
+//
+// At the cap the save is REFUSED and says so, rather than dropping the oldest. These are
+// things the reader named on purpose; quietly throwing one away to make room for another is
+// not a trade anybody asked for, and delete is one tap away in the same list.
+const MAX_VIEWS = 24;
+const MAX_VIEW_BYTES = 32 * 1024;
+const MAX_VIEW_NAME = 60;
+
+// Whether the feature exists at all. A browser that refuses storage outright gets no block:
+// there is nowhere to put a saved view, so offering to save one would be a lie.
+function viewsAvailable(){
+  try{ localStorage.getItem(VIEWS_STORE); return true; }
+  catch(err){ return false; }
+}
+
+// A record is { name, hash, saved } and nothing else — the hash as writeHash wrote it. Anything
+// that does not read back as one of those is dropped rather than guessed at: an older shape,
+// somebody else's JSON, a half-written array. Read fresh at every use rather than held in a
+// variable, so what is drawn is what is stored, whatever another tab has been doing.
+function readViews(){
+  try{
+    const raw = JSON.parse(localStorage.getItem(VIEWS_STORE));
+    if(!Array.isArray(raw)) return [];
+    return raw
+      .filter(v => v && typeof v.name === "string" && typeof v.hash === "string" && v.hash.length <= 4000)
+      .slice(0, MAX_VIEWS)
+      .map(v => ({ name: v.name.slice(0, MAX_VIEW_NAME), hash: v.hash, saved: +v.saved || 0 }));
+  }catch(err){ return []; }     // private mode, or somebody else's JSON: nothing saved
+}
+
+// Says whether it landed, unlike every other write in the project, because this one answers a
+// button the reader has just pressed: a save that quietly did not happen would leave a row on
+// screen that is gone tomorrow. Still silent in the console and still harmless — the list is
+// re-read from storage on the next paint, so a refused write simply means nothing changed, and
+// the sheet says as much in its hint line.
+function writeViews(list){
+  try{
+    const json = JSON.stringify(list);
+    if(json.length > MAX_VIEW_BYTES) return false;
+    localStorage.setItem(VIEWS_STORE, json);
+    return true;
+  }catch(err){ return false; }  // no room (QuotaExceededError), or no storage at all
+}
+
+// The inline editor, when one is open: what it is for, which row it belongs to, the name as
+// typed so far, and whether Delete has been pressed once already. It lives out here rather
+// than in the DOM because a filter tapped mid-name re-renders the whole sheet, and a
+// half-typed name should survive that.
+let viewEditor = null;   // null | { mode:"save"|"rename", at, name, confirm }
+
+// The name the sheet offers: the specimen label's own words, which exist to describe a view in
+// a few words and are the same job. They arrive as HTML — a scientific name in italics, the
+// months wearing a tooltip — so each goes through a detached element to come back as the plain
+// text a stored name has to be.
+//
+// Taken a whole phrase at a time rather than sliced at the cap, because a label that has run
+// out of room should stop at something it has finished saying: "Aves / Research grade" and not
+// "Aves / Research grade / @someone missing tier". Only a single phrase longer than the cap is
+// ever cut mid-word, and the reader is typing over this anyway — it is a first offer, not a name.
+function defaultViewName(){
+  const box = document.createElement("div");
+  const said = labelBits().map(html => {
+    box.innerHTML = html;
+    return (box.textContent || "").replace(/\s+/g, " ").trim();
+  }).filter(Boolean);
+  let name = "";
+  for(const phrase of said){
+    const next = name ? `${name} / ${phrase}` : phrase;
+    if(next.length > MAX_VIEW_NAME) break;
+    name = next;
+  }
+  return name || (said[0] || "All observations").slice(0, MAX_VIEW_NAME);
+}
+
+// When it was saved, in the label's own small caps. Today and yesterday by name because that
+// is how a view saved this afternoon is actually thought of; anything older takes the date
+// fmtDate writes for an observation. Read out of the local calendar rather than an ISO string,
+// so a view saved at half past eleven at night is not dated tomorrow.
+function savedWhen(ms){
+  const d = new Date(ms);
+  if(!ms || !isFinite(d.getTime())) return "";
+  const sameDay = (a, b) => a.getFullYear() === b.getFullYear() &&
+                            a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const now = new Date();
+  if(sameDay(d, now)) return "Today";
+  const yday = new Date(now);
+  yday.setDate(yday.getDate() - 1);
+  if(sameDay(d, yday)) return "Yesterday";
+  return `${d.getDate()} ${MONTH_NAMES[d.getMonth()].toUpperCase()} ${d.getFullYear()}`;
+}
+
+function pencilSvg(){
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M4 20h4L18.5 9.5a2.8 2.8 0 10-4-4L4 16v4z"/><path d="M14 6l4 4"/>
+  </svg>`;
+}
+
+function viewsHtml(){
+  return viewsAvailable() ? `<div class="views" id="viewsBlock">${viewsInner()}</div>` : "";
+}
+
+// Names are the reader's own words printed into innerHTML, so every one of them goes through
+// esc — in the row, in the tooltip the ellipsis makes necessary, in the editor's field, and in
+// the label that tells a screen reader which view the pencil belongs to.
+function viewsInner(){
+  const list = readViews();
+  const renaming = i => viewEditor && viewEditor.mode === "rename" && viewEditor.at === i;
+  const rows = list.map((v, i) => renaming(i) ? viewEditorHtml() : `
+    <li class="view-row">
+      <button type="button" class="view-open" data-at="${i}" title="${esc(v.name)}">
+        <span class="view-name">${esc(v.name)}</span>
+        <span class="view-when">${esc(savedWhen(v.saved))}</span>
+      </button>
+      <button type="button" class="view-edit" data-edit="${i}"
+              aria-label="Rename or delete ${esc(v.name)}">${pencilSvg()}</button>
+    </li>`).join("");
+
+  const saving = viewEditor && viewEditor.mode === "save";
+  return `
+  <div class="views-head">
+    <span class="field-label">Saved views</span>
+    ${saving ? "" : `<button type="button" class="linkish" id="viewSave">Save this view</button>`}
+  </div>
+  <ol class="view-list">${rows}${saving ? viewEditorHtml() : ""}</ol>
+  ${list.length || saving ? "" :
+    `<p class="field-hint">Nothing saved yet &mdash; keep this map, filters and all, and come
+      back to it in a tap.</p>`}
+  <p class="field-hint" id="viewHint" hidden></p>`;
+}
+
+function viewEditorHtml(){
+  const saving = viewEditor.mode === "save";
+  return `
+  <li class="view-row view-editing">
+    <input class="input" id="viewName" type="text" maxlength="${MAX_VIEW_NAME}"
+           autocomplete="off" spellcheck="false" enterkeyhint="done"
+           placeholder="Name this view" value="${esc(viewEditor.name)}">
+    <div class="seg act view-acts">
+      <button type="button" id="viewCommit">${saving ? "Save" : "Rename"}</button>
+      ${saving ? "" : `<button type="button" id="viewDelete" ${viewEditor.confirm ? `data-armed="1"` : ""}
+        >${viewEditor.confirm ? "Delete for good?" : "Delete"}</button>`}
+      <button type="button" id="viewCancel">Cancel</button>
+    </div>
+  </li>`;
+}
+
+// Repainting the block rather than re-opening the sheet, for the same reason the month row
+// paints itself: openFilters scrolls back to the top and this is a list to work in.
+function repaintViews(focus){
+  const block = document.getElementById("viewsBlock");
+  if(!block) return;
+  block.innerHTML = viewsInner();
+  // Opened with the whole name selected, so the offer can be typed straight over — the label's
+  // words are a starting point, and a reader with their own name for a view should not have to
+  // clear a field before writing it. Tapping into the field still puts the caret where it landed.
+  const field = document.getElementById("viewName");
+  if(focus && field){
+    field.focus();
+    field.select();
+  }
+}
+
+// A word to the reader in the block's own hint line — a refused save, a full list. It is set
+// on the element rather than rendered, so the next repaint clears it: the message belongs to
+// the tap that caused it and to nothing after.
+function sayViews(msg){
+  const hint = document.getElementById("viewHint");
+  if(!hint) return;
+  hint.textContent = msg;
+  hint.hidden = !msg;
+}
+
+// The saved hash, opened — see the note at the top of this section on why this is a reload.
+function openView(at){
+  const v = readViews()[at];
+  if(!v) return;
+  history.replaceState(null, "", "#" + v.hash);
+  location.reload();
+}
+
+function commitViewEditor(){
+  if(!viewEditor) return;
+  const name = viewEditor.name.trim().slice(0, MAX_VIEW_NAME) || defaultViewName();
+  const list = readViews();
+  if(viewEditor.mode === "save"){
+    if(list.length >= MAX_VIEWS){
+      // Refused, and the editor stays open with the name still in it — the reader has a view
+      // to delete and can come straight back to this.
+      sayViews(`${MAX_VIEWS} saved views is the limit. Delete one to make room for this.`);
+      return;
+    }
+    // The address, as writeHash left it. Every commit and every settled drag writes it, so the
+    // bar is always current — reading it here is what keeps a saved view and a shared link the
+    // same string rather than two spellings of one.
+    list.push({ name, hash: location.hash.replace(/^#/, ""), saved: Date.now() });
+  }else{
+    const row = list[viewEditor.at];
+    if(!row){ viewEditor = null; repaintViews(); return; }   // deleted from under us, in another tab
+    row.name = name;
+  }
+  const ok = writeViews(list);
+  viewEditor = null;
+  repaintViews();
+  if(!ok) sayViews("This browser has no room left, so nothing was saved.");
+}
+
+// Two taps, and never beside Restore: the first arms the button in place — no repaint, so the
+// finger and the keyboard both stay where they were — and only the second one takes the view
+// away. Getting here at all means opening the editor first, so a mis-tap on the list can
+// never delete anything.
+function deleteEditingView(btn){
+  if(!viewEditor || viewEditor.mode !== "rename") return;
+  if(!viewEditor.confirm){
+    viewEditor.confirm = true;
+    btn.dataset.armed = "1";
+    btn.textContent = "Delete for good?";
+    return;
+  }
+  const list = readViews();
+  list.splice(viewEditor.at, 1);
+  const ok = writeViews(list);
+  viewEditor = null;
+  repaintViews();
+  if(!ok) sayViews("This browser refused the write, so nothing was deleted.");
+}
+
+// Wired once per sheet render and delegated from the block, which survives every repaint of
+// its own contents — so the handlers outlive the rows they act on.
+function wireViews(){
+  const block = document.getElementById("viewsBlock");
+  if(!block) return;
+
+  block.addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if(!b) return;
+    if(b.id === "viewSave"){
+      viewEditor = { mode:"save", at:-1, name: defaultViewName(), confirm:false };
+      repaintViews(true);
+    }else if(b.id === "viewCommit"){
+      commitViewEditor();
+    }else if(b.id === "viewDelete"){
+      deleteEditingView(b);
+    }else if(b.id === "viewCancel"){
+      viewEditor = null;
+      repaintViews();
+    }else if(b.dataset.at != null){
+      openView(+b.dataset.at);
+    }else if(b.dataset.edit != null){
+      const at = +b.dataset.edit;
+      const v = readViews()[at];
+      if(!v) return;
+      viewEditor = { mode:"rename", at, name: v.name, confirm:false };
+      repaintViews(true);
+    }
+  });
+
+  // The draft, kept in the editor rather than in the field, so a sheet re-rendered under a
+  // half-typed name gives it back.
+  block.addEventListener("input", e => {
+    if(e.target.id === "viewName" && viewEditor) viewEditor.name = e.target.value;
+  });
+
+  block.addEventListener("keydown", e => {
+    if(e.target.id !== "viewName") return;
+    if(e.key === "Enter"){ e.preventDefault(); commitViewEditor(); }
+    if(e.key === "Escape"){ viewEditor = null; repaintViews(); }
+  });
+}
+
 /* ---------------- filters panel ---------------- */
 
 function segHtml(id, opts, current){
@@ -870,6 +1193,8 @@ function monthHint(){
 function filtersHtml(){
   return `
   <div class="eyebrow"><span>Filters</span><button class="linkish" id="reset">Reset all</button></div>
+
+  ${viewsHtml()}
 
   <div class="field ac-wrap">
     <label for="taxonInput">Species or group</label>
@@ -1156,6 +1481,8 @@ function commit(){ applyStyle(); renderLabel(); writeHash(); }
 
 function wireFilters(){
   const $ = id => document.getElementById(id);
+
+  wireViews();
 
   $("doneBtn").addEventListener("click", closeSheet);
 

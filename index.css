@@ -262,6 +262,53 @@ a.linkish{text-decoration:none}
 }
 .eyebrow-actions{display:flex;align-items:baseline;gap:14px;flex:0 0 auto}
 
+/* ---------- saved views ----------
+   The block at the top of the filter sheet. A row is a wide restore target with a small pencil
+   beside it, and delete lives inside what the pencil opens rather than on the row — so the tap
+   that restores a view and the tap that destroys one are never neighbours, on a screen where
+   both are made with a thumb. The editor takes the whole row when it is open: a line to type
+   on, and its actions on the line below as real buttons rather than links, since a link's worth
+   of text is not a finger's worth of button. */
+.views{margin-bottom:18px}
+.views-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:7px}
+.views-head .field-label{margin-bottom:0}
+.views-head .linkish{
+  flex:0 0 auto;
+  font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+}
+.view-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.view-row{display:flex;gap:6px}
+.view-open{
+  flex:1 1 auto;min-width:0;text-align:left;padding:8px 11px;cursor:pointer;
+  font:inherit;color:var(--text);background:var(--raise);
+  border:1px solid var(--rule);border-radius:7px;
+  transition:border-color .14s;
+}
+.view-open:hover{border-color:var(--mark)}
+.view-open:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+.view-name{
+  display:block;font-size:13.5px;line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.view-when{
+  display:block;margin-top:3px;
+  font-size:8.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);
+}
+.view-edit{
+  flex:0 0 auto;width:44px;cursor:pointer;
+  background:none;border:1px solid var(--rule);border-radius:7px;
+  color:var(--mute);display:grid;place-items:center;
+  transition:color .14s,border-color .14s;
+}
+.view-edit:hover{color:var(--mark);border-color:var(--mark)}
+.view-edit:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+.view-edit svg{width:16px;height:16px}
+.view-editing{display:block}
+.view-editing .input{font-size:14px}
+/* Armed by the first tap and only then: the button says what the second one will do, and
+   wears the accent to say it is now live. */
+#viewDelete[data-armed="1"]{color:var(--mark);border-color:var(--mark)}
+
 .field{margin-bottom:15px}
 .field > label,.field-label{
   display:block;font-size:9.5px;font-weight:700;letter-spacing:.16em;

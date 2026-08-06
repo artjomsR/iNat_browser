@@ -22,6 +22,18 @@ directly (or via `.claude/launch.json`'s static server) to run it.
     than a list — `Aug`, `Jun–Aug`, or `3 months` with the months on the tooltip — and a run
     may wrap the year, `Nov–Feb` being `11,12,1,2`. Months ride along to the species page on
     both links out, as the pin does.
+  - `Saved views` sits at the top of the filter sheet, that being the one panel already about
+    *what am I looking at*. A saved view is nothing but a hash string kept under a name — the
+    whole state is already one, so there is no second format to keep in step and no way for a
+    saved view to drift from a shared link. It holds the hash verbatim, viewport and all: a
+    standing question is a place as much as a filter, and taking the string apart to store the
+    filters alone is the one thing that could make the two disagree. Restoring sets the hash
+    and reloads, which *is* the pasted-link path, so a restored view lands exactly where that
+    address lands and leaves no trace of having been saved. The name is offered from what
+    `renderLabel` composes (`labelBits`), typed over in an inline field rather than a
+    `prompt()`; rename and delete live behind the row's pencil, and delete arms before it
+    fires, so it can never be the tap that was meant for the row above. See the saved-views
+    block in `index.js` and the storage note under **Conventions**.
 - **species.html / species.css / species.js** — the species report, reached from the map and
   returning to it by the "Back to Map" link. Two tabs over the same rows: `tier` (one user's
   species banded by tier tag) and `place` (every species in an area, ticked off against a
@@ -145,6 +157,16 @@ step or split further unless a file becomes unwieldy again.
   hand back the filters of the day the icon was made. A cold launch — told from a page opened
   inside the app by an empty `inat.map.session` in sessionStorage — starts from that copy
   instead. In a browser tab none of it runs and the address is still the only state there is.
+  The map's saved views go under `inat.map.views`, a list of `{ name, hash, saved }` — the
+  reader's own name for a view, the hash exactly as `writeHash` wrote it, and when they kept
+  it. A different lifetime from `inat.map.last`, which is one hash the app overwrites for
+  itself: these are named on purpose and only the reader adds to or takes from them, which is
+  also why the list refuses a save at its cap rather than dropping the oldest to make room.
+  Capped at 24 and at 32KB, and the write says whether it landed — a save is a button that was
+  pressed, so a refusal is told to the reader in the sheet rather than swallowed. Wrapped like
+  the rest, and where storage refuses outright the block is not drawn at all: with no storage
+  the map is exactly the map it was before the feature existed. See the saved-views block in
+  `index.js`.
   The species page also keeps its answers, under `inat.query.v1.<question>` — but in
   sessionStorage, and for five minutes. The difference in store is the difference in what is
   held: an eBird code is minted once and never changes, while every one of these is a count or
