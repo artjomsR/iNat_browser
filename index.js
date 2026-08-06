@@ -1495,6 +1495,8 @@ function resultsHtml(list, km, latlng){
   if(!list.length){
     return `<div class="eyebrow"><span>Nothing here</span>
       <span class="eyebrow-actions">
+        <button class="linkish" id="toHere" data-url="${esc(hereUrl(latlng, km))}">Species<br>here</button>
+        <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">On<br>iNat${extIcon()}</button>
         <a class="linkish" ${outAttrs(easilyMissedUrl(latlng, km))}>Easily<br>Missed${extIcon()}</a>
         <a class="linkish" ${outAttrs(gmapsUrl(latlng))}>GMaps${extIcon()}</a>
       </span></div>
