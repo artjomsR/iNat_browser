@@ -616,6 +616,18 @@ function outAttrs(url){
   return `href="${esc(url)}"` + (STANDALONE ? "" : ` target="_blank" rel="noopener"`);
 }
 
+// Marks a results-row action as a hop off the map — On iNat, Missed, GMaps — so the reader
+// knows before tapping that it leaves this page rather than opening one of the app's own
+// views (Species here stays plain). Drawn in currentColor so it always matches the link.
+function extIcon(){
+  return `<svg class="ext-icon" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M9 5H5a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-4"
+          fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M13 3h8v8M21 3L11 13"
+          fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
 /* ---------------- the home screen's own memory ----------------
 
    The hash is this app's whole state, and on the home screen the address is not the reader's
@@ -1234,8 +1246,8 @@ function resultsHtml(list, km, latlng){
   if(!list.length){
     return `<div class="eyebrow"><span>Nothing here</span>
       <span class="eyebrow-actions">
-        <a class="linkish" ${outAttrs(easilyMissedUrl(latlng, km))}>Missed</a>
-        <a class="linkish" ${outAttrs(gmapsUrl(latlng))}>Open in GMaps</a>
+        <a class="linkish" ${outAttrs(easilyMissedUrl(latlng, km))}>Easily<br>Missed${extIcon()}</a>
+        <a class="linkish" ${outAttrs(gmapsUrl(latlng))}>GMaps${extIcon()}</a>
       </span></div>
       <div class="state">
         <div class="state-lede">No observations within ${esc(fmtAcc(km * 1000))}.</div>
@@ -1277,10 +1289,10 @@ function resultsHtml(list, km, latlng){
   }).join("");
   return `<div class="eyebrow"><span>${list.length} selected &middot; ${esc(fmtAcc(km * 1000))}</span>
     <span class="eyebrow-actions">
-      <button class="linkish" id="toHere" data-url="${esc(hereUrl(latlng, km))}">Species here</button>
-      <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">On iNat</button>
-      <a class="linkish" ${outAttrs(easilyMissedUrl(latlng, km))}>Missed</a>
-      <a class="linkish" ${outAttrs(gmapsUrl(latlng))}>Open in GMaps</a>
+      <button class="linkish" id="toHere" data-url="${esc(hereUrl(latlng, km))}">Species<br>here</button>
+      <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">On<br>iNat${extIcon()}</button>
+      <a class="linkish" ${outAttrs(easilyMissedUrl(latlng, km))}>Easily<br>Missed${extIcon()}</a>
+      <a class="linkish" ${outAttrs(gmapsUrl(latlng))}>GMaps${extIcon()}</a>
     </span></div>${rows}`;
 }
 

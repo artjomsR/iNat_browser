@@ -235,6 +235,10 @@ body[data-sheet="results"] .sheet{min-height:240px}
 }
 a.linkish{text-decoration:none}
 .linkish:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+.ext-icon{
+  width:10px;height:10px;margin-left:3px;vertical-align:1.5px;
+  color:currentColor;opacity:.75;
+}
 .eyebrow-actions{display:flex;align-items:baseline;gap:14px;flex:0 0 auto}
 
 .field{margin-bottom:15px}
