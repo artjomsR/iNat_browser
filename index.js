@@ -1792,6 +1792,17 @@ document.getElementById("locate").addEventListener("click", function(){
   renderCursorRow();
   applyStyle();
 
+  const zoomIn = document.getElementById("zoomIn");
+  const zoomOut = document.getElementById("zoomOut");
+  const syncZoomButtons = () => {
+    zoomIn.disabled = map.getZoom() >= map.getMaxZoom();
+    zoomOut.disabled = map.getZoom() <= map.getMinZoom();
+  };
+  zoomIn.addEventListener("click", () => map.zoomIn());
+  zoomOut.addEventListener("click", () => map.zoomOut());
+  map.on("zoomend", syncZoomButtons);
+  syncZoomButtons();
+
   map.on("zoomend", () => { if(state.style === "auto") refreshOverlay(); });
   map.on("moveend", () => {
     writeHash();

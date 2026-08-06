@@ -110,6 +110,27 @@ body{
 .label-text .dim{color:var(--mute)}
 .label-chevron{flex:0 0 auto;color:var(--mute);font-size:10px;letter-spacing:.1em}
 
+/* ---------- zoom ---------- */
+.zoom{
+  position:absolute;z-index:600;right:12px;
+  bottom:calc(var(--safe-b) + 78px);
+  display:flex;flex-direction:column;width:42px;border-radius:21px;
+  background:rgba(20,33,29,.92);border:1px solid var(--rule);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  overflow:hidden;
+  transition:right .26s cubic-bezier(.32,.72,0,1);
+}
+.zoom button{
+  width:42px;height:42px;border:0;background:none;padding:0;cursor:pointer;
+  color:var(--text);display:grid;place-items:center;
+}
+.zoom button:first-child{border-bottom:1px solid var(--rule)}
+.zoom button:active{background:var(--raise)}
+.zoom button[disabled]{color:var(--rule);cursor:default}
+.zoom button[disabled]:active{background:none}
+.zoom button svg{width:17px;height:17px}
+.zoom button:focus-visible{outline:2px solid var(--mark);outline-offset:-2px}
+
 /* ---------- locate ---------- */
 .locate{
   position:absolute;z-index:600;right:12px;
@@ -471,4 +492,5 @@ label.check{
      edge under the label bar and only steps aside for as long as the panel is actually
      there to step aside from — stowed, it takes its corner back. */
   body[data-sheet]:not([data-stow="1"]) .locate{right:410px}
+  body[data-sheet]:not([data-stow="1"]) .zoom{right:410px}
 }
