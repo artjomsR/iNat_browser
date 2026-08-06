@@ -359,7 +359,7 @@ async function speciesIdsWithTag(user, tag){
 
    The place tab reads a patch of ground, either an iNat place or the map's own pin and
    radius. Deliberately unfiltered by date or quality grade: the question is what has been
-   recorded here, ever, and the map's default three-month window would quietly answer a
+   recorded here, ever, and the map's default 45 day window would quietly answer a
    much smaller one. Taxon and quick-group scope still apply — those are the reader's. */
 
 function areaScope(){
