@@ -927,7 +927,10 @@ function filtersHtml(){
     </div>
     <!-- Months of the year, under the window they cut across rather than in a field of their
          own: the two are one question about time, and read together or not at all. -->
-    <span class="field-label months-label">Months of the year</span>
+    <div class="field-label-row months-label">
+      <span class="field-label">Months of the year</span>
+      <button type="button" id="monthClear" aria-label="Clear months" ${state.months.length ? "" : "hidden"}>&times;</button>
+    </div>
     <div class="chips months" id="monthRow">${MONTH_NAMES.map((l, i) =>
       `<button type="button" data-v="${i+1}" aria-pressed="${state.months.includes(i+1)}">${l}</button>`).join("")}</div>
     <p class="field-hint" id="monthHint" ${state.months.length ? "" : "hidden"}>${monthHint()}</p>
@@ -1266,6 +1269,15 @@ function wireFilters(){
     const hint = $("monthHint");
     hint.innerHTML = monthHint();
     hint.hidden = !state.months.length;
+    $("monthClear").hidden = !state.months.length;
+    commit();
+  });
+
+  $("monthClear").addEventListener("click", () => {
+    state.months = [];
+    [...$("monthRow").children].forEach(b => b.setAttribute("aria-pressed", "false"));
+    $("monthHint").hidden = true;
+    $("monthClear").hidden = true;
     commit();
   });
 

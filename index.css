@@ -344,6 +344,15 @@ label.check{
 /* the second caption inside one field: the months belong to the window above them, so they
    sit under it rather than in a field of their own — this is the air that pairing costs */
 .months-label{margin-top:13px}
+.field-label-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.field-label-row .field-label{margin-bottom:0}
+.field-label-row button{
+  flex:0 0 auto;width:18px;height:18px;border-radius:50%;cursor:pointer;
+  background:none;border:1px solid var(--rule);color:var(--mute);
+  font:inherit;font-size:12px;line-height:1;display:grid;place-items:center;
+}
+.field-label-row button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+.field-label-row button[hidden]{display:none}
 
 /* taxon autocomplete */
 .ac-wrap{position:relative}

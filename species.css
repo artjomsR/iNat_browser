@@ -142,10 +142,13 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
 .monthbar button:hover{color:var(--text);border-color:var(--mute)}
 .monthbar button[aria-pressed="true"]{color:var(--ink);background:var(--mark);border-color:var(--mark)}
 .monthbar button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
-/* the way back to the whole year — a word rather than a thirteenth month, and held off the
-   twelve so it doesn't read as one of them */
-.monthbar .mbClear{margin-left:7px;background:none;border-color:transparent;letter-spacing:.12em}
-.monthbar .mbClear:hover{color:var(--mark);border-color:var(--rule)}
+/* the way back to the whole year — the finder's own × rather than a thirteenth month, and
+   held off the twelve so it doesn't read as one of them */
+.monthbar .mbClear{
+  margin-left:2px;padding:2px 7px;background:none;border:0;letter-spacing:0;
+  font-size:17px;line-height:1;
+}
+.monthbar .mbClear:hover{color:var(--mark)}
 .monthbar .mbClear[hidden]{display:none}
 @media (max-width:520px){
   .sortbar{flex-wrap:wrap} .sortbar .thresh,.sortbar .layout{margin-left:0}

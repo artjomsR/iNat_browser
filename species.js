@@ -1188,7 +1188,7 @@ function monthRowHtml(){
     ${MONTH_NAMES.map((l, i) =>
       `<button type="button" data-month="${i+1}" aria-pressed="${on(i+1)}">${l}</button>`).join("")}
     <button type="button" class="mbClear"${view.months.length ? "" : " hidden"}
-            title="Read the whole year again">Any month</button>
+            title="Read the whole year again" aria-label="Clear months">&times;</button>
   </div>`;
 }
 
