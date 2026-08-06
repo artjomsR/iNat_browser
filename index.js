@@ -108,6 +108,10 @@ const PRECISION = [["","Any"],["precise","Exact only"]];
 const STYLES  = [["auto","Auto"],["points","Points"],["grid","Grid"],["heat","Heat"],["accuracy","Accuracy"]];
 const BASES   = [["light", "Light"], ["dark","Dark"],["sat","Satellite"]];
 
+// The twelve, once: the month chips, the label's reading of them, and — upper-cased — the
+// date on every result row. One list rather than two spellings of the same words.
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
 // Two levels past every layer's tightest native ceiling (satellite's 19) — past that point
 // every layer is upscaling anyway, so there's nothing left to gain by going further.
 const MAX_ZOOM = 21;
@@ -132,9 +136,26 @@ function isDefaultQuality(){
   return state.quality.length === d.length && d.every(v => state.quality.includes(v));
 }
 
+// Months of the year, 1–12, as chosen in the filter sheet — a season rather than a stretch of
+// time. Empty is every month, and writes nothing anywhere.
+function readMonths(raw){
+  const seen = new Set();
+  String(raw == null ? "" : raw).split(",").forEach(v => {
+    if(!/^\d{1,2}$/.test(v)) return;          // "3.5", "foo", "" — none of them a month
+    const n = +v;
+    if(n >= 1 && n <= 12) seen.add(n);
+  });
+  // Sorted and de-duplicated on the way in, so "8,3,3" and "3,8" are one address rather than
+  // two spellings of the same question.
+  return [...seen].sort((a, b) => a - b);
+}
+
 const state = {
   taxon:null, tname:"", iconic:[], quality:defaultQuality(),
-  d1:defaultD1(), d2:"", style:"accuracy", base:"light", unobs:"", precise:"precise",
+  d1:defaultD1(), d2:"", months:[],
+  // Whether that d1 is the app's own 45-day default or something asked for — see windowD1.
+  d1auto:true,
+  style:"accuracy", base:"light", unobs:"", precise:"precise",
   // dmode: "unobserved" | "s" | "b" | "c" | "own". The mode row toggles, so pressing the
   // mode already set turns it off — "own" is that no-button-pressed state, and it asks the
   // opposite question: not what this user is missing but what they have already recorded.
@@ -144,6 +165,30 @@ const state = {
 let map, overlay, accLayer, probeAccLayer, probeMark, probeRing, meRing, meCone, sheetView = null;
 
 /* ---------------- query building ---------------- */
+
+/* The lower end of the window, as the query should see it — and the one place the month
+   filter and the date range are reconciled.
+
+   They ask different questions. The window is a stretch of time, defaulting to the last 45
+   days: what is about right now. The months are a season: what is here in March, in any year.
+   Asked together they intersect, and the intersection of March and the last 45 days is empty
+   for ten and a half months of the year — a reader who picks March in August would get a bare
+   map and read it, almost fairly, as a broken filter.
+
+   So the default steps aside. A window nobody asked for cannot be allowed to defeat a filter
+   somebody did: with months set, the 45 days apply only if they were actually chosen. A date
+   typed into either field, or carried in on a link, is a deliberate one and stands — "March,
+   between 2015 and 2020" is a real question and this is the only way to ask it. The label
+   prints whichever of the two is in force (see renderLabel), so an empty map always says why.
+
+   Telling the two apart is what state.d1auto is for, and why an untouched default no longer
+   rides in the hash: writeHash omits d1 while it is the app's own, readHash puts it back, and
+   so the address carries a date only when a date was meant. The side effect is that a link
+   shared without touching the dates now opens on the reader's own last 45 days rather than on
+   the sharer's — which is what "the last 45 days" meant when it was shared. */
+function windowD1(){
+  return state.months.length && state.d1auto ? "" : state.d1;
+}
 
 function obsParams(){
   const p = new URLSearchParams();
@@ -179,8 +224,12 @@ function obsParams(){
   }
   if(state.quality.length) p.set("quality_grade", state.quality.join(","));
   if(state.precise){ p.set("geoprivacy", "open"); p.set("taxon_geoprivacy", "open"); }
-  if(state.d1)      p.set("d1", state.d1);
+  const d1 = windowD1();
+  if(d1)            p.set("d1", d1);
   if(state.d2)      p.set("d2", state.d2);
+  // Months of the year, matched on the observed date — a slice of the calendar rather than a
+  // shorter stretch of it, so it narrows every year at once instead of the last one.
+  if(state.months.length) p.set("month", state.months.join(","));
   return p;
 }
 
@@ -188,17 +237,21 @@ function obsParams(){
 // compared against its parent's rank — but a genuinely unidentified observation has no
 // taxon at all, so it never clears that floor and silently never shows, even though
 // "nothing identified yet" is the plainest case of something not yet observed. This mirrors
-// obsParams()'s other filters for that one case: quality, date range and precision still
-// apply, and the target user's own uploads are still excluded, but nothing taxon-shaped
-// (taxon_id, iconic_taxa, the rank window itself) can match a record that has no taxon.
+// obsParams()'s other filters for that one case: quality, date range, month and precision
+// still apply — an unidentified record still has a date, so the season it was found in is as
+// readable as anything else about it — and the target user's own uploads are still excluded,
+// but nothing taxon-shaped (taxon_id, iconic_taxa, the rank window itself) can match a record
+// that has no taxon.
 function unknownParams(){
   const p = new URLSearchParams();
   p.set("identified", "false");
   if(state.unobs) p.set("not_user_id", state.unobs);
   if(state.quality.length) p.set("quality_grade", state.quality.join(","));
   if(state.precise){ p.set("geoprivacy", "open"); p.set("taxon_geoprivacy", "open"); }
-  if(state.d1)      p.set("d1", state.d1);
+  const d1 = windowD1();
+  if(d1)            p.set("d1", d1);
   if(state.d2)      p.set("d2", state.d2);
+  if(state.months.length) p.set("month", state.months.join(","));
   return p;
 }
 
@@ -541,8 +594,11 @@ function writeHash(){
   if(state.ssp)     p.set("ssp", state.ssp);
   p.set("q", state.quality.join(","));
   p.set("precise", state.precise);
-  p.set("d1", state.d1);
+  // Only a date that was meant — see windowD1. Left out, readHash hands back the day's own
+  // 45 days, which is what an untouched window has always meant.
+  if(!state.d1auto) p.set("d1", state.d1);
   if(state.d2)      p.set("d2", state.d2);
+  if(state.months.length) p.set("m", state.months.join(","));
   if(state.style !== "accuracy") p.set("s", state.style);
   if(state.base !== "light")  p.set("b", state.base);
   if(state.cursor !== "precise") p.set("cur", state.cursor);
@@ -563,8 +619,13 @@ function readHash(){
   state.ssp     = ["1","only"].includes(p.get("ssp")) ? p.get("ssp") : "";
   state.quality = p.has("q") ? p.get("q").split(",").filter(Boolean) : defaultQuality();
   state.precise = p.has("precise") ? p.get("precise") : "precise";
-  state.d1      = p.has("d1") ? p.get("d1") : defaultD1();
+  // A date in the address was asked for by somebody, whoever made the link; no date is the
+  // app's own 45 days, and only that one steps aside for a month filter. An empty `d1=` counts
+  // as asked for — it is the field cleared on purpose, which is "no lower bound at all".
+  state.d1auto  = !p.has("d1");
+  state.d1      = state.d1auto ? defaultD1() : p.get("d1");
   state.d2      = p.get("d2") || "";
+  state.months  = readMonths(p.get("m"));
   state.style   = p.get("s") || "accuracy";
   state.base    = p.get("b") || "light";
   state.cursor  = p.get("cur") || "precise";
@@ -581,6 +642,32 @@ function readHash(){
 /* ---------------- specimen label ---------------- */
 
 function fmtYear(d){ return d ? d.slice(0,4) : ""; }
+
+// Where a selection of months begins, when it is one unbroken run — the month whose
+// predecessor is not also chosen. Exactly one such month means a run; two or more mean a
+// scatter. The predecessor of January is December, so a run reads across the year end and
+// Nov–Feb (11,12,1,2) is a run rather than two: a winter is one season however the calendar
+// is numbered. All twelve have no start at all, every month having a chosen predecessor.
+function monthRunStart(months){
+  const starts = months.filter(m => !months.includes(m === 1 ? 12 : m - 1));
+  return starts.length === 1 ? starts[0] : null;
+}
+
+// Months as a season rather than a list: one is its own name, an unbroken run is a span, and
+// anything else is a count — a label is a line of small caps a few words wide, and
+// "Jan / Mar / Jun / Sep / Nov" is not something it can hold. Whoever prints this hangs the
+// months themselves on the tooltip, so the count is never the only reading available.
+function monthsLabel(months){
+  const name = m => MONTH_NAMES[m - 1];
+  if(!months.length) return "";
+  if(months.length === 12) return "every month";
+  if(months.length === 1) return name(months[0]);
+  const start = monthRunStart(months);
+  if(start == null) return `${months.length} months`;
+  let end = start;
+  while(months.includes(end === 12 ? 1 : end + 1)) end = end === 12 ? 1 : end + 1;
+  return `${name(start)}–${name(end)}`;
+}
 
 function renderLabel(){
   const bits = [];
@@ -611,8 +698,19 @@ function renderLabel(){
     }
   }
   if(!state.precise) bits.push("incl. obscured");
-  if(state.d1 || state.d2){
-    bits.push(esc(fmtYear(state.d1) + " – " + (fmtYear(state.d2) || "now")));
+  // Season and window, in that order and both named: they are two filters, and where both are
+  // in force the reader is looking at their intersection — which can easily be empty, and has
+  // to be readable as such rather than as a map that stopped working. The window is the one
+  // that may have stood aside (see windowD1), so it is printed as the query will run it: with
+  // months chosen and no date asked for, there is no year range to print and the season is
+  // being read across every year there is.
+  if(state.months.length){
+    bits.push(`<span title="${esc(state.months.map(m => MONTH_NAMES[m-1]).join(", "))}">${
+      esc(monthsLabel(state.months))}</span>`);
+  }
+  const d1 = windowD1();
+  if(d1 || state.d2){
+    bits.push(esc(fmtYear(d1) + " – " + (fmtYear(state.d2) || "now")));
   }
   document.getElementById("labelText").innerHTML =
     bits.length ? bits.join('<span class="sep">/</span>')
@@ -759,6 +857,19 @@ function segHtml(id, opts, current){
   ).join("") + `</div>`;
 }
 
+// What the month row is doing to the window above it, in the one case where that is not
+// obvious: the reader has asked for a season, and the dates they can see in the two fields
+// are not the dates being asked about. Said here rather than left to the label, which has to
+// be read on the map behind a sheet that is covering it.
+function monthHint(){
+  if(!state.months.length) return "";
+  const season = esc(monthsLabel(state.months));
+  return state.d1auto
+    ? `Any year &mdash; the 45-day window above steps aside for ${season}.
+       Type a date into it to ask about ${season} inside a stretch of years.`
+    : `${season}, within the dates above. Clear them to read ${season} in any year.`;
+}
+
 function filtersHtml(){
   return `
   <div class="eyebrow"><span>Filters</span><button class="linkish" id="reset">Reset all</button></div>
@@ -817,6 +928,12 @@ function filtersHtml(){
       <input class="input" id="d1Input" type="date" value="${esc(state.d1)}">
       <input class="input" id="d2Input" type="date" value="${esc(state.d2)}">
     </div>
+    <!-- Months of the year, under the window they cut across rather than in a field of their
+         own: the two are one question about time, and read together or not at all. -->
+    <span class="field-label months-label">Months of the year</span>
+    <div class="chips months" id="monthRow">${MONTH_NAMES.map((l, i) =>
+      `<button type="button" data-v="${i+1}" aria-pressed="${state.months.includes(i+1)}">${l}</button>`).join("")}</div>
+    <p class="field-hint" id="monthHint" ${state.months.length ? "" : "hidden"}>${monthHint()}</p>
   </div>
 
   <div class="field">
@@ -864,6 +981,11 @@ function openFilters(){
 // the address — so the reader who dropped it lands on their own patch of ground instead of
 // being asked for a location that is sitting on the map behind this sheet. Naming a place
 // over there replaces it; see wirePlaceFinder in species.js.
+//
+// The months ride along for exactly that reason, and only that one: the tier tab is about a
+// person's tags and reads no season, but the place tab is, again, one tap away, and a reader
+// who set August on the map has every reason to expect August on the other side. Unread on
+// the tab this opens, in force the moment they cross to the other.
 
 function tierReportUrl(user){
   const p = new URLSearchParams({ u: user });
@@ -872,6 +994,7 @@ function tierReportUrl(user){
     if(state.tname) p.set("tname", state.tname);
   }
   if(state.iconic.length) p.set("iconic", state.iconic.join(","));
+  if(state.months.length) p.set("m", state.months.join(","));
   const pin = pinScope();
   if(pin){
     p.set("lat", pin.lat.toFixed(6));
@@ -1039,7 +1162,7 @@ function wireFilters(){
   $("doneBtn").addEventListener("click", closeSheet);
 
   $("reset").addEventListener("click", () => {
-    Object.assign(state, { taxon:null, tname:"", iconic:[], quality:defaultQuality(), d1:defaultD1(), d2:"", unobs:"", precise:"precise", dmode:"unobserved", tierExclude:null, ssp:"" });
+    Object.assign(state, { taxon:null, tname:"", iconic:[], quality:defaultQuality(), d1:defaultD1(), d1auto:true, d2:"", months:[], unobs:"", precise:"precise", dmode:"unobserved", tierExclude:null, ssp:"" });
     commit();
     openFilters();
   });
@@ -1131,6 +1254,24 @@ function wireFilters(){
     openFilters();
   });
 
+  // Months toggle like the quick groups — several at once, and pressing a lit one turns it
+  // off — but the row is repainted in place rather than by re-opening the sheet. Twelve
+  // toggles are meant to be worked in a handful of taps, and openFilters() scrolls the sheet
+  // back to the top, which would throw the reader off the row after every one of them.
+  $("monthRow").addEventListener("click", e => {
+    const b = e.target.closest("button[data-v]");
+    if(!b) return;
+    const v = +b.dataset.v;
+    state.months = state.months.includes(v)
+      ? state.months.filter(x => x !== v)
+      : [...state.months, v].sort((a, x) => a - x);
+    b.setAttribute("aria-pressed", state.months.includes(v));
+    const hint = $("monthHint");
+    hint.innerHTML = monthHint();
+    hint.hidden = !state.months.length;
+    commit();
+  });
+
   const seg = (id, key) => $(id).addEventListener("click", e => {
     const b = e.target.closest("button[data-v]");
     if(!b) return;
@@ -1191,7 +1332,16 @@ function wireFilters(){
     let t = null;
     el.addEventListener("input", () => {
       clearTimeout(t);
-      t = setTimeout(() => { state[key] = el.value.trim(); commit(); }, 420);
+      t = setTimeout(() => {
+        state[key] = el.value.trim();
+        // Touched, so no longer the app's own window — including cleared, which is a
+        // deliberate "no lower bound" and not a request for the default back. From here it
+        // rides in the address and stands against a month filter (see windowD1), so the hint
+        // under the months has to be redrawn with it.
+        if(key === "d1") state.d1auto = false;
+        $("monthHint").innerHTML = monthHint();
+        commit();
+      }, 420);
     });
   };
   debounced($("d1Input"), "d1");
@@ -1241,12 +1391,11 @@ function pinScope(){
   return { lat: ll.lat, lng: ll.lng, km: probeRing.getRadius() / 1000 };
 }
 
-const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 function fmtDate(iso){
   if(!iso) return "No date";
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   if(!m) return iso;
-  return `${+m[3]} ${MONTHS[+m[2]-1]} ${m[1]}`;
+  return `${+m[3]} ${MONTH_NAMES[+m[2]-1].toUpperCase()} ${m[1]}`;
 }
 // time_observed_at carries the clock time in the observer's own UTC offset, so this reads
 // out the hour and minute as written rather than converting to the viewer's timezone.
@@ -1265,7 +1414,10 @@ function speciesUrl(latlng, km){
 }
 
 // The same circle on our own species page: the pin and its radius are the area, and the
-// panel's username rides along so the list can tick off what it already holds.
+// panel's username rides along so the list can tick off what it already holds. So does the
+// season, which that page reads on this very tab — the dates do not, the list over there
+// being about what has been recorded in a place ever, which is a premise a month slices
+// without shortening. See the place-scope block in species.js.
 function hereUrl(latlng, km){
   const p = new URLSearchParams({
     tab: "place",
@@ -1279,6 +1431,7 @@ function hereUrl(latlng, km){
     if(state.tname) p.set("tname", state.tname);
   }
   if(state.iconic.length) p.set("iconic", state.iconic.join(","));
+  if(state.months.length) p.set("m", state.months.join(","));
   const hash = location.hash.replace(/^#/, "");
   if(hash) p.set("back", hash);
   return "species.html?" + p.toString();

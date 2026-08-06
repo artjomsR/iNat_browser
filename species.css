@@ -130,6 +130,23 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
 .onlySub:hover{color:var(--text)}
 .onlySub input{width:13px;height:13px;margin:0;cursor:pointer;accent-color:var(--mark)}
 .onlySub input:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+/* the season, on its own line under the subspecies checkbox — the page's two asking controls
+   sitting together above the list they rebuild, and both wearing the sortbar's micro-caps so
+   the three lines read as one block of controls rather than as three unrelated rows. Twelve
+   months wrap rather than scroll: a reader reaching for November should not have to find it. */
+.monthbar{display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin:0 0 12px;
+  font-size:9.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--mute)}
+.monthbar .mb-label{margin-right:4px}
+.monthbar button{padding:5px 9px;cursor:pointer;font:inherit;letter-spacing:.08em;
+  color:var(--mute);background:var(--raise);border:1px solid var(--rule);border-radius:5px}
+.monthbar button:hover{color:var(--text);border-color:var(--mute)}
+.monthbar button[aria-pressed="true"]{color:var(--ink);background:var(--mark);border-color:var(--mark)}
+.monthbar button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+/* the way back to the whole year — a word rather than a thirteenth month, and held off the
+   twelve so it doesn't read as one of them */
+.monthbar .mbClear{margin-left:7px;background:none;border-color:transparent;letter-spacing:.12em}
+.monthbar .mbClear:hover{color:var(--mark);border-color:var(--rule)}
+.monthbar .mbClear[hidden]{display:none}
 @media (max-width:520px){
   .sortbar{flex-wrap:wrap} .sortbar .thresh,.sortbar .layout{margin-left:0}
 }

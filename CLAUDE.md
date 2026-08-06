@@ -8,6 +8,19 @@ directly (or via `.claude/launch.json`'s static server) to run it.
 
 - **index.html / index.css / index.js** — the map view. Leaflet map of iNaturalist
   observations, filter sheet, location-accuracy legend. Entry point for the app.
+  - `Months of the year` (`m=6,7,8`) sits under `Observed between` because the two are one
+    question asked two ways: the window is a stretch of time, the months are a season read
+    across every year. Asked together they intersect, and the intersection of March and a
+    45-day window is nothing — so the *default* window stands aside whenever months are
+    chosen, while a date that was actually asked for still stands (`windowD1`). Telling the
+    two apart is what `state.d1auto` is for, and it is why an untouched `d1` no longer rides
+    in the hash: the address carries a date only when a date was meant, so a link shared
+    without touching the fields opens on the reader's own last 45 days. Both filters are named
+    in the specimen label, since where both are in force the map is showing their
+    intersection and an empty one has to be readable as such. The label reads a season rather
+    than a list — `Aug`, `Jun–Aug`, or `3 months` with the months on the tooltip — and a run
+    may wrap the year, `Nov–Feb` being `11,12,1,2`. Months ride along to the species page on
+    both links out, as the pin does.
 - **species.html / species.css / species.js** — the species report, reached from the map and
   returning to it by the "Back to Map" link. Two tabs over the same rows: `tier` (one user's
   species banded by tier tag) and `place` (every species in an area, ticked off against a
@@ -28,6 +41,18 @@ directly (or via `.claude/launch.json`'s static server) to run it.
   - `View: List / Grid` (`layout=grid`) hangs the same rows as tiles. It is one class on
     `#main`, not a second rendering, so sort, threshold, family bands and the hide-cascade
     keep working on the same `<li>`s — don't grow a separate grid renderer.
+  - `Months of the year` (`m=6,7,8`, the map's key and the map's spelling) is the place tab's
+    second asking control, and sits with `Only subspecies` rather than in the sortbar because
+    it refetches. It slices the calendar without shortening the years, which is the only
+    reason it is allowed on a tab whose premise is "ever" — see the "deliberately unfiltered
+    by date" note under **Conventions**. It reaches `areaScope` and nothing else: not
+    `userScope`, so a tick and a tier badge still say what the reader holds on a species
+    rather than what they happened to record that month; not the tier tab, whose bands are
+    about tags on photographs and have no season. On the tier tab the key rides along unread,
+    like a pin, so crossing to the place tab keeps it. The heading, the page title and the
+    loading state all name it — a list narrowed to a season must never look like the whole
+    year's. Taps are debounced and only the newest run may paint (`placeRun`), since picking
+    a summer is three taps and each is an area query.
   - Bird rows carry an `eBird` link out to that species on eBird. The code eBird needs comes
     from Wikidata (see External dependencies) behind the finished list, so the link appears
     when it lands and is simply absent where no code is found — never broken.
@@ -121,3 +146,10 @@ step or split further unless a file becomes unwieldy again.
   instead. In a browser tab none of it runs and the address is still the only state there is.
 - iNaturalist's `verifiable=true` (research + needs-ID, casual excluded) is the default
   filter on every query; don't drop it without a reason.
+- The species page's place tab is deliberately unfiltered by date: the question is what has
+  been recorded here, ever, and the map's 45-day window would quietly answer a much smaller
+  one. That still stands, with one qualifier — a *month* is not a date range. `m=6,7,8`
+  narrows every year at once and leaves the "ever" intact, which is why the place tab takes it
+  and would still refuse `d1`/`d2`. The distinction is the whole of the reasoning: a filter
+  that shortens the years is out, a filter that slices them is in, and anything new here has
+  to be argued on that line.

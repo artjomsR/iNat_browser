@@ -34,6 +34,16 @@
    folds a subspecies into its species here whatever is asked. So "1" reads as off rather than
    as a second meaning for the same word on a neighbouring page.
 
+   `m=6,7,8` is months of the year, 1–12, and the map's key again for the same reason. It cuts
+   the calendar rather than the years: "what has been recorded here in summer, ever" is a
+   question the tab's own premise allows, where a date range would not. Only the place tab
+   reads it — the tier tab is about the tags on a person's photographs, and those do not
+   belong to a season — but it rides along there unread, like a pin, so that crossing to the
+   place tab keeps the season the map was set to. Empty means every month and writes nothing;
+   junk is dropped on the way in and the order is normalised, so one selection is one address.
+   Like the subspecies split it is a different question rather than a different reading of the
+   same rows, so it refetches.
+
    `sort=tier` is the place tab's own order: the rows banded by what the named user already
    holds on them — never recorded first, then audio, the plain tick, C, B, S — and heaviest
    first inside each band. It needs a standing on every row to read, which only the place tab
@@ -58,6 +68,9 @@ const ICONIC = [
   ["Arachnida","Arachnids"],["Mammalia","Mammals"],["Reptilia","Reptiles"],
   ["Amphibia","Amphibians"],["Actinopterygii","Fish"],["Mollusca","Molluscs"]
 ];
+// The twelve, for the month row and for the heading's reading of it. A copy of the map's, as
+// ICONIC and esc are copies — one script file per page is the arrangement here.
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 /* ---------------- asking iNaturalist ----------------
 
@@ -184,6 +197,19 @@ const DEFAULT_MIN = tab === "place" ? 20 : 0;
 // the arrow does not touch.
 const REVERSIBLE = ["count", "name", "tier"];
 
+// Months of the year, 1–12 — the map's own reader, and validated here the same way: anything
+// that is not a month is dropped rather than sent, and what is left is sorted and
+// de-duplicated so "8,3,3" and "3,8" are one address.
+function readMonths(raw){
+  const seen = new Set();
+  String(raw == null ? "" : raw).split(",").forEach(v => {
+    if(!/^\d{1,2}$/.test(v)) return;
+    const n = +v;
+    if(n >= 1 && n <= 12) seen.add(n);
+  });
+  return [...seen].sort((a, b) => a - b);
+}
+
 const view = {
   tab,
   user:   (q.get("u") || "").trim(),
@@ -198,6 +224,9 @@ const view = {
   // Only what has been taken below species rank — a narrower question, not a narrower
   // reading of the same rows. Boolean here, "only" on the wire, matching the map. See sspOnly.
   ssp:    q.get("ssp") === "only",
+  // The season, empty for every month. Read on both tabs so it survives the crossing, applied
+  // only by the place tab's own scope — see areaScope.
+  months: readMonths(q.get("m")),
   // `min=0` in the address is an explicit "show me everything" and survives a reload.
   min:    q.has("min") ? Math.max(0, Math.floor(+q.get("min") || 0)) : DEFAULT_MIN,
   back:   q.get("back") || "",
@@ -273,11 +302,14 @@ function taxonObsUrl(taxonId, user){
        + "&user_id=" + encodeURIComponent(user) + "&verifiable=any";
 }
 
-// One species inside the area, on iNat — where a place-tab row points.
+// One species inside the area, on iNat — where a place-tab row points. The season goes with
+// it, as it does on every link out of this tab: the row is showing a month's count, and a
+// link that opened the year's would make a liar of the number beside it.
 function taxonAreaUrl(taxonId){
   const p = new URLSearchParams({ taxon_id: taxonId, verifiable: "any" });
   if(view.place) p.set("place_id", view.place);
   else if(hasPin){ p.set("lat", view.lat); p.set("lng", view.lng); p.set("radius", view.radius); }
+  if(view.months.length) p.set("month", view.months.join(","));
   return "https://www.inaturalist.org/observations?" + p.toString();
 }
 
@@ -288,6 +320,7 @@ function areaSpeciesUrl(){
   else if(hasPin){ p.set("lat", view.lat); p.set("lng", view.lng); p.set("radius", view.radius); }
   if(view.taxon) p.set("taxon_id", view.taxon);
   if(view.iconic.length) p.set("iconic_taxa", view.iconic.join(","));
+  if(view.months.length) p.set("month", view.months.join(","));
   return "https://www.inaturalist.org/observations?" + p.toString();
 }
 
@@ -313,6 +346,14 @@ function scopeLabel(){
 
 // Scope a species_counts query to one user plus the taxon / quick-group filters the map
 // was holding when the link was made.
+//
+// Pointedly not scoped by month, wherever it is asked. Everything built on this is a question
+// about a person rather than about a time: which species they hold, which tier tag is on each,
+// which they have only ever heard. A season has no business in any of them. Narrowed to
+// August, a bird tagged S in July would come back untagged and a bird photographed in June
+// would lose its tick — the badge would stop meaning "what I have on this species" and start
+// meaning "what I happened to record in August", which is not what any of it claims. The
+// place tab's own list is where the season applies; see areaScope.
 function userScope(user){
   const o = { user_id: user };
   if(view.taxon) o.taxon_id = view.taxon;
@@ -360,7 +401,14 @@ async function speciesIdsWithTag(user, tag){
    The place tab reads a patch of ground, either an iNat place or the map's own pin and
    radius. Deliberately unfiltered by date or quality grade: the question is what has been
    recorded here, ever, and the map's default 45 day window would quietly answer a
-   much smaller one. Taxon and quick-group scope still apply — those are the reader's. */
+   much smaller one. Taxon and quick-group scope still apply — those are the reader's.
+
+   The month row is the one exception, and it does not overturn any of that. A date range
+   shortens the years; a month slices every one of them at once and leaves the "ever" intact,
+   so "what has been recorded here in August, ever" is still the question this tab is for —
+   the question anyone actually asks before a trip. It applies to the area's own list and to
+   nothing else on the page: not to the ticks, not to the tier badges, not to the tier tab.
+   See userScope for why. */
 
 function areaScope(){
   const o = {};
@@ -368,6 +416,7 @@ function areaScope(){
   else if(hasPin){ o.lat = view.lat; o.lng = view.lng; o.radius = view.radius; }
   if(view.taxon) o.taxon_id = view.taxon;
   if(view.iconic.length) o.iconic_taxa = view.iconic.join(",");
+  if(view.months.length) o.month = view.months.join(",");
   return o;
 }
 
@@ -383,6 +432,45 @@ function areaLabel(){
   if(view.place) return view.pname || ("place " + view.place);
   if(hasPin) return `${fmtRadius(+view.radius)} around ${(+view.lat).toFixed(3)}, ${(+view.lng).toFixed(3)}`;
   return "nowhere yet";
+}
+
+// Where a selection of months begins, when it is one unbroken run — the month whose
+// predecessor is not also chosen. Exactly one such month means a run; two or more mean a
+// scatter. December is January's predecessor, so a run reads across the year end and Nov–Feb
+// (11,12,1,2) is one season rather than two. The map's own reading, kept word for word.
+function monthRunStart(months){
+  const starts = months.filter(m => !months.includes(m === 1 ? 12 : m - 1));
+  return starts.length === 1 ? starts[0] : null;
+}
+
+// The season as a heading says it: one month by name, an unbroken run as a span, anything
+// else as a count. Kept short because it hangs off the area's own name, which is already the
+// longer half — the months themselves ride on the tooltip wherever this is printed.
+function monthsLabel(months){
+  const name = m => MONTH_NAMES[m - 1];
+  if(!months.length) return "";
+  if(months.length === 12) return "every month";
+  if(months.length === 1) return name(months[0]);
+  const start = monthRunStart(months);
+  if(start == null) return `${months.length} months`;
+  let end = start;
+  while(months.includes(end === 12 ? 1 : end + 1)) end = end === 12 ? 1 : end + 1;
+  return `${name(start)}–${name(end)}`;
+}
+
+// The place tab's premise is "ever", so a list narrowed to a season has to say so wherever it
+// claims to be showing an area — the heading, the page title, the state that says what is
+// being read. Silence here would leave a list that is quietly a fraction of what it looks.
+function seasonLabel(){
+  return view.months.length ? "in " + monthsLabel(view.months) : "";
+}
+
+// The page's own name, rebuilt rather than written once: the month row changes what the list
+// is without reloading the page, and a tab still bearing the whole year's name would be the
+// last thing on screen still claiming it. Also what a bookmark of an August list is called.
+function placeTitle(){
+  if(!hasArea) return "Species here";
+  return "Species — " + areaLabel() + (view.months.length ? " " + seasonLabel() : "");
 }
 
 // Every species recorded in the area, heaviest first — the same count iNat's own species
@@ -1084,6 +1172,26 @@ const SSP_HINT = "Split every species into the subspecies recorded in this scope
   + "counted, linked, ticked and tiered as itself — a race you have not recorded stays unticked "
   + "under one you have.";
 
+const MONTH_HINT = "Only records made in these months, in any year — the years are never "
+  + "shortened, so this is still what the area holds ever, read one season at a time. Your own "
+  + "ticks and tier badges are not filtered: they say what you have on a species, not when.";
+
+// The season control, and the place tab's second asking control. Deliberately not in the
+// sortbar: that bar holds only what re-reads rows already on the page, and a month is a
+// different question to iNaturalist. So it sits with the subspecies checkbox above the list
+// the two of them rebuild. Empty is every month and lights nothing, which is why the clear
+// only appears once there is something to clear — the same rule the threshold's × follows.
+function monthRowHtml(){
+  const on = m => view.months.includes(m);
+  return `<div class="monthbar" role="group" aria-label="Months of the year" title="${esc(MONTH_HINT)}">
+    <span class="mb-label">Months</span>
+    ${MONTH_NAMES.map((l, i) =>
+      `<button type="button" data-month="${i+1}" aria-pressed="${on(i+1)}">${l}</button>`).join("")}
+    <button type="button" class="mbClear"${view.months.length ? "" : " hidden"}
+            title="Read the whole year again">Any month</button>
+  </div>`;
+}
+
 // What each reversible order is actually doing, both ways round: the arrow shows that a
 // button flips, this says what the flip did. Plain text with real dashes rather than
 // entities, since wireSort assigns it straight to `title` on a flip as well as printing it
@@ -1168,12 +1276,13 @@ function sortRows(rows, sortBy, standing){
     : rows;
 }
 
-// An empty list is painted without a sortbar, and with it goes the checkbox that emptied it —
-// so where the subspecies filter is what came back with nothing, the way back out has to be
-// in the state itself. A link, not an instruction: the filter is in the address, so taking it
-// off is an address too.
-function sspWayOut(lede){
-  return `${esc(lede)} <a href="${esc(selfUrl({ ssp: null }))}">Show every species.</a>`;
+// An empty list is painted without a sortbar, and with it go the two controls that could have
+// emptied it — the subspecies split and the month row, the page's only asking controls. So
+// where one of them is what came back with nothing, the way back out has to be in the state
+// itself. A link, not an instruction: the filter is in the address, so taking it off is an
+// address too. Each names the one filter it is offering to drop rather than resetting the lot.
+function wayOut(lede, over, call){
+  return `${esc(lede)} <a href="${esc(selfUrl(over))}">${esc(call)}</a>`;
 }
 
 // The badges, spelled out — the glyphs are only obvious once, and a phone has no hover to
@@ -1193,11 +1302,19 @@ function legendHtml(){
 // they have it.
 function placeListHtml(rows, standing, sortBy){
   if(!rows.length){
+    // Whichever of the two asking controls is in force gets named first — the split is the
+    // narrower question of the two, so where both are on it is the likelier culprit.
+    const hint = view.ssp
+      ? wayOut("Nothing inside this area has been identified below species rank.",
+               { ssp: null }, "Show every species.")
+      : view.months.length
+        ? wayOut(`Nothing inside this area has been recorded ${seasonLabel()}.`,
+                 { m: null }, "Show every month.")
+        : `No species inside this area under the current scope.
+           Try a wider place, or drop the quick-group filter.`;
     return `<div class="state">
       <div class="state-lede">Nothing recorded here.</div>
-      <div class="state-hint">${view.ssp ? sspWayOut("Nothing inside this area has been identified below species rank.")
-        : `No species inside this area under the current scope.
-           Try a wider place, or drop the quick-group filter.`}</div>
+      <div class="state-hint">${hint}</div>
     </div>`;
   }
   const tally = standing
@@ -1216,13 +1333,17 @@ function placeListHtml(rows, standing, sortBy){
   const badge = standing
     ? `${sep}<span class="who">@${esc(view.user)}</span>${sep}<span class="n have" title="Already recorded, of the species showing">${held} / ${rows.length} observed</span>`
     : `${sep}<span class="n">${rows.length}</span>`;
+  // The season rides inside the link, not beside it: the link opens the same slice on iNat, so
+  // the two are one claim about one list rather than a heading with a filter noted after it.
+  const season = view.months.length ? " &middot; " + esc(seasonLabel()) : "";
   return `<section class="tier" id="here">
     <h2><a href="${esc(areaSpeciesUrl())}" target="_blank" rel="noopener"
-          title="The same area on iNaturalist">${esc(areaLabel())}</a>${badge}</h2>
+          title="The same area on iNaturalist">${esc(areaLabel())}${season}</a>${badge}</h2>
     ${tally}
     ${sortbarHtml(sortBy)}
     <label class="onlySub" title="${esc(SSP_HINT)}">
       <input type="checkbox"${view.ssp ? " checked" : ""}>Show only subspecies?</label>
+    ${monthRowHtml()}
     <ul>${sortRows(rows, sortBy, standing).map((x, n) =>
       rowHtml(x, n, view.user, standing ? standing(x) : "")).join("")}</ul>
   </section>`;
@@ -1232,7 +1353,9 @@ function listHtml(buckets, user, sortBy){
   if(!buckets.some(rows => rows.length)){
     return `<div class="state">
       <div class="state-lede">Nothing to show.</div>
-      <div class="state-hint">${view.ssp ? sspWayOut("Nothing this user has recorded in this scope is identified below species rank.")
+      <div class="state-hint">${view.ssp
+        ? wayOut("Nothing this user has recorded in this scope is identified below species rank.",
+                 { ssp: null }, "Show every species.")
         : "This user has no species recorded in this scope."}</div>
     </div>`;
   }
@@ -1507,6 +1630,43 @@ function wireOnlySub(){
   }));
 }
 
+// The other control that asks iNaturalist something new — and the only one worked in several
+// taps, a summer being three of them. Firing on the tap would spend an area query on each, and
+// throw away the first two before they landed, so the row lights and the address is rewritten
+// at once (both free) and the refetch waits for the reader to stop. Half a second is long
+// enough to pick a run of months and short enough not to read as a control that ignored you.
+//
+// The list is repainted from the tab's own query, so the row goes with it and comes back
+// showing the same months — nothing here has to survive the paint but the timer.
+function wireMonths(){
+  const rows = [...document.querySelectorAll(".monthbar")];
+  if(!rows.length) return;
+  let timer = null;
+  const apply = () => {
+    rows.forEach(row => {
+      row.querySelectorAll("button[data-month]").forEach(b =>
+        b.setAttribute("aria-pressed", view.months.includes(+b.dataset.month)));
+      row.querySelector(".mbClear").hidden = !view.months.length;
+    });
+    // Every month is the default, so it leaves no key behind — same as sort's "count".
+    writeState({ m: view.months.join(",") });
+    clearTimeout(timer);
+    timer = setTimeout(runPlace, 500);
+  };
+  rows.forEach(row => row.addEventListener("click", e => {
+    const b = e.target.closest("button[data-month]");
+    if(b){
+      const m = +b.dataset.month;
+      view.months = view.months.includes(m)
+        ? view.months.filter(x => x !== m)
+        : [...view.months, m].sort((a, x) => a - x);
+      apply();
+      return;
+    }
+    if(e.target.closest(".mbClear") && view.months.length){ view.months = []; apply(); }
+  }));
+}
+
 // List or grid. Both are the same rows in the same order — the switch is one class on #main
 // and nothing else — so this touches neither the sort, the threshold, the family bands nor
 // the hide-cascade, and never refetches. Scroll position is left alone: the page changes
@@ -1575,6 +1735,7 @@ function afterPaint(buckets){
   wireSort();
   wireLayout();
   wireOnlySub();
+  wireMonths();                 // place tab only — no month row is painted anywhere else
   applyHideFrom();              // tier tab's sections; a no-op if nothing is cut and place-tab-safe
   if(view.min || view.hide != null) relist();   // a threshold or cutoff in the address applies to first paint
   familiesReady = loadFamilies(buckets).catch(() => {});
@@ -1601,10 +1762,19 @@ async function runTier(){
   }
 }
 
+// The month row can be worked again while a run is still out — a place query takes seconds,
+// and a reader picking a season will not always wait for one to land before adding the next
+// month. So each run carries a number and only the newest may paint; an overtaken one drops
+// its answer on the floor rather than putting a stale list up after the current one.
+let placeRun = 0;
+
 async function runPlace(){
+  const mine = ++placeRun;
+  document.title = placeTitle();
   paint(`<div class="state">
     <div class="state-lede">Reading the area&hellip;</div>
     <div class="state-hint">Every species recorded in ${esc(areaLabel())}${
+      view.months.length ? " " + esc(seasonLabel()) : ""}${
       view.user ? `, then checking them against @${esc(view.user)}'s own species` : ""}.${
       view.ssp ? " Splitting each into its subspecies takes a few more passes." : ""}</div>
   </div>`, "", true);
@@ -1630,12 +1800,16 @@ async function runPlace(){
     }else if(unseen){
       standing = x => unseen.has(x.taxon.id) ? "" : (bestOf ? bestOf(x.taxon.id) : "seen");
     }
+    if(mine !== placeRun) return;              // a later selection is already being read
     // No tally in the header: this tab is one list, and its count belongs on it, where it can
     // follow what the threshold and the cascade leave showing. The tier tab keeps its own —
     // five sections have no single heading to carry a total.
     paint(placeListHtml(rows, standing, view.sort), "");
     afterPaint([rows]);
   }catch(e){
+    // An overtaken run's failure is not this list's failure — the newer one is still out, and
+    // its own loading state is what should be on screen.
+    if(mine !== placeRun) return;
     failed("iNaturalist may be rate-limiting, or that place may be too large to tally.");
   }
 }
@@ -1765,8 +1939,9 @@ const NOTES = {
   place: `Every species recorded inside this area, with the ones the named user has already
      recorded &mdash; anywhere, not just here &mdash; ticked off. Counts are iNaturalist's own
      observation totals for the area, so the default order is the same one their species view
-     leads with. Casual records are not counted; dates are not filtered, so this answers what
-     has been found in this place, ever.`
+     leads with. Casual records are not counted; the years are never shortened, so this answers
+     what has been found in this place, ever &mdash; and the month row cuts that by season
+     without cutting it short.`
 };
 
 (function init(){
@@ -1852,7 +2027,7 @@ const NOTES = {
   };
 
   if(view.tab === "place"){
-    document.title = hasArea ? "Species — " + areaLabel() : "Species here";
+    document.title = placeTitle();
     document.getElementById("placebar").hidden = false;
     wirePlaceFinder();
 

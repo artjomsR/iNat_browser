@@ -335,6 +335,16 @@ label.check{
 .chips button[aria-pressed="true"]{color:var(--ink);background:var(--mark);border-color:var(--mark)}
 .chips button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
 
+/* the months — the same chips, laid out as a calendar rather than a strip. Twelve of them
+   would scroll like the quick groups do, and a reader reaching for November should not have
+   to swipe a row to find it; six columns puts the year in two readable halves and every
+   month within one tap. */
+.chips.months{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;overflow:visible;padding-bottom:0}
+.chips.months button{padding:8px 2px;text-align:center;letter-spacing:.06em}
+/* the second caption inside one field: the months belong to the window above them, so they
+   sit under it rather than in a field of their own — this is the air that pairing costs */
+.months-label{margin-top:13px}
+
 /* taxon autocomplete */
 .ac-wrap{position:relative}
 .ac{
