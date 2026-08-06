@@ -183,6 +183,10 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
    headings keep their badge muted against a tag name, a different pairing that stays as-is. */
 #here h2 .n,#here h2 .who{color:var(--mark)}
 #here h2 .sep{opacity:.45}
+/* and it sits at the foot of the toolbar now, directly above the rows it counts — so it wears
+   the rule the first row would otherwise have gone without, closing the controls off and
+   giving the list a top edge to match the one every row carries below it */
+#here h2{margin:15px 0 0;padding-bottom:10px;border-bottom:1px solid var(--rule)}
 .tier .blurb{margin:5px 0 2px;font-family:var(--lit);font-size:14px;color:var(--mute)}
 .tier .clear{margin:10px 0 0;padding:14px 2px;font-family:var(--lit);font-size:15px;
   color:var(--rule);border-top:1px solid var(--rule)}

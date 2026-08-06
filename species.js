@@ -1276,11 +1276,12 @@ function sortRows(rows, sortBy, standing){
     : rows;
 }
 
-// An empty list is painted without a sortbar, and with it go the two controls that could have
-// emptied it — the subspecies split and the month row, the page's only asking controls. So
-// where one of them is what came back with nothing, the way back out has to be in the state
-// itself. A link, not an instruction: the filter is in the address, so taking it off is an
-// address too. Each names the one filter it is offering to drop rather than resetting the lot.
+// The tier tab paints an empty list bare — no sortbar, and with it none of the controls that
+// could have emptied it. So where one of them is what came back with nothing, the way back out
+// has to be in the state itself. A link, not an instruction: the filter is in the address, so
+// taking it off is an address too. Each names the one filter it is offering to drop rather
+// than resetting the lot. The place tab wears its toolbar under every state now (see
+// placeShellHtml), so there this reads as a shortcut rather than as the only way back.
 function wayOut(lede, over, call){
   return `${esc(lede)} <a href="${esc(selfUrl(over))}">${esc(call)}</a>`;
 }
@@ -1295,6 +1296,56 @@ function legendHtml(){
     `<span class="legend-item"><span class="tick tick-${m}" data-rank="${i}" role="button" tabindex="0"
         title="Hide ${esc(BADGE[m][1])} and above">${BADGE[m][0]}</span>${
       esc(BADGE[m][1].replace("best tag: ", ""))}</span>`).join("")}</p>`;
+}
+
+// The count line: what the area holds, how much of it is already the reader's, and the way
+// through to the same area on iNaturalist. It sits at the foot of the toolbar, directly above
+// the rows it counts, because that is what it counts — not the area's total but what is
+// actually listed, which has to move as the threshold and the cascade take rows out. See
+// retally, which rewrites it and finds it by `h2 .n`.
+//
+// With a username every row carries a standing to read, so it reads as a pair: how many of the
+// species showing are already recorded. The username reads beside the count it explains, since
+// a standing is only ever there when view.user is (see runPlace) — which is also why this asks
+// `view.user` rather than waiting to be handed the lookup. A `|` ahead of each marks it as its
+// own item on the line rather than a continuation of the one before, so it still reads as
+// three things even in one colour.
+//
+// `counts` is missing while a fetch is out, when the numbers are simply not known yet: the
+// line keeps its shape and shows an em dash for each — the same mark the page header uses for
+// a username it has not been given — so nothing shifts when the real numbers land.
+function placeTallyHtml(counts){
+  const sep = `<span class="sep">|</span>`;
+  const held = counts ? counts.held : "&mdash;";
+  const total = counts ? counts.total : "&mdash;";
+  const badge = view.user
+    ? `<span class="who">@${esc(view.user)}</span>${sep}<span class="n have" title="Already recorded, of the species showing">${held} / ${total} observed</span>`
+    : `<span class="n">${total}</span>`;
+  return `<h2><a href="${esc(areaSpeciesUrl())}" target="_blank" rel="noopener"
+        title="The same area on iNaturalist"></a>${badge}</h2>`;
+}
+
+// The place tab's controls, apart from the rows they act on: the legend, sort, the subspecies
+// split, months and the count line. Every one of them reads off `view`, never off a fetch's
+// rows, so the whole block can be drawn — and answer clicks — before that fetch has landed.
+function placeToolbarHtml(sortBy, counts){
+  const lede = view.user
+    ? `<p class="blurb">Click the tiers below to hide them.</p>${legendHtml()}`
+    : `<p class="blurb">Add a username to tick off the ones you have already recorded.</p>`;
+  return `${lede}
+    ${sortbarHtml(sortBy)}
+    ${monthRowHtml()}
+    <label class="onlySub" title="${esc(SSP_HINT)}">
+    <input type="checkbox"${view.ssp ? " checked" : ""}>Show only subspecies?</label>
+    ${placeTallyHtml(counts)}`;
+}
+
+// Every state this tab paints wears the same shell: the toolbar, then whatever goes under it —
+// the list, a loading note, an empty one, a failure. So a month tap or the subspecies checkbox
+// never costs the reader the control they just used, whether the answer is still out, comes
+// back empty, or doesn't come back at all.
+function placeShellHtml(body, counts){
+  return `<section class="tier" id="here">${placeToolbarHtml(view.sort, counts)}${body}</section>`;
 }
 
 // The place tab: one flat list, every species recorded in the area, badged where the
@@ -1312,38 +1363,15 @@ function placeListHtml(rows, standing, sortBy){
                  { m: null }, "Show every month.")
         : `No species inside this area under the current scope.
            Try a wider place, or drop the quick-group filter.`;
-    return `<div class="state">
+    return placeShellHtml(`<div class="state">
       <div class="state-lede">Nothing recorded here.</div>
       <div class="state-hint">${hint}</div>
-    </div>`;
+    </div>`, { held: 0, total: 0 });
   }
-  const tally = standing
-    ? `<p class="blurb">Click the tiers below to hide them.</p>${legendHtml()}`
-    : `<p class="blurb">Add a username to tick off the ones you have already recorded.</p>`;
-  // The count sits on the list rather than up in the header, because it is a count of what is
-  // actually listed and has to move as the threshold and the cascade take rows out — see
-  // retally, which rewrites it. With a username every row carries a standing to read, so it
-  // reads as a pair: how many of the species showing are already recorded.
   const held = standing ? rows.filter(x => standing(x)).length : 0;
-  // The username reads here now too, beside the count it explains, rather than alone atop
-  // the page — standing is only ever set once view.user is (see runPlace), so the two always
-  // travel together. A `|` ahead of each marks it as its own item on the line rather than a
-  // continuation of the one before, so it still reads as three things even in one colour.
-  const sep = `<span class="sep">|</span>`;
-  const badge = standing
-    ? `<span class="who">@${esc(view.user)}</span>${sep}<span class="n have" title="Already recorded, of the species showing">${held} / ${rows.length} observed</span>`
-    : `<span class="n">${rows.length}</span>`;
-  return `<section class="tier" id="here">
-    <h2><a href="${esc(areaSpeciesUrl())}" target="_blank" rel="noopener"
-          title="The same area on iNaturalist"></a>${badge}</h2>
-    ${tally}
-    ${sortbarHtml(sortBy)}
-    <label class="onlySub" title="${esc(SSP_HINT)}">
-      <input type="checkbox"${view.ssp ? " checked" : ""}>Show only subspecies?</label>
-    ${monthRowHtml()}
-    <ul>${sortRows(rows, sortBy, standing).map((x, n) =>
-      rowHtml(x, n, view.user, standing ? standing(x) : "")).join("")}</ul>
-  </section>`;
+  return placeShellHtml(`<ul>${sortRows(rows, sortBy, standing).map((x, n) =>
+    rowHtml(x, n, view.user, standing ? standing(x) : "")).join("")}</ul>`,
+    { held, total: rows.length });
 }
 
 function listHtml(buckets, user, sortBy){
@@ -1679,6 +1707,26 @@ function wireLayout(){
   }));
 }
 
+// The four controls that mean something on `view` alone, with no rows required to answer a
+// click — sort, layout, the subspecies split and months. Bound after any paint that can grow
+// one of them into the page, including the place tab's own loading state (see runPlace),
+// since the buttons a reader just used are still live even while their fetch is out.
+function wireToolbar(){
+  wireSort();
+  wireLayout();
+  wireOnlySub();
+  wireMonths();                 // place tab only — no month row is painted anywhere else
+}
+
+// A shell painted with no rows under it still has to answer clicks, and its legend still has
+// to show whatever cutoff is already in force — the same two steps afterPaint takes once the
+// rows do land. The badges themselves need no binding: one delegated listener on the document
+// catches every one of them (see wireHideToggle), however many times they are repainted.
+function wirePlaceShell(){
+  wireToolbar();
+  applyHideFrom();
+}
+
 // Index rail: real fragment links now that the page has an address, so a tier can be
 // linked to directly. The highlight follows whichever heading last passed the top.
 function wireIndex(){
@@ -1718,21 +1766,21 @@ function paint(html, sub, busy){
   }
 }
 
-function failed(hint){
-  paint(`<div class="state">
+// `wrap` lets a tab keep whatever shell was already on screen around the message — the place
+// tab uses it to hold its toolbar in place through a failed refetch (see runPlace); the tier
+// tab has no such shell to offer, so it takes the default and paints the message bare.
+function failed(hint, wrap = html => html){
+  paint(wrap(`<div class="state">
     <div class="state-lede">The list didn't come back.</div>
     <div class="state-hint">${hint}</div>
-  </div>`, "failed");
+  </div>`), "failed");
 }
 
 // Family names and eBird codes both cost their own requests, so they are fetched behind the
 // finished list rather than in front of it. The headings and the links appear when they land,
 // and a failure on either side costs only itself — the list is already on screen.
 function afterPaint(buckets){
-  wireSort();
-  wireLayout();
-  wireOnlySub();
-  wireMonths();                 // place tab only — no month row is painted anywhere else
+  wireToolbar();
   applyHideFrom();              // tier tab's sections; a no-op if nothing is cut and place-tab-safe
   if(view.min || view.hide != null) relist();   // a threshold or cutoff in the address applies to first paint
   familiesReady = loadFamilies(buckets).catch(() => {});
@@ -1768,13 +1816,14 @@ let placeRun = 0;
 async function runPlace(){
   const mine = ++placeRun;
   document.title = placeTitle();
-  paint(`<div class="state">
+  paint(placeShellHtml(`<div class="state">
     <div class="state-lede">Reading the area&hellip;</div>
     <div class="state-hint">Every species recorded in ${esc(areaLabel())}${
       view.months.length ? " " + esc(seasonLabel()) : ""}${
       view.user ? `, then checking them against @${esc(view.user)}'s own species` : ""}.${
       view.ssp ? " Splitting each into its subspecies takes a few more passes." : ""}</div>
-  </div>`, "", true);
+  </div>`), "", true);
+  wirePlaceShell();
   try{
     // Whole species can be asked about all at once, none of the three depending on another:
     // `unseen` answers which of the area's species this user is missing, `bestOf` what they
@@ -1807,7 +1856,8 @@ async function runPlace(){
     // An overtaken run's failure is not this list's failure — the newer one is still out, and
     // its own loading state is what should be on screen.
     if(mine !== placeRun) return;
-    failed("iNaturalist may be rate-limiting, or that place may be too large to tally.");
+    failed("iNaturalist may be rate-limiting, or that place may be too large to tally.", placeShellHtml);
+    wirePlaceShell();
   }
 }
 
