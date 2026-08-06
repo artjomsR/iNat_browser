@@ -171,3 +171,42 @@ step or split further unless a file becomes unwieldy again.
   and would still refuse `d1`/`d2`. The distinction is the whole of the reasoning: a filter
   that shortens the years is out, a filter that slices them is in, and anything new here has
   to be argued on that line.
+
+## Tests
+
+`test.html` + `test.js` at the repo root, opened over the same static server as everything else
+(`python -m http.server 8731`, then `localhost:8731/test.html`). A green tally means every claim
+held. Hand-rolled assert harness, no runner, no dependency, no build step — a test that needed
+one would break the only constraint the project has.
+
+**Run it after every change to `species.js`, and again before calling that change done.** There
+is no CI and nothing else will catch a broken tie-break — a wrong sort order paints happily and
+looks almost right, which is the failure mode the whole file exists for. A reload is the whole
+ritual; there is nothing to install and no reason to skip it. If a claim fails, the fix is
+either the code or the claim — but say which, because a test edited to match new behaviour is a
+decision about what the page means, not a formality. It covers the pure logic in `species.js`
+and nothing else: DOM wiring, the request gate and anything that talks to iNaturalist want a
+live API rather than assertions, and are deliberately left out. It is a dev tool, not a fourth
+page — nothing links to it, it loads no fonts and no stylesheet, and it stays out of the
+three-page navigation.
+
+How it reaches the code without a module, and without touching production code: `test.html`
+reproduces `species.html`'s body skeleton so every `getElementById` in `species.js` finds its
+element, then loads `species.js` unmodified with an empty query string. That resolves to the
+tier tab with no user and short-circuits into the username prompt before a single request
+leaves, so the script settles harmlessly with all of its top-level functions in scope for
+`test.js`, loaded after it. The "asked nothing" half is asserted rather than assumed —
+`test.html` wraps `fetch` and `XMLHttpRequest` ahead of the boot and the first test reads the
+count back.
+
+What is covered, in the order it earns its place: `sspWaves`, whose invariant — no wave holding
+two subspecies of one parent — fails silently rather than loudly, two asked together coming back
+merged; `comparator` and `sortRows`, where reversing turns over only what the order is asking
+and never the tie-break inside it, so no reversed list is a plain mirror of its forward self;
+`idBatches`; `taxoKey`; then `standingRank`/`tierRank`, `fmtRadius`, `esc` and `isSpeciesRow`.
+`comparator` is exercised against real `<li>` elements carrying the attributes `rowHtml` writes,
+since it compares `dataset` — running it against the real thing in a real browser is the point
+of a harness that lives in one, so don't refactor it to take plain objects. Test names are
+claims, so a failure reads as the sentence that stopped being true, and where a comment in
+`species.js` states a behaviour the test encodes that sentence rather than whatever the code
+happens to do.
