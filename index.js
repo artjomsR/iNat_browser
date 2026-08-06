@@ -976,16 +976,14 @@ function openFilters(){
 // `back` is this map's whole hash, ferried along untouched so the report's Map link
 // returns to the filters, layer and viewport the reader left — the report never reads it.
 //
-// A pin still on the map goes too. This link opens the tier tab, which has no use for an
-// area, but the place tab is one tap away on the other side and reads the pin straight off
-// the address — so the reader who dropped it lands on their own patch of ground instead of
-// being asked for a location that is sitting on the map behind this sheet. Naming a place
-// over there replaces it; see wirePlaceFinder in species.js.
+// A pin still on the map goes too. This link opens the place tab — the default — which reads
+// the pin straight off the address, so the reader who dropped it lands on their own patch of
+// ground instead of being asked for a location. The tier tab is one tap away on the other
+// side; naming a place over there replaces the pin. See wirePlaceFinder in species.js.
 //
-// The months ride along for exactly that reason, and only that one: the tier tab is about a
-// person's tags and reads no season, but the place tab is, again, one tap away, and a reader
-// who set August on the map has every reason to expect August on the other side. Unread on
-// the tab this opens, in force the moment they cross to the other.
+// The months ride along for that reason: the place tab reads them straight away, and a reader
+// who set August on the map has every reason to expect August on the list it opens. Unread on
+// the tier tab, in force again the moment they cross back to it.
 
 function tierReportUrl(user){
   const p = new URLSearchParams({ u: user });

@@ -3,7 +3,7 @@
    The pure logic in `species.js`, asserted in a browser with no framework, no runner and no
    build step — the same constraint the three pages themselves keep. `test.html` reproduces
    `species.html`'s body skeleton and loads `species.js` unmodified with an empty query string,
-   which resolves to the tier tab with no user and short-circuits into the username prompt
+   which resolves to the place tab with no place and short-circuits into the place prompt
    before any request leaves. So by the time this file runs, every top-level function in
    `species.js` is in scope and callable, and nothing has been asked of iNaturalist. That claim
    is not taken on trust — the network watch installed ahead of the boot is checked below like
@@ -78,13 +78,13 @@ claim("an empty query string asks iNaturalist nothing", () => {
   same(window.__calls, [], "requests left during boot:");
 });
 
-claim("an empty query string is the tier tab with no user", () => {
-  is(view.tab, "tier");
-  is(view.user, "");
+claim("an empty query string is the place tab with no place", () => {
+  is(view.tab, "place");
+  is(view.place, "");
 });
 
-claim("with no user the tier tab paints the username prompt and stops", () => {
-  ok(main.textContent.includes("Which user?"), "main holds: " + main.textContent.slice(0, 60));
+claim("with no place the place tab paints the place prompt and stops", () => {
+  ok(main.textContent.includes("Which place?"), "main holds: " + main.textContent.slice(0, 60));
 });
 
 /* ---------------- sspWaves ----------------

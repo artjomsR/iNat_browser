@@ -3,14 +3,15 @@
    The report is its own page, so its whole input lives in the query string and it can be
    bookmarked, shared, and reloaded on its own:
 
-     species.html?u=USER&taxon=ID&tname=NAME&iconic=Aves,Insecta&sort=name#tier-3
-     species.html?tab=place&place_id=7122&pname=Portugal&u=USER&sort=taxo&layout=grid
-     species.html?tab=place&lat=38.72&lng=-9.14&radius=12&u=USER
+     species.html?tab=tier&u=USER&taxon=ID&tname=NAME&iconic=Aves,Insecta&sort=name#tier-3
+     species.html?place_id=7122&pname=Portugal&u=USER&sort=taxo&layout=grid
+     species.html?lat=38.72&lng=-9.14&radius=12&u=USER
 
    Two tabs over the same rows. `tier` is about one person: their species banded by the tier
    tag they carry. `place` is about one patch of ground: every species recorded there, with
    the ones that person has already recorded ticked off. Both are addresses, so either can
-   be bookmarked and the tab strip is just two links.
+   be bookmarked and the tab strip is just two links. `place` is the default tab, so it is
+   the one tab that never needs `tab=` written out; `tier` always does.
 
    `tname` is only a label — the taxon id is what scopes the query — so a stale or missing
    name costs nothing but a prettier heading. `pname` is the same for a place.
@@ -296,7 +297,7 @@ async function cachedIds(kind, params, ask){
 }
 
 const q = new URLSearchParams(location.search);
-const tab = q.get("tab") === "place" ? "place" : "tier";
+const tab = q.get("tab") === "tier" ? "tier" : "place";
 
 // The threshold's default has to follow what the counts mean, and the two tabs count
 // different things. On the place tab a count is iNaturalist's area-wide total for that
@@ -2157,7 +2158,7 @@ const NOTES = {
   // drops only what cannot apply.
   document.querySelectorAll("#tabs a").forEach(a => {
     const tab = a.dataset.tab;
-    a.href = selfUrl({ tab: tab === "tier" ? null : tab });
+    a.href = selfUrl({ tab: tab === "place" ? null : tab });
     if(tab === view.tab) a.className = "on";
   });
 
