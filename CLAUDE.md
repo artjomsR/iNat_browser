@@ -145,6 +145,23 @@ step or split further unless a file becomes unwieldy again.
   hand back the filters of the day the icon was made. A cold launch — told from a page opened
   inside the app by an empty `inat.map.session` in sessionStorage — starts from that copy
   instead. In a browser tab none of it runs and the address is still the only state there is.
+  The species page also keeps its answers, under `inat.query.v1.<question>` — but in
+  sessionStorage, and for five minutes. The difference in store is the difference in what is
+  held: an eBird code is minted once and never changes, while every one of these is a count or
+  a set derived from counts, and counts move all day. Kept across sessions they would quietly
+  turn the report into a photograph of an earlier day; a tab's life and five minutes inside it
+  covers a reload, a back, and a reader working the toolbar, and nothing further. It needs no
+  purge — sessionStorage goes when the tab does. What is stored is the answer rather than the
+  payload: a species_counts page is around 1.3KB a row against roughly 5MB for the origin, but
+  most of these chains reduce on landing to a set of taxon ids, which costs kilobytes. The two
+  that are rows — the area's list and the user's own — are kept whole under a size cap, so an
+  ordinary scope is instant and an enormous one is simply not kept. Each key is the derivation
+  plus every parameter that shaped it, so two questions cannot collide; the `v1` is there to be
+  bumped if what is stored ever changes shape. Anything uncertain — malformed, expired, from an
+  older version — is a miss, and a refusal is never written, so a 429 can never be served back
+  as an answer. Wrapped like the others: with no storage the page works, it just asks again.
+  The autocompletes are deliberately out of it, being cheap, already debounced, and stale in a
+  way a reader would see. See the "keeping the answers" block in `species.js`.
 - iNaturalist's `verifiable=true` (research + needs-ID, casual excluded) is the default
   filter on every query; don't drop it without a reason.
 - The species page's place tab is deliberately unfiltered by date: the question is what has

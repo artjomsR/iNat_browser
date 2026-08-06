@@ -173,6 +173,128 @@ async function apiGet(url, opts){
   }
 }
 
+/* ---------------- keeping the answers ----------------
+
+   The gate above decides when a request leaves. This decides whether it has to leave at all.
+
+   The same questions get asked over and over on this page. A reload, the back button off a
+   species' page on iNaturalist, the subspecies checkbox, a month added to the row: every one of
+   them puts the whole fan-out up again from cold, and at 350ms a departure a place-tab load
+   with a username is a dozen or more requests before a single row is painted. Nothing about
+   those answers changed in the twenty seconds since they were last given.
+
+   So an answer is kept for five minutes, in sessionStorage, under the question that earned it.
+
+   Why sessionStorage, where the eBird codes are in localStorage: an eBird code is minted once
+   and never changes, so it is worth keeping forever. Everything here is a count, or a set
+   derived from counts, and counts move all day — a life list grows, a tag is added, a species
+   is recorded in the area for the first time. Kept across sessions these would quietly turn the
+   report into a photograph of some earlier day. A tab's life, and five minutes inside it, is
+   the most that can be claimed honestly: long enough for a reload, a back, and a reader working
+   the toolbar, short enough that a list left open over lunch is asked again. It also means
+   there is no purge to write — sessionStorage goes when the tab does, and five minutes is
+   checked on the way out of the store rather than swept up on a timer.
+
+   What is kept is the ANSWER, not the payload, and that is the whole shape of this. A
+   species_counts page is 500 rows of full taxon objects — measured at about 1.3KB a row, so
+   650KB for one page, against roughly 5MB for the entire origin — and a place-tab load fans out
+   to eight of those chains at once. Kept raw, one country-sized list would spend the budget on
+   its own and then evict itself on the next load. But most of those chains are never read as
+   rows: the three tag searches, the audio pair and the unobserved list are each reduced, the
+   moment they land, to a set of taxon ids. Stored as ids, a chain that cost 650KB on the wire
+   costs a few kilobytes here. So this sits at the callers, on what they made of the answer,
+   rather than at apiGet on what came back — a few more lines than one hook in the gate, and
+   worth them twice over: a hit hands back the same thing the caller would have built, and the
+   autocompletes, which must never be cached, are left out by construction rather than by an
+   exception list somebody has to remember to maintain.
+
+   The two exceptions are the lists themselves — the area's species, and the user's own — which
+   ARE rows, and are also the slowest single thing on their tab. Those are kept whole, under a
+   size cap: an ordinary scope fits and comes back instantly, and a scope big enough to eat the
+   budget is simply not kept. Nothing is ever correct only because it fit; the cap costs speed
+   and never an answer.
+
+   Two questions must never share a key, so a key is the derivation's name plus every parameter
+   that shapes it, sorted. Paging is left out, the answer being the whole chain rather than a
+   page of it. The version sits in the prefix: if what is stored ever changes shape, bump it and
+   every old entry stops being found instead of being read as something it isn't.
+
+   Anything uncertain is a miss — unparseable JSON, a half-written entry, one past its five
+   minutes. And a refusal is never an answer: the write only happens where the ask resolved, so
+   a 429 or a 500 leaves nothing behind to be served later as fact. Wrapped throughout, like the
+   gallery's record of seen photos and the eBird codes: with no storage at all this page works
+   exactly as it did, it just asks again. */
+
+const CACHE = "inat.query.v1.";
+const CACHE_TTL = 5 * 60 * 1000;
+// Roughly a fifth of the origin's ~5MB, counted in characters as the browser counts it — about
+// 760 species rows. Enough for both list entries at an ordinary scope with room to spare.
+const CACHE_MAX = 1e6;
+
+function cacheRead(key){
+  try{
+    const raw = sessionStorage.getItem(CACHE + key);
+    if(!raw) return null;
+    const entry = JSON.parse(raw);
+    // Half an entry is a miss, not half an answer.
+    if(!entry || typeof entry.at !== "number" || !("v" in entry)) return null;
+    if(Date.now() - entry.at > CACHE_TTL){ sessionStorage.removeItem(CACHE + key); return null; }
+    return entry;
+  }catch(e){ return null; }      // private mode, or somebody else's JSON: ask again
+}
+
+function cacheDrop(){
+  try{
+    // Object.keys hands back a snapshot, so removing as we go is safe.
+    Object.keys(sessionStorage).forEach(k => { if(k.startsWith(CACHE)) sessionStorage.removeItem(k); });
+  }catch(e){ /* nothing to drop, or nowhere to drop it from */ }
+}
+
+function cacheWrite(key, value){
+  let body;
+  try{ body = JSON.stringify({ at: Date.now(), v: value }); }
+  catch(e){ return; }
+  if(body.length > CACHE_MAX) return;
+  try{ sessionStorage.setItem(CACHE + key, body); }
+  catch(e){
+    // Full. Ours is the only thing in here that may be dropped, and dropping all of it beats
+    // picking a victim — every entry is worth a few hundred milliseconds, not a record.
+    cacheDrop();
+    try{ sessionStorage.setItem(CACHE + key, body); }catch(e2){ /* still no room: ask again */ }
+  }
+}
+
+// A question's name in the store: what was derived, then every parameter that shaped it, in a
+// fixed order so the same question spells the same way whichever order it was built in.
+function askKey(kind, params){
+  const p = new URLSearchParams(params);
+  p.sort();
+  return kind + "." + p.toString();
+}
+
+// Ask, and keep what comes back. Stored as JSON and handed back re-parsed, so a hit and a miss
+// return equal objects and never a shared one — nothing downstream can hold on to a row and
+// find someone else's edit in it.
+async function cachedAsk(kind, params, ask){
+  const key = askKey(kind, params);
+  const hit = cacheRead(key);
+  if(hit) return hit.v;
+  const answer = await ask();
+  cacheWrite(key, answer);
+  return answer;
+}
+
+// The same, for the questions whose answer is a set of taxon ids — which is most of them. The
+// Set travels as a plain array and is rebuilt on the way out.
+async function cachedIds(kind, params, ask){
+  const key = askKey(kind, params);
+  const hit = cacheRead(key);
+  if(hit && Array.isArray(hit.v)) return new Set(hit.v);
+  const ids = await ask();
+  cacheWrite(key, [...ids]);
+  return ids;
+}
+
 const q = new URLSearchParams(location.search);
 const tab = q.get("tab") === "place" ? "place" : "tier";
 
@@ -391,9 +513,13 @@ async function speciesCounts(params){
 // species as Untagged while the tag is plainly there. Widening the tag lookup alone is
 // safe: the species lists it is matched against are still verifiable-only, so a species
 // known solely from a casual record is not dragged onto the page by its tag.
+//
+// The params are built once and used twice — as the question asked and as the key it is kept
+// under — so the two cannot drift apart. Every cached ask on this page is written that way.
 async function speciesIdsWithTag(user, tag){
-  const rows = await speciesCounts({ ...userScope(user), search_on:"tags", q:tag, verifiable:"any" });
-  return new Set(rows.map(x => x.taxon.id));
+  const params = { ...userScope(user), search_on:"tags", q:tag, verifiable:"any" };
+  return cachedIds("tagged", params, async () =>
+    new Set((await speciesCounts(params)).map(x => x.taxon.id)));
 }
 
 /* ---------------- place scope ----------------
@@ -475,12 +601,20 @@ function placeTitle(){
 
 // Every species recorded in the area, heaviest first — the same count iNat's own species
 // view leads with.
+//
+// One of the two answers kept as rows rather than as ids, and the tab's slowest — see the note
+// on the size cap where the store is defined. What is kept is the list as it will be read,
+// split and sorted, since the split is the expensive half and `hrank` in the key is already
+// what tells a split list from a whole one.
 async function speciesHere(){
-  const rows = (await speciesCounts({ ...areaScope(), ...sspOnly() })).filter(isSpeciesRow);
-  // Already heaviest-first out of the split, and by the subspecies' own counts.
-  if(view.ssp) return splitIntoSubspecies(rows, areaScope());
-  rows.sort((a, b) => b.count - a.count || sortName(a.taxon).localeCompare(sortName(b.taxon)));
-  return rows;
+  const params = { ...areaScope(), ...sspOnly() };
+  return cachedAsk("here", params, async () => {
+    const rows = (await speciesCounts(params)).filter(isSpeciesRow);
+    // Already heaviest-first out of the split, and by the subspecies' own counts.
+    if(view.ssp) return splitIntoSubspecies(rows, areaScope());
+    rows.sort((a, b) => b.count - a.count || sortName(a.taxon).localeCompare(sortName(b.taxon)));
+    return rows;
+  });
 }
 
 // Which of the area's species this user has never recorded — asked of iNat the way round
@@ -489,8 +623,9 @@ async function speciesHere(){
 // is one area-sized query however much the user has seen. "Unobserved" is iNat's own and
 // means anywhere, not just here, so the tick reads as "I have this species".
 async function unseenHere(user){
-  const rows = await speciesCounts({ ...areaScope(), unobserved_by_user_id: user });
-  return new Set(rows.map(x => x.taxon.id));
+  const params = { ...areaScope(), unobserved_by_user_id: user };
+  return cachedIds("unseen", params, async () =>
+    new Set((await speciesCounts(params)).map(x => x.taxon.id)));
 }
 
 // iNat's taxon search, the same index behind the map's species field — so a name typed here
@@ -605,14 +740,22 @@ function sspWaves(rows){
 // One question put to one wave: which of its subspecies the answer names. The reply is rolled
 // up to species as always, but a wave holds at most one subspecies per species, so a row
 // coming back under a species can only be about the id asked for it.
+//
+// Kept under the whole wave rather than under each batch of it: the batches are a limit of the
+// URL, not a division of the question, and the wave is what has to come back the same on a
+// second reading. That makes for a long key where a wave is long — exact, which is what a key
+// has to be, and short beside the answer it stands for.
 async function sspAsk(wave, scope, params){
-  const asked = new Map(wave.map(x => [parentOf(x), x.taxon.id]));
-  const hits = new Set();
-  for(const batch of idBatches(wave.map(x => x.taxon.id), 6000)){
-    (await speciesCounts({ ...scope, ...params, taxon_id: batch.join(",") }))
-      .forEach(r => { const id = asked.get(r.taxon.id); if(id != null) hits.add(id); });
-  }
-  return hits;
+  const ids = wave.map(x => x.taxon.id);
+  return cachedIds("sspAsk", { ...scope, ...params, taxon_id: ids.join(",") }, async () => {
+    const asked = new Map(wave.map(x => [parentOf(x), x.taxon.id]));
+    const hits = new Set();
+    for(const batch of idBatches(ids, 6000)){
+      (await speciesCounts({ ...scope, ...params, taxon_id: batch.join(",") }))
+        .forEach(r => { const id = asked.get(r.taxon.id); if(id != null) hits.add(id); });
+    }
+    return hits;
+  });
 }
 
 // standingLookup's questions, asked of subspecies. Same vocabulary and the same order of
@@ -919,14 +1062,19 @@ async function loadEbirdLinks(buckets){
 // Two queries, because iNat filters observations by their media while this is a question
 // about the species: "no photo of it at all" can only be answered by subtracting the
 // photographed set.
+//
+// Two queries and one answer, so what is kept is the subtraction rather than either half of it,
+// and the scope they share is the whole of the question.
 async function audioOnlySpeciesIds(user){
   const scope = userScope(user);
-  const [heard, shot] = await Promise.all([
-    speciesCounts({ ...scope, sounds: "true", photos: "false" }),
-    speciesCounts({ ...scope, photos: "true" })
-  ]);
-  const photographed = new Set(shot.map(x => x.taxon.id));
-  return new Set(heard.map(x => x.taxon.id).filter(id => !photographed.has(id)));
+  return cachedIds("audioOnly", scope, async () => {
+    const [heard, shot] = await Promise.all([
+      speciesCounts({ ...scope, sounds: "true", photos: "false" }),
+      speciesCounts({ ...scope, photos: "true" })
+    ]);
+    const photographed = new Set(shot.map(x => x.taxon.id));
+    return new Set(heard.map(x => x.taxon.id).filter(id => !photographed.has(id)));
+  });
 }
 
 // Where this user stands on every species they have recorded: the best tier tag it carries,
@@ -986,21 +1134,30 @@ function standingRank(mark){ return STANDING_ORDER.indexOf(mark || "seen"); }
 // with those, which is what the place tab is read for.
 function tierRank(mark){ return mark ? STANDING_ORDER.indexOf(mark) + 1 : 0; }
 
+// The one list-defining query on this tab, so the one the subspecies filter narrows and then
+// splits — and the tab's slowest, a life list being twenty pages for a long-standing user. The
+// other of the two answers kept as rows, and kept the same way the area's list is: the list as
+// it will be read, split included, with `hrank` in the key telling the two apart.
+async function tierRows(user){
+  const params = { ...userScope(user), ...sspOnly() };
+  return cachedAsk("mine", params, async () => {
+    const rows = (await speciesCounts(params)).filter(isSpeciesRow);
+    return view.ssp ? splitIntoSubspecies(rows, userScope(user)) : rows;
+  });
+}
+
 // Band every species the user has recorded by its best tag. Nothing drops out — the five
 // tiers together are everything recorded in scope. This fallback order (a tag always beats
 // a sound recording, a sound recording always beats nothing) is independent of both TIERS'
 // display order and STANDING_ORDER's hide rank — three separate orderings over the same
 // five names, each answering a different question.
 async function speciesByTier(user){
-  // The one list-defining query on this tab, so the one the subspecies filter narrows and
-  // then splits.
-  let all = (await speciesCounts({ ...userScope(user), ...sspOnly() })).filter(isSpeciesRow);
+  const all = await tierRows(user);
   // Split rows band by their own tags, read one race at a time — so a bird tagged S on one
   // subspecies and never tagged on another sits in two different tiers, which is the whole
   // point of asking for the races. Every row here is already the reader's own, the list
   // being theirs by definition, so the "have you recorded it" pass is skipped.
   if(view.ssp){
-    all = await splitIntoSubspecies(all, userScope(user));
     const standing = await sspStanding(all, user, true);
     const buckets = TIERS.map(() => []);
     all.forEach(x => {
