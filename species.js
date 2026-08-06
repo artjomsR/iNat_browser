@@ -1331,14 +1331,11 @@ function placeListHtml(rows, standing, sortBy){
   // continuation of the one before, so it still reads as three things even in one colour.
   const sep = `<span class="sep">|</span>`;
   const badge = standing
-    ? `${sep}<span class="who">@${esc(view.user)}</span>${sep}<span class="n have" title="Already recorded, of the species showing">${held} / ${rows.length} observed</span>`
-    : `${sep}<span class="n">${rows.length}</span>`;
-  // The season rides inside the link, not beside it: the link opens the same slice on iNat, so
-  // the two are one claim about one list rather than a heading with a filter noted after it.
-  const season = view.months.length ? " &middot; " + esc(seasonLabel()) : "";
+    ? `<span class="who">@${esc(view.user)}</span>${sep}<span class="n have" title="Already recorded, of the species showing">${held} / ${rows.length} observed</span>`
+    : `<span class="n">${rows.length}</span>`;
   return `<section class="tier" id="here">
     <h2><a href="${esc(areaSpeciesUrl())}" target="_blank" rel="noopener"
-          title="The same area on iNaturalist">${esc(areaLabel())}${season}</a>${badge}</h2>
+          title="The same area on iNaturalist"></a>${badge}</h2>
     ${tally}
     ${sortbarHtml(sortBy)}
     <label class="onlySub" title="${esc(SSP_HINT)}">
