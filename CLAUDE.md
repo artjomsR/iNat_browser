@@ -9,13 +9,14 @@ directly (or via `.claude/launch.json`'s static server) to run it.
 - **index.html / index.css / index.js** — the map view. Leaflet map of iNaturalist
   observations, filter sheet, location-accuracy legend. Entry point for the app.
   - `Months of the year` (`m=6,7,8`) sits under `Observed between` because the two are one
-    question asked two ways: the window is a stretch of time, the months are a season read
-    across every year. Asked together they intersect, and the intersection of March and a
-    45-day window is nothing — so the *default* window stands aside whenever months are
-    chosen, while a date that was actually asked for still stands (`windowD1`). Telling the
-    two apart is what `state.d1auto` is for, and it is why an untouched `d1` no longer rides
-    in the hash: the address carries a date only when a date was meant, so a link shared
-    without touching the fields opens on the reader's own last 45 days. Both filters are named
+    question asked two ways: the window is a stretch of time — asked for on purpose or not at
+    all, since `d1` carries no default — and the months are a season read across every year,
+    defaulting to the current and previous month (`defaultMonths`). A date typed into either
+    field, or carried in on a link, is a deliberate one and stands (`windowD1`); with no
+    default date to intersect against a chosen season, the two only collide when a date was
+    actually asked for. Telling an asked-for date apart from the still-empty default is what
+    `state.d1auto` is for, and it is why an untouched `d1` never rides in the hash: the address
+    carries a date only when a date was meant. Both filters are named
     in the specimen label, since where both are in force the map is showing their
     intersection and an empty one has to be readable as such. The label reads a season rather
     than a list — `Aug`, `Jun–Aug`, or `3 months` with the months on the tooltip — and a run
@@ -147,8 +148,8 @@ step or split further unless a file becomes unwieldy again.
 - iNaturalist's `verifiable=true` (research + needs-ID, casual excluded) is the default
   filter on every query; don't drop it without a reason.
 - The species page's place tab is deliberately unfiltered by date: the question is what has
-  been recorded here, ever, and the map's 45-day window would quietly answer a much smaller
-  one. That still stands, with one qualifier — a *month* is not a date range. `m=6,7,8`
+  been recorded here, ever, and a date range would quietly answer a much smaller one. That
+  still stands, with one qualifier — a *month* is not a date range. `m=6,7,8`
   narrows every year at once and leaves the "ever" intact, which is why the place tab takes it
   and would still refuse `d1`/`d2`. The distinction is the whole of the reasoning: a filter
   that shortens the years is out, a filter that slices them is in, and anything new here has

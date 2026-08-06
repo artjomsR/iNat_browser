@@ -116,16 +116,18 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 // every layer is upscaling anyway, so there's nothing left to gain by going further.
 const MAX_ZOOM = 21;
 
-function defaultD1(){
-  const d = new Date();
-  // 1.5 months as a fixed 45 days: setMonth only takes whole months, and calendar months
-  // vary in length anyway, so a day count is the one way to make "a month and a half" mean
-  // the same span every time this runs.
-  d.setDate(d.getDate() - 45);
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,"0");
-  const day = String(d.getDate()).padStart(2,"0");
-  return `${y}-${m}-${day}`;
+// No default lower bound: the app asks about "recently" through the month chips
+// (see defaultMonths), not through a date that quietly narrows every year to one.
+function defaultD1(){ return ""; }
+
+// The two months chips lit on a fresh load: this one and the one before it, so "recently"
+// reads as a season out of the box rather than as an empty date field. Sorted ascending —
+// monthsLabel/monthRunStart tell a run apart by set membership, not by array order, so
+// December-into-January still reads as a run even though 12 sorts after 1.
+function defaultMonths(){
+  const now = new Date().getMonth() + 1;         // 1–12
+  const prev = now === 1 ? 12 : now - 1;
+  return [prev, now].sort((a, b) => a - b);
 }
 // Fallback centre when the browser won't give us a position.
 const LISBON = [38.7223, -9.1393];
@@ -152,8 +154,9 @@ function readMonths(raw){
 
 const state = {
   taxon:null, tname:"", iconic:[], quality:defaultQuality(),
-  d1:defaultD1(), d2:"", months:[],
-  // Whether that d1 is the app's own 45-day default or something asked for — see windowD1.
+  d1:defaultD1(), d2:"", months:defaultMonths(),
+  // Whether that d1 is still the app's own (empty) default or something asked for — see
+  // windowD1.
   d1auto:true,
   style:"accuracy", base:"light", unobs:"", precise:"precise",
   // dmode: "unobserved" | "s" | "b" | "c" | "own". The mode row toggles, so pressing the
@@ -169,23 +172,18 @@ let map, overlay, accLayer, probeAccLayer, probeMark, probeRing, meRing, meCone,
 /* The lower end of the window, as the query should see it — and the one place the month
    filter and the date range are reconciled.
 
-   They ask different questions. The window is a stretch of time, defaulting to the last 45
-   days: what is about right now. The months are a season: what is here in March, in any year.
-   Asked together they intersect, and the intersection of March and the last 45 days is empty
-   for ten and a half months of the year — a reader who picks March in August would get a bare
-   map and read it, almost fairly, as a broken filter.
+   They ask different questions. The window is a stretch of time, asked for on purpose or not
+   at all — there is no default date. The months are a season: what is here in March, in any
+   year, or here in Jul–Aug by default (see defaultMonths). With no default date to collide
+   with a chosen season, the two only interact when a date was actually typed into either
+   field, or carried in on a link — a deliberate one and stands: "March, between 2015 and
+   2020" is a real question and this is the only way to ask it. The label prints whichever is
+   in force (see renderLabel), so an empty map always says why.
 
-   So the default steps aside. A window nobody asked for cannot be allowed to defeat a filter
-   somebody did: with months set, the 45 days apply only if they were actually chosen. A date
-   typed into either field, or carried in on a link, is a deliberate one and stands — "March,
-   between 2015 and 2020" is a real question and this is the only way to ask it. The label
-   prints whichever of the two is in force (see renderLabel), so an empty map always says why.
-
-   Telling the two apart is what state.d1auto is for, and why an untouched default no longer
-   rides in the hash: writeHash omits d1 while it is the app's own, readHash puts it back, and
-   so the address carries a date only when a date was meant. The side effect is that a link
-   shared without touching the dates now opens on the reader's own last 45 days rather than on
-   the sharer's — which is what "the last 45 days" meant when it was shared. */
+   Telling an asked-for date apart from the still-empty default is what state.d1auto is for,
+   and why an untouched d1 never rides in the hash: writeHash omits it while it is the app's
+   own (empty) default, readHash hands back the same empty default, and so the address carries
+   a date only when a date was meant. */
 function windowD1(){
   return state.months.length && state.d1auto ? "" : state.d1;
 }
@@ -594,8 +592,8 @@ function writeHash(){
   if(state.ssp)     p.set("ssp", state.ssp);
   p.set("q", state.quality.join(","));
   p.set("precise", state.precise);
-  // Only a date that was meant — see windowD1. Left out, readHash hands back the day's own
-  // 45 days, which is what an untouched window has always meant.
+  // Only a date that was meant — see windowD1. Left out, readHash hands back the same empty
+  // default, which is what an untouched window has always meant.
   if(!state.d1auto) p.set("d1", state.d1);
   if(state.d2)      p.set("d2", state.d2);
   if(state.months.length) p.set("m", state.months.join(","));
@@ -620,12 +618,12 @@ function readHash(){
   state.quality = p.has("q") ? p.get("q").split(",").filter(Boolean) : defaultQuality();
   state.precise = p.has("precise") ? p.get("precise") : "precise";
   // A date in the address was asked for by somebody, whoever made the link; no date is the
-  // app's own 45 days, and only that one steps aside for a month filter. An empty `d1=` counts
-  // as asked for — it is the field cleared on purpose, which is "no lower bound at all".
+  // app's own (empty) default. An empty `d1=` counts as asked for too — it is the field
+  // cleared on purpose, which is "no lower bound at all".
   state.d1auto  = !p.has("d1");
   state.d1      = state.d1auto ? defaultD1() : p.get("d1");
   state.d2      = p.get("d2") || "";
-  state.months  = readMonths(p.get("m"));
+  state.months  = p.has("m") ? readMonths(p.get("m")) : defaultMonths();
   state.style   = p.get("s") || "accuracy";
   state.base    = p.get("b") || "light";
   state.cursor  = p.get("cur") || "precise";
@@ -857,16 +855,15 @@ function segHtml(id, opts, current){
   ).join("") + `</div>`;
 }
 
-// What the month row is doing to the window above it, in the one case where that is not
-// obvious: the reader has asked for a season, and the dates they can see in the two fields
-// are not the dates being asked about. Said here rather than left to the label, which has to
-// be read on the map behind a sheet that is covering it.
+// What the month row is asking, since the season alone doesn't say whether it's read across
+// every year or narrowed to a stretch of them. Said here rather than left to the label, which
+// has to be read on the map behind a sheet that is covering it.
 function monthHint(){
   if(!state.months.length) return "";
   const season = esc(monthsLabel(state.months));
   return state.d1auto
-    ? `Any year &mdash; the 45-day window above steps aside for ${season}.
-       Type a date into it to ask about ${season} inside a stretch of years.`
+    ? `Any year &mdash; ${season} in every year there is. Type a date below to ask about
+       ${season} inside a stretch of years.`
     : `${season}, within the dates above. Clear them to read ${season} in any year.`;
 }
 
@@ -1162,7 +1159,7 @@ function wireFilters(){
   $("doneBtn").addEventListener("click", closeSheet);
 
   $("reset").addEventListener("click", () => {
-    Object.assign(state, { taxon:null, tname:"", iconic:[], quality:defaultQuality(), d1:defaultD1(), d1auto:true, d2:"", months:[], unobs:"", precise:"precise", dmode:"unobserved", tierExclude:null, ssp:"" });
+    Object.assign(state, { taxon:null, tname:"", iconic:[], quality:defaultQuality(), d1:defaultD1(), d1auto:true, d2:"", months:defaultMonths(), unobs:"", precise:"precise", dmode:"unobserved", tierExclude:null, ssp:"" });
     commit();
     openFilters();
   });
