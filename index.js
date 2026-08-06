@@ -1,6 +1,97 @@
 "use strict";
 
 const API  = "https://api.inaturalist.org/v1";
+
+/* ---------------- asking iNaturalist ----------------
+
+   One door for every request to iNaturalist. The map asks less heavily than the species report
+   does — a tier mode walks the levels, the accuracy layer asks two questions at once, and a
+   dragged map re-asks all of it on every settle — but it asks often, and it had no reply to a
+   refusal: a call site threw on the first non-ok status and the layer simply stayed empty.
+
+   MAX_INFLIGHT caps how many requests are open at once, so one slow answer cannot pile the
+   rest up behind it. `gap` sets the pace: iNaturalist asks for under a hundred requests a
+   minute, and 350ms between departures sits inside that. `gap` is a floor that only ever
+   rises — a 429 is iNaturalist saying the pace was wrong, so the pace changes for the rest of
+   the session rather than only for the retry, and it never decays.
+
+   Retried: the statuses that mean "later", and a connection that dropped, which on a phone in
+   a field is the ordinary case. Everything else throws where it always did, a 404 being an
+   answer rather than a refusal. Retry-After is honoured where it is sent.
+
+   The species report carries its own copy of this, deliberately: one script file per page is
+   the arrangement here, and the two have their own comments about their own bursts. If that
+   ever changes, this is the first thing that should move. */
+
+const MAX_INFLIGHT = 3;
+const RETRIES = 3;
+const RETRY_ON = new Set([429, 502, 503, 504]);
+
+const pause = ms => new Promise(done => setTimeout(done, ms));
+
+let gap = 350;        // ms between departures — raised by a 429, never lowered
+let nextStart = 0;    // when the next request may leave
+let inflight = 0;
+const waiting = [];
+
+function acquire(){
+  if(inflight < MAX_INFLIGHT){ inflight++; return Promise.resolve(); }
+  return new Promise(go => waiting.push(go));
+}
+
+// The slot is handed straight to whoever is next rather than released and re-taken, so a
+// request arriving between the two cannot jump the queue.
+function release(){
+  const next = waiting.shift();
+  if(next) next(); else inflight--;
+}
+
+// Claim the next departure and say how long to wait for it. Synchronous on purpose: the read
+// and the write have to happen with no await between them, or two callers waking together read
+// the same slot and leave side by side.
+function reserve(){
+  const now = Date.now();
+  const at = Math.max(now, nextStart);
+  nextStart = at + gap;
+  return at - now;
+}
+
+// Seconds, or an HTTP date — only the first is worth reading, and only within reason. A long
+// wait is better spent failing, so the reader can ask again themselves.
+function retryAfter(res){
+  const secs = +res.headers.get("Retry-After");
+  return isFinite(secs) && secs > 0 ? Math.min(secs * 1000, 10000) : 0;
+}
+
+function backoff(attempt){ return 800 * 2 ** attempt; }
+
+async function apiGet(url, opts){
+  await acquire();
+  try{
+    for(let attempt = 0; ; attempt++){
+      await pause(reserve());
+      let res;
+      try{
+        res = await fetch(url, opts);
+      }catch(err){
+        // No response at all, so no status to read: the connection went. Asking again is the
+        // only way to tell a blip from a dead line.
+        if(attempt >= RETRIES) throw err;
+        await pause(backoff(attempt));
+        continue;
+      }
+      // Awaited rather than handed back: a large page is still arriving when its headers land,
+      // and the slot is not free until the body is in.
+      if(res.ok) return await res.json();
+      if(res.status === 429) gap = Math.min(gap * 2, 2000);
+      if(!RETRY_ON.has(res.status) || attempt >= RETRIES) throw new Error(res.status);
+      await pause(retryAfter(res) || backoff(attempt));
+    }
+  }finally{
+    release();
+  }
+}
+
 const MARK = "#FF3E7C";
 // --panel, the sheet the results list sits on. The palette lives in CSS, but a taxon glyph
 // drawn flat in that list needs a real colour string to paint its halo out of sight — see
@@ -151,9 +242,7 @@ async function speciesCounts(params, stale){
     const p = new URLSearchParams(params);
     p.set("per_page", "500");
     p.set("page", String(page));
-    const r = await fetch(`${API}/observations/species_counts?${p.toString()}`);
-    if(!r.ok) throw new Error(r.status);
-    const d = await r.json();
+    const d = await apiGet(`${API}/observations/species_counts?${p.toString()}`);
     if(stale && stale()) return out;
     (d.results || []).forEach(x => { if(x.taxon && x.taxon.id) out.push(x); });
     if(page * 500 >= (d.total_results || 0)) break;
@@ -863,13 +952,14 @@ async function refreshAccuracyLayer(){
   }
 
   try{
-    const [r, ur] = await Promise.all([
-      fetch(`${API}/observations?${p.toString()}`),
-      up ? fetch(`${API}/observations?${up.toString()}`) : Promise.resolve(null)
+    // The unidentified half is allowed to fail on its own, as it always was: it is an extra
+    // question folded into the layer rather than the layer itself, so a refusal there costs
+    // those pins and nothing else.
+    const [d, ud] = await Promise.all([
+      apiGet(`${API}/observations?${p.toString()}`),
+      up ? apiGet(`${API}/observations?${up.toString()}`).catch(() => ({ results: [], total_results: 0 }))
+         : Promise.resolve(null)
     ]);
-    if(!r.ok) throw new Error(r.status);
-    const d = await r.json();
-    const ud = ur ? (ur.ok ? await ur.json() : { results: [], total_results: 0 }) : null;
     if(mine !== accSeq || state.style !== "accuracy") return;
 
     const results = ud ? (d.results || []).concat(ud.results || []) : (d.results || []);
@@ -965,8 +1055,7 @@ function wireFilters(){
     timer = setTimeout(async () => {
       const mine = ++seq;
       try{
-        const r = await fetch(`${API}/taxa/autocomplete?per_page=8&q=${encodeURIComponent(q)}`);
-        const d = await r.json();
+        const d = await apiGet(`${API}/taxa/autocomplete?per_page=8&q=${encodeURIComponent(q)}`);
         if(mine !== seq) return;
         if(!d.results || !d.results.length){ ac.hidden = true; return; }
         ac.innerHTML = d.results.map(t => {
@@ -1372,9 +1461,7 @@ async function probe(latlng){
   p.set("order", "desc");
 
   try{
-    const r = await fetch(`${API}/observations?${p.toString()}`);
-    if(!r.ok) throw new Error(r.status);
-    const d = await r.json();
+    const d = await apiGet(`${API}/observations?${p.toString()}`);
     if(sheetView !== "results") return;
     openSheet("results", resultsHtml(d.results || [], km, latlng));
     wireResults();

@@ -59,6 +59,107 @@ const ICONIC = [
   ["Amphibia","Amphibians"],["Actinopterygii","Fish"],["Mollusca","Molluscs"]
 ];
 
+/* ---------------- asking iNaturalist ----------------
+
+   One door for every request to iNaturalist, because this page asks in bursts rather than one
+   at a time. A place-tab load fans out to eight paged chains at once — runPlace starts three,
+   one of them standingLookup, which starts four more, one of THOSE audioOnlySpeciesIds, which
+   starts two — and each chain is good for twenty pages. Fired flat out that is well past what
+   a free, shared, unauthenticated API will answer, and the page had no reply to a refusal:
+   every call site threw on the first non-ok status, so one 429 in the middle of a life list
+   took the whole report down with it.
+
+   So the bursts are metered rather than thinned. Callers still ask for everything they need,
+   in whatever parallel shape reads best; this decides when each request actually leaves.
+
+   Two limits doing different jobs. MAX_INFLIGHT caps how many are open at once, so one slow
+   answer cannot pile the rest up behind it. `gap` is the pace-setter: iNaturalist asks for
+   under a hundred requests a minute, and 350ms between departures sits inside that in
+   practice, since a chain cannot ask for its next page until the last one has landed.
+
+   `gap` is a floor that only ever rises. A 429 is iNaturalist saying the pace was wrong, so
+   the pace changes for the rest of the session rather than only for the retry — otherwise a
+   burst that earns one refusal earns another the moment it resumes. It never decays: a page
+   that has been told off once is in no hurry, and the reader gets their list either way.
+
+   Retried: the statuses that mean "later", and a connection that dropped — on a phone in a
+   field that is the ordinary case rather than the exotic one. Everything else throws where it
+   always did, a 404 being an answer rather than a refusal. Retry-After is honoured where it is
+   sent, that being iNaturalist's own number rather than a guess.
+
+   The Wikidata lookup behind the eBird links does not come through here. It is a different
+   service with a different temper and a retry of its own (see ebirdCodesRetrying), and putting
+   the two in one queue would only let a long species list hold up the links, or the reverse. */
+
+const MAX_INFLIGHT = 3;
+const RETRIES = 3;
+const RETRY_ON = new Set([429, 502, 503, 504]);
+
+const pause = ms => new Promise(done => setTimeout(done, ms));
+
+let gap = 350;        // ms between departures — raised by a 429, never lowered
+let nextStart = 0;    // when the next request may leave
+let inflight = 0;
+const waiting = [];
+
+function acquire(){
+  if(inflight < MAX_INFLIGHT){ inflight++; return Promise.resolve(); }
+  return new Promise(go => waiting.push(go));
+}
+
+// The slot is handed straight to whoever is next rather than released and re-taken, so a
+// request arriving between the two cannot jump the queue.
+function release(){
+  const next = waiting.shift();
+  if(next) next(); else inflight--;
+}
+
+// Claim the next departure and say how long to wait for it. Synchronous on purpose: the read
+// and the write have to happen with no await between them, or two callers waking together read
+// the same slot and leave side by side.
+function reserve(){
+  const now = Date.now();
+  const at = Math.max(now, nextStart);
+  nextStart = at + gap;
+  return at - now;
+}
+
+// Seconds, or an HTTP date — only the first is worth reading, and only within reason. A long
+// wait is better spent failing, so the reader can ask again themselves.
+function retryAfter(res){
+  const secs = +res.headers.get("Retry-After");
+  return isFinite(secs) && secs > 0 ? Math.min(secs * 1000, 10000) : 0;
+}
+
+function backoff(attempt){ return 800 * 2 ** attempt; }
+
+async function apiGet(url, opts){
+  await acquire();
+  try{
+    for(let attempt = 0; ; attempt++){
+      await pause(reserve());
+      let res;
+      try{
+        res = await fetch(url, opts);
+      }catch(err){
+        // No response at all, so no status to read: the connection went. Asking again is the
+        // only way to tell a blip from a dead line.
+        if(attempt >= RETRIES) throw err;
+        await pause(backoff(attempt));
+        continue;
+      }
+      // Awaited rather than handed back: a large page is still arriving when its headers land,
+      // and the slot is not free until the body is in.
+      if(res.ok) return await res.json();
+      if(res.status === 429) gap = Math.min(gap * 2, 2000);
+      if(!RETRY_ON.has(res.status) || attempt >= RETRIES) throw new Error(res.status);
+      await pause(retryAfter(res) || backoff(attempt));
+    }
+  }finally{
+    release();
+  }
+}
+
 const q = new URLSearchParams(location.search);
 const tab = q.get("tab") === "place" ? "place" : "tier";
 
@@ -233,9 +334,7 @@ async function speciesCounts(params){
     if(!p.has("verifiable")) p.set("verifiable", "true");
     p.set("per_page", "500");
     p.set("page", String(page));
-    const r = await fetch(`${API}/observations/species_counts?${p.toString()}`);
-    if(!r.ok) throw new Error(r.status);
-    const d = await r.json();
+    const d = await apiGet(`${API}/observations/species_counts?${p.toString()}`);
     (d.results || []).forEach(x => { if(x.taxon && x.taxon.id) out.push(x); });
     if(page * 500 >= (d.total_results || 0)) break;
   }
@@ -310,9 +409,7 @@ async function unseenHere(user){
 // and a name typed there land on the same taxon.
 async function findTaxa(text){
   const p = new URLSearchParams({ q: text, per_page: "8" });
-  const r = await fetch(`${API}/taxa/autocomplete?${p}`);
-  if(!r.ok) throw new Error(r.status);
-  const d = await r.json();
+  const d = await apiGet(`${API}/taxa/autocomplete?${p}`);
   return (d.results || []).map(t => ({
     id: t.id,
     // The scientific name is what rides in the address as `tname`, matching the map, so a
@@ -327,9 +424,7 @@ async function findTaxa(text){
 // iNat's own place search, the one behind the place field on their observation pages.
 async function findPlaces(text){
   const p = new URLSearchParams({ q: text, per_page: "8" });
-  const r = await fetch(`${API}/places/autocomplete?${p}`);
-  if(!r.ok) throw new Error(r.status);
-  const d = await r.json();
+  const d = await apiGet(`${API}/places/autocomplete?${p}`);
   return (d.results || []).map(x => ({
     id: x.id,
     name: x.display_name || x.name,
@@ -482,9 +577,7 @@ async function taxaPaged(params){
     const p = new URLSearchParams(params);
     p.set("per_page", "500");
     p.set("page", String(page));
-    const r = await fetch(`${API}/taxa?${p}`);
-    if(!r.ok) throw new Error(r.status);
-    const d = await r.json();
+    const d = await apiGet(`${API}/taxa?${p}`);
     (d.results || []).forEach(t => out.push(t));
     if(page * 500 >= (d.total_results || 0)) break;
   }
@@ -611,9 +704,7 @@ async function loadFamilies(buckets){
   const families = new Map();       // family taxon id -> {name, common}
   for(const batch of idBatches([...ids], 6000)){
     const p = new URLSearchParams({ id: batch.join(","), rank: "family", per_page: "500" });
-    const r = await fetch(`${API}/taxa?${p}`);
-    if(!r.ok) throw new Error(r.status);
-    const d = await r.json();
+    const d = await apiGet(`${API}/taxa?${p}`);
     (d.results || []).forEach(t => families.set(t.id, { id: t.id, name: t.name, common: t.preferred_common_name || "" }));
   }
   rows.forEach(x => {
@@ -689,9 +780,8 @@ function showEbirdLinks(){
 // The query service sheds load by refusing a request outright rather than queuing it, and a
 // refused batch is almost always fine a moment later. Worth one wait-and-ask-again: without it
 // a single refusal mid-list costs that batch its links until the page is next opened, and
-// refusals are common enough to see on an ordinary load.
-const pause = ms => new Promise(done => setTimeout(done, ms));
-
+// refusals are common enough to see on an ordinary load. `pause` is the one defined up in the
+// request gate — the only thing this shares with it, the two services being asked separately.
 async function ebirdCodesRetrying(batch){
   try{ return await ebirdCodesFor(batch); }
   catch(e){
