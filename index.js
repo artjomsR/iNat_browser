@@ -1460,6 +1460,9 @@ function wireFilters(){
     openFilters();
   });
 
+  // Repainted in place rather than by re-opening the sheet, like the month row below —
+  // openFilters() scrolls the sheet back to the top, which would throw the reader off the
+  // row after every tap on what is usually a run of several.
   $("iconicRow").addEventListener("click", e => {
     const b = e.target.closest("button[data-v]");
     if(!b) return;
@@ -1467,10 +1470,14 @@ function wireFilters(){
     state.iconic = state.iconic.includes(v)
       ? state.iconic.filter(x => x !== v)
       : [...state.iconic, v];
-    if(state.iconic.length){ state.taxon = null; state.tname = ""; }
+    b.setAttribute("aria-pressed", state.iconic.includes(v));
+    if(state.iconic.length && state.taxon){
+      state.taxon = null; state.tname = "";
+      $("taxonSel").hidden = true;
+      $("taxonSel").querySelector(".s-sci").textContent = "";
+    }
     commit();
     if(isTierMode()) syncTierExclude().then(commit);
-    openFilters();
   });
 
   // A mouse wheel only emits deltaY, which this single row would otherwise ignore —
@@ -1487,6 +1494,7 @@ function wireFilters(){
     row.scrollLeft = next;
   }, { passive:false });
 
+  // Repainted in place for the same reason as the quick groups above — see the comment there.
   $("qualityRow").addEventListener("click", e => {
     const b = e.target.closest("button[data-v]");
     if(!b) return;
@@ -1494,12 +1502,12 @@ function wireFilters(){
     state.quality = state.quality.includes(v)
       ? state.quality.filter(x => x !== v)
       : [...state.quality, v];
+    b.setAttribute("aria-pressed", state.quality.includes(v));
     commit();
-    openFilters();
   });
 
-  // Months toggle like the quick groups — several at once, and pressing a lit one turns it
-  // off — but the row is repainted in place rather than by re-opening the sheet. Twelve
+  // Months toggle like the quick groups and the quality row above — several at once, and
+  // pressing a lit one turns it off — and is repainted in place for the same reason: twelve
   // toggles are meant to be worked in a handful of taps, and openFilters() scrolls the sheet
   // back to the top, which would throw the reader off the row after every one of them.
   $("monthRow").addEventListener("click", e => {
