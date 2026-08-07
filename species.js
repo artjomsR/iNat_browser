@@ -1900,12 +1900,20 @@ async function runPlace(){
 
 function wireFinder({ input, hits, find, row, pick }){
   const box = input.closest(".finder");
-  let timer = null, seq = 0;
+  let timer = null, seq = 0, active = -1;
 
-  const close = () => { hits.hidden = true; hits.innerHTML = ""; };
+  const close = () => { hits.hidden = true; hits.innerHTML = ""; active = -1; };
+
+  // Keeps the highlighted row in sync with `active`, whether it moved by arrow key or the
+  // list just repainted — a single place so the two never fall out of step.
+  const highlight = () => {
+    [...hits.children].forEach((el, i) => el.classList.toggle("hi", i === active));
+    if(active >= 0) hits.children[active].scrollIntoView({ block: "nearest" });
+  };
 
   const show = list => {
     if(!list.length){ close(); return; }
+    active = -1;
     hits.innerHTML = list.map(row).join("");
     hits.hidden = false;
   };
@@ -1921,6 +1929,26 @@ function wireFinder({ input, hits, find, row, pick }){
         if(mine === seq) show(list);
       }catch(e){ close(); }
     }, 300);
+  });
+
+  // Arrow keys move the highlight, Enter picks it — defaulting to the top row when nothing's
+  // been arrowed to yet, so Enter after typing acts on the best match without an extra tap.
+  input.addEventListener("keydown", e => {
+    if(hits.hidden || !hits.children.length) return;
+    if(e.key === "ArrowDown"){
+      e.preventDefault();
+      active = Math.min(active + 1, hits.children.length - 1);
+      highlight();
+    }else if(e.key === "ArrowUp"){
+      e.preventDefault();
+      active = Math.max(active - 1, 0);
+      highlight();
+    }else if(e.key === "Enter"){
+      e.preventDefault();
+      pick(hits.children[active < 0 ? 0 : active]);
+    }else if(e.key === "Escape"){
+      close();
+    }
   });
 
   hits.addEventListener("click", e => {

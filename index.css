@@ -436,7 +436,7 @@ label.check{
   background:none;color:var(--text);font:inherit;cursor:pointer;
 }
 .ac button:last-child{border-bottom:0}
-.ac button:hover,.ac button:focus-visible{background:var(--panel);outline:none}
+.ac button:hover,.ac button:focus-visible,.ac button.hi{background:var(--panel);outline:none}
 .ac img{width:32px;height:32px;border-radius:4px;object-fit:cover;flex:0 0 auto;background:var(--panel)}
 .ac .ac-nophoto{width:32px;height:32px;border-radius:4px;flex:0 0 auto;background:var(--panel);border:1px solid var(--rule)}
 .ac-name{flex:1 1 auto;min-width:0}

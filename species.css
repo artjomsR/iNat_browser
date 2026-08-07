@@ -44,7 +44,7 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
   font:inherit;font-size:13.5px;color:var(--text);background:none;border:0;
   border-bottom:1px solid var(--rule)}
 .hits button:last-child{border-bottom:0}
-.hits button:hover{background:var(--ink);color:var(--mark)}
+.hits button:hover,.hits button.hi{background:var(--ink);color:var(--mark)}
 .hits button span{display:block;margin-top:2px;font-size:9.5px;letter-spacing:.12em;
   text-transform:uppercase;color:var(--mute)}
 /* taxon finder — the map's species field, brought to this page. Same list, but every hit
@@ -58,7 +58,7 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
   color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* the name is the line being chosen, so it takes the hover the way the place hit's own text
    does — the second line and the rank stay muted under it */
-.hits.taxa button:hover .t-common{color:var(--mark)}
+.hits.taxa button:hover .t-common,.hits.taxa button.hi .t-common{color:var(--mark)}
 .hits.taxa .t-sci{margin-top:1px;font-family:var(--lit);font-style:italic;font-size:12.5px;
   letter-spacing:0;text-transform:none;color:var(--mute);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

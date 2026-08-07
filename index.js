@@ -1383,18 +1383,28 @@ function wireFilters(){
 
   // taxon autocomplete
   const input = $("taxonInput"), ac = $("ac");
-  let timer = null, seq = 0;
+  let timer = null, seq = 0, active = -1;
+
+  // Keeps the highlighted row in sync with `active`, whether it moved by arrow key or the
+  // list just repainted — a single place so the two never fall out of step.
+  const highlight = () => {
+    [...ac.children].forEach((el, i) => el.classList.toggle("hi", i === active));
+    if(active >= 0) ac.children[active].scrollIntoView({ block: "nearest" });
+  };
+
+  const closeAc = () => { ac.hidden = true; ac.innerHTML = ""; active = -1; };
 
   input.addEventListener("input", () => {
     const q = input.value.trim();
     clearTimeout(timer);
-    if(q.length < 2){ ac.hidden = true; ac.innerHTML = ""; return; }
+    if(q.length < 2){ closeAc(); return; }
     timer = setTimeout(async () => {
       const mine = ++seq;
       try{
         const d = await apiGet(`${API}/taxa/autocomplete?per_page=8&q=${encodeURIComponent(q)}`);
         if(mine !== seq) return;
-        if(!d.results || !d.results.length){ ac.hidden = true; return; }
+        if(!d.results || !d.results.length){ closeAc(); return; }
+        active = -1;
         ac.innerHTML = d.results.map(t => {
           const thumb = t.default_photo && t.default_photo.square_url;
           return `<button type="button" data-id="${t.id}" data-name="${esc(t.name)}">
@@ -1407,8 +1417,28 @@ function wireFilters(){
           </button>`;
         }).join("");
         ac.hidden = false;
-      }catch(e){ ac.hidden = true; }
+      }catch(e){ closeAc(); }
     }, 280);
+  });
+
+  // Arrow keys move the highlight, Enter picks it — defaulting to the top row when nothing's
+  // been arrowed to yet, so Enter after typing acts on the best match without an extra tap.
+  input.addEventListener("keydown", e => {
+    if(ac.hidden || !ac.children.length) return;
+    if(e.key === "ArrowDown"){
+      e.preventDefault();
+      active = Math.min(active + 1, ac.children.length - 1);
+      highlight();
+    }else if(e.key === "ArrowUp"){
+      e.preventDefault();
+      active = Math.max(active - 1, 0);
+      highlight();
+    }else if(e.key === "Enter"){
+      e.preventDefault();
+      ac.children[active < 0 ? 0 : active].click();
+    }else if(e.key === "Escape"){
+      closeAc();
+    }
   });
 
   ac.addEventListener("click", e => {
