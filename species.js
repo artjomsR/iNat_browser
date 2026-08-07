@@ -2433,6 +2433,12 @@ const NOTES = {
         <div class="state-hint">${esc(areaLabel())} holds far too many species to list at once.
           Search a taxon above, or pick a group.</div>
       </div>`, "pick a group");
+      // The place field has just been filled in for the reader, so the cursor belongs one
+      // question further along — the same rule the empty-place state above follows, moved on
+      // by the answer that arrived with the link. Only where a question is still outstanding:
+      // with both halves set the page is a list to be read, and a field taking focus there
+      // would open a keyboard over it.
+      document.getElementById("taxonInput").focus();
       return;
     }
     runPlace();
