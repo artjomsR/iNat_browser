@@ -66,6 +66,33 @@ directly (or via `.claude/launch.json`'s static server) to run it.
     loading state all name it — a list narrowed to a season must never look like the whole
     year's. Taps are debounced and only the newest run may paint (`placeRun`), since picking
     a summer is three taps and each is an area query.
+  - `Recorded · Anywhere / Here` (`seen=here`) reads the reader's own ticks and tier badges
+    against the area instead of against the world, and is the place tab's third asking control —
+    it sits with the season, above it, so the pair reads as recorded *where* then recorded
+    *when*. It is one control for both signals because they are one badge column and one lookup.
+    Everything hangs off one line: `userScope` spreads the ground, which reaches the three tag
+    searches, the audio pair and all six of `sspStanding`'s questions at once, so the subspecies
+    path needs nothing of its own. The tick is the exception and the awkward half —
+    `unobserved_by_user_id` is iNaturalist's *global* test, so the place params already in
+    `unseenHere` only pick candidates and the answer per species stays global whatever is sent.
+    `here` is therefore not that question narrowed but the opposite one asked positively
+    (`recordedHere`); `alreadyHas` chooses and hands back a predicate, so the renderer sees one
+    polarity. Both of those gate the tag searches, which reach into casual records, so both pass
+    `verifiable=any` — a gate narrower than what it gates costs a species not just its tier but
+    its tick, and read against one area, where a species is often held on a single record, that
+    stops being academic. `sspStanding`'s first pass carries it for the same reason.
+    It takes the ground and never the season: `hereOnly` returns `areaWhere`, which is
+    `areaScope` with the taxon, the group and the month left off — that split is the whole
+    mechanism, so don't collapse it back. Place tab only, and only with both an area and a
+    username (`canReadHere`, which the control's own gate and the scopes share so what is drawn
+    and what is asked cannot come apart); on the tier tab the key rides along unread, like a pin,
+    since that list is a person's whole holding and stays one. Anywhere is the default and writes
+    no key. The blurb, the tally, the badge titles, the note, the loading state, `View my` and
+    the CSV all name which way it is set — a tick that quietly means something narrower than it
+    did is the one thing on this tab that must not go unsaid. Two honest costs, both
+    iNaturalist's: a record with no usable location and one with obscured coordinates (every
+    threatened species) cannot count as here. See the "where the badges are read" block in
+    `species.js`.
   - Bird rows carry an `eBird` link out to that species on eBird. The code eBird needs comes
     from Wikidata (see External dependencies) behind the finished list, so the link appears
     when it lands and is simply absent where no code is found — never broken.
@@ -118,10 +145,12 @@ directly (or via `.claude/launch.json`'s static server) to run it.
   it goes through (`apiGet`), `esc`, `ICONIC`, `MONTH_NAMES`, and the `species_counts` paging
   loop. Nothing in it reads a page's own state — it knows about iNaturalist and about HTML and
   nothing about a map or a report, and that is the line that keeps it from becoming a drawer.
-  `userScope` is the near-miss that stays out: the two copies are the same five lines over
-  different ground (the map projects `state`, the report projects `view`), and handing the
-  state in at all six call sites to save five lines makes both pages read worse than the
-  duplication does.
+  `userScope` is the near-miss that stays out, and it has since stopped being a near-miss: the
+  two were once the same five lines over different ground (the map projects `state`, the report
+  projects `view`), and handing the state in at every call site to save five lines made both
+  pages read worse than the duplication did. The report's has since grown a branch the map has
+  no counterpart for — the ground `seen=here` puts in — so the code now makes the case the
+  argument made first.
   The gallery does not load it and should not be made to — it asks iNaturalist in a shape of
   its own and is deliberately the page with nothing to wait for on load, so it keeps its own
   `esc` and `ICONIC`. Those copies are kept in step with common.js's by hand; the `esc` in
@@ -237,8 +266,11 @@ don't introduce a build step or split further unless a file becomes unwieldy aga
   still stands, with one qualifier — a *month* is not a date range. `m=6,7,8`
   narrows every year at once and leaves the "ever" intact, which is why the place tab takes it
   and would still refuse `d1`/`d2`. The distinction is the whole of the reasoning: a filter
-  that shortens the years is out, a filter that slices them is in, and anything new here has
-  to be argued on that line.
+  that shortens the years is out, a filter that slices them is in, and anything new about *when*
+  has to be argued on that line. The tab has a second axis now — `seen=here` asks *where* the
+  reader's own records were made — and it is not on that line at all, having nothing to do with
+  dates. The two stay orthogonal on purpose: `seen=here` takes the ground and never the season,
+  so neither control can quietly answer the other's question.
 
 ## Tests
 
@@ -275,8 +307,16 @@ merged; `comparator` and `sortRows`, where reversing turns over only what the or
 and never the tie-break inside it, so no reversed list is a plain mirror of its forward self;
 the CSV export, whose two silent failures are a row inside a hidden `<section>` — which the tier
 tab's cascade produces and a row-level `:not([hidden])` walks straight past — and a standing read
-off a heading three of the five sections share; `idBatches`; `taxoKey`; then
-`standingRank`/`tierRank`, `fmtRadius`, `esc` and `isSpeciesRow`.
+off a heading three of the five sections share; `areaWhere`/`userScope`, where `seen=here`'s
+three silent failures live — a season leaking into a badge would re-mean every one of them, the
+ground leaking onto the tier tab would turn a person's whole holding into an area's list under a
+heading still claiming the first, and the ground leaking in unasked would do both to a reader who
+never touched the switch; `idBatches`; `taxoKey`; then `standingRank`/`tierRank`, `fmtRadius`,
+`esc` and `isSpeciesRow`.
+That group is reachable at all only because `areaWhere` reads `view` as it stands rather than the
+consts settled at load (`pinSet` beside `hasPin`) — the switch moves without a navigation, so it
+had to; collapsing the two back takes the pin claims with it. `withView` is the harness's way in,
+saving and restoring whatever keys a claim needs, and `withRev` is now one line of it.
 `comparator` is exercised against real `<li>` elements carrying the attributes `rowHtml` writes,
 since it compares `dataset` — running it against the real thing in a real browser is the point
 of a harness that lives in one, so don't refactor it to take plain objects. The export's fixtures

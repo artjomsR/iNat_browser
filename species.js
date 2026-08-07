@@ -45,6 +45,17 @@
    Like the subspecies split it is a different question rather than a different reading of the
    same rows, so it refetches.
 
+   `seen=here` reads the reader's own ticks and tier badges against the area instead of against
+   the world. Without it a green tick means "I have this species, somewhere on earth" and a badge
+   means the best tag on a photograph taken anywhere — both true, and on a list of one park often
+   not the question being asked. It takes the ground and pointedly not the season: with months
+   also set, `here` still means "recorded here, ever", so the two controls stay one question
+   each. Only the place tab reads it, and only with an area to be in and a username to be it
+   about; anywhere else it rides along unread, like the season and the pin, so crossing to the
+   tier tab and back keeps it — the tier tab's list is a person's whole holding and stays that
+   way. Anywhere is the default and writes nothing. Like the season it is a different question
+   rather than a different reading of the same rows, so it refetches.
+
    `sort=tier` is the place tab's own order: the rows banded by what the named user already
    holds on them — never recorded first, then audio, the plain tick, C, B, S — and heaviest
    first inside each band. It needs a standing on every row to read, which only the place tab
@@ -245,6 +256,10 @@ const view = {
   // The season, empty for every month. Read on both tabs so it survives the crossing, applied
   // only by the place tab's own scope — see areaScope.
   months: readMonths(q.get("m")),
+  // Where the reader's own ticks and tier badges are read: "here" against the area, empty
+  // against the world. Carried on both tabs for the same reason the season is, and honoured
+  // only where it could mean something — see readingHere.
+  seen:   q.get("seen") === "here" ? "here" : "",
   // `min=0` in the address is an explicit "show me everything" and survives a reload.
   min:    q.has("min") ? Math.max(0, Math.floor(+q.get("min") || 0)) : DEFAULT_MIN,
   back:   q.get("back") || "",
@@ -259,7 +274,11 @@ const view = {
   hide:   q.has("hide") && /^\d+$/.test(q.get("hide")) ? +q.get("hide") : null
 };
 // A pin needs both halves to mean anything; a bare lat with no lng is no location at all.
-const hasPin = !!(view.lat && view.lng && view.radius);
+// A function as well as the const, and read as one by areaWhere: the boot decisions below want
+// the answer the address arrived with, but the scopes want a reading of `view` as it stands, so
+// that a control changing it in place is not answered by what was true at load.
+function pinSet(){ return !!(view.lat && view.lng && view.radius); }
+const hasPin = pinSet();
 const hasArea = !!view.place || hasPin;
 // Something narrowing the tree. Without it an area query is unbounded, so the place tab
 // declines to run one.
@@ -310,9 +329,15 @@ function writeState(over){
 
 /* ---------------- queries ---------------- */
 
+// One user's own records of one species, on iNat — where a tier-tab row points, and where the
+// place tab's "View my" goes. That second use is what decides its shape: the link is there to
+// let a reader check the badge beside it, so it asks the badge's own question. The ground comes
+// along under `here` and stays off otherwise, and the season comes along under neither, the
+// badge not being read by season either way.
 function taxonObsUrl(taxonId, user){
-  return "https://www.inaturalist.org/observations?taxon_id=" + encodeURIComponent(taxonId)
-       + "&user_id=" + encodeURIComponent(user) + "&verifiable=any";
+  const p = new URLSearchParams({ taxon_id: taxonId, user_id: user, verifiable: "any" });
+  Object.entries(hereOnly()).forEach(([k, v]) => p.set(k, v));
+  return "https://www.inaturalist.org/observations?" + p.toString();
 }
 
 // One species inside the area, on iNat — where a place-tab row points. The season goes with
@@ -357,18 +382,55 @@ function scopeLabel(){
   return "all taxa";
 }
 
-// Scope a species_counts query to one user plus the taxon / quick-group filters the map
-// was holding when the link was made.
+/* ---------------- where the badges are read ----------------
+
+   Empty is the world, which is what this page has always answered: a green tick means "I have
+   this species, somewhere", and a tier badge the best tag on a photograph of it taken anywhere.
+   `here` reads both against the area the list is of instead — the question a reader looking at
+   one park is usually asking.
+
+   It takes the ground and only the ground; the season stays out, for the reasons under
+   userScope. So the two asking controls answer one question each: this one says where a record
+   has to have been made to count, and the month row says nothing about the reader at all.
+
+   Honoured only where it could mean something — the place tab, with an area to be in and a
+   username to be it about — and read off `view` rather than off a const settled at load,
+   because unlike the area and the username this one moves without a navigation. Nothing is
+   folded back into `view` the way the tier order is: an address carrying `seen=here` across to
+   the tier tab keeps it, unread, exactly as the season and the pin do.
+
+   The known cost of asking honestly: a record iNaturalist holds no usable location for cannot
+   match a place, and the tag searches reach into casual records, which is where most of those
+   sit. So a tag on an unlocated observation drops out under `here`. That is the true answer to
+   "tagged here" rather than a gap to be papered over — see HERE_HINT, which says so. */
+
+// Whether the switch could mean anything at all: somewhere to be, someone to be it about, and
+// the tab whose question it is. One condition in one place, because the control's own gate reads
+// this too — what is drawn and what is asked must never be able to come apart.
+function canReadHere(){
+  return view.tab === "place" && !!view.user && !!Object.keys(areaWhere()).length;
+}
+
+function readingHere(){ return view.seen === "here" && canReadHere(); }
+
+// Params, like sspOnly, so it spreads into a scope rather than being asked about at every site.
+function hereOnly(){ return readingHere() ? areaWhere() : {}; }
+
+// Scope a species_counts query to one user plus the taxon / quick-group filters the map was
+// holding when the link was made — and, where the reader asked for it, the ground the list is
+// standing on (see hereOnly).
 //
-// Pointedly not scoped by month, wherever it is asked. Everything built on this is a question
-// about a person rather than about a time: which species they hold, which tier tag is on each,
-// which they have only ever heard. A season has no business in any of them. Narrowed to
-// August, a bird tagged S in July would come back untagged and a bird photographed in June
-// would lose its tick — the badge would stop meaning "what I have on this species" and start
-// meaning "what I happened to record in August", which is not what any of it claims. The
-// place tab's own list is where the season applies; see areaScope.
+// Pointedly not scoped by month, wherever it is asked, and load-bearing now rather than merely
+// true: the ground goes in and the season still does not. Everything built on this is a question
+// about a person rather than about a time — which species they hold, which tier tag is on each,
+// which they have only ever heard — and a place narrows the first of those honestly where a
+// season cannot. Narrowed to August, a bird tagged S in July would come back untagged and a bird
+// photographed in June would lose its tick: the badge would stop meaning "what I have on this
+// species" and start meaning "what I happened to record in August", which is not what any of it
+// claims. Narrowed to a park, a bird tagged S in that park is precisely what the badge is then
+// claiming to say. The place tab's own list is where the season applies; see areaScope.
 function userScope(user){
-  const o = { user_id: user };
+  const o = { user_id: user, ...hereOnly() };
   if(view.taxon) o.taxon_id = view.taxon;
   if(view.iconic.length) o.iconic_taxa = view.iconic.join(",");
   return o;
@@ -404,12 +466,21 @@ async function speciesIdsWithTag(user, tag){
    so "what has been recorded here in August, ever" is still the question this tab is for —
    the question anyone actually asks before a trip. It applies to the area's own list and to
    nothing else on the page: not to the ticks, not to the tier badges, not to the tier tab.
-   See userScope for why. */
+   See userScope for why — and areaWhere, which is what lets the ground go somewhere the season
+   is not allowed to follow. */
+
+// Just the ground: a named place, or the map's pin and radius, and nothing else. Split out of
+// areaScope so the user-side questions can take the place without taking the season with it,
+// which is the whole of what `seen=here` is (see hereOnly). A named place still wins over a pin,
+// one area at a time, exactly as it did when this was one function.
+function areaWhere(){
+  if(view.place) return { place_id: view.place };
+  if(pinSet()) return { lat: view.lat, lng: view.lng, radius: view.radius };
+  return {};
+}
 
 function areaScope(){
-  const o = {};
-  if(view.place) o.place_id = view.place;
-  else if(hasPin){ o.lat = view.lat; o.lng = view.lng; o.radius = view.radius; }
+  const o = { ...areaWhere() };
   if(view.taxon) o.taxon_id = view.taxon;
   if(view.iconic.length) o.iconic_taxa = view.iconic.join(",");
   if(view.months.length) o.month = view.months.join(",");
@@ -492,10 +563,46 @@ async function speciesHere(){
 // entire life list (11k species, two dozen requests) to tick off a few hundred rows; this
 // is one area-sized query however much the user has seen. "Unobserved" is iNat's own and
 // means anywhere, not just here, so the tick reads as "I have this species".
+//
+// Which is also why it cannot simply be narrowed. The place params already in this query only
+// pick the candidates; iNaturalist still answers each of them globally. `here` is not this
+// question with a place bolted onto it, it is the other question — see recordedHere.
 async function unseenHere(user){
   const params = { ...areaScope(), unobserved_by_user_id: user };
   return cachedIds("unseen", params, async () =>
     new Set((await speciesCounts(params)).map(x => x.taxon.id)));
+}
+
+// The same tick under `here`, asked positively: which species the reader has records of inside
+// the area. `userScope` is exactly the scope wanted, and not by coincidence — the ground rides
+// in it under `here` and the season never does, so the tick and the tier badges beside it are
+// read on one scope and cannot come to disagree about what "here" was. Small, too: a person's
+// records in one area are a fraction of that area's list, where their life list is a multiple
+// of it, which is the whole reason the question has to be turned round in the first place.
+//
+// `verifiable:"any"` because this is a gate, and a gate has to be at least as wide as what it
+// gates. The tag searches it stands in front of deliberately reach into casual records (see
+// speciesIdsWithTag); left at the default this would find the tag and then throw the row away,
+// costing a species tagged S on a casual record here not just its tier but its tick. Widening
+// it cannot add a row: it is only ever consulted about species already on the list, and that
+// list is verifiable-only — the same trade, and the same reasoning, as the tag lookup's own.
+async function recordedHere(user){
+  const params = { ...userScope(user), verifiable: "any" };
+  return cachedIds("recordedHere", params, async () =>
+    new Set((await speciesCounts(params)).map(x => x.taxon.id)));
+}
+
+// Has this reader already recorded it — the one thing the badge column needs, and the one thing
+// both questions above can answer. They are opposite in sense and opposite in polarity, so the
+// choosing is done here and the renderer is handed a single predicate rather than two branches
+// it would have to keep the right way up.
+async function alreadyHas(user){
+  if(readingHere()){
+    const mine = await recordedHere(user);
+    return id => mine.has(id);
+  }
+  const missing = await unseenHere(user);
+  return id => !missing.has(id);
 }
 
 // iNat's taxon search, the same index behind the map's species field — so a name typed here
@@ -639,8 +746,15 @@ async function sspStanding(rows, user, allRecorded){
   const scope = userScope(user);
   const recorded = new Set();
   if(allRecorded) rows.forEach(x => recorded.add(x.taxon.id));
+  // `verifiable:"any"`, for recordedHere's reason and not a second one: this is the gate the
+  // five questions below stand behind, three of them reach into casual records on purpose, and a
+  // gate narrower than what it gates costs a race tagged S on a casual record not just its tier
+  // but its tick. It only ever narrows rows that are on the list already, and that list is
+  // verifiable-only, so widening it can add no row. Read against one area the difference stops
+  // being academic — a race is often held on a single record there, and a single casual record
+  // was the whole answer.
   else for(const wave of sspWaves(rows))
-    (await sspAsk(wave, scope, {})).forEach(id => recorded.add(id));
+    (await sspAsk(wave, scope, { verifiable: "any" })).forEach(id => recorded.add(id));
 
   const mine = rows.filter(x => recorded.has(x.taxon.id));
   const tag = { s: new Set(), b: new Set(), c: new Set() };
@@ -1125,12 +1239,17 @@ const BADGE = {
 // ranked at or above it (see STANDING_ORDER), drops out of view — a click again on the
 // same rank brings it all back. `data-rank` is what wireHideToggle reads; the row badges
 // carry a title of their own already, so only the parts particular to each caller differ.
+//
+// Under `here` the standing is qualified rather than reworded. BADGE's five descriptions are
+// shared with the legend and with the tier tab's own headings, and rewriting them at the source
+// would have a band on a page that has no area claiming something about one.
 function badgeHtml(mark, user){
   const hit = BADGE[mark] || BADGE.seen;
+  const said = hit[1] + (readingHere() ? " (in this area)" : "");
   return ` <span class="tick tick-${esc(mark)}" data-rank="${standingRank(mark)}"
       role="button" tabindex="0"
-      title="@${esc(user)} &mdash; ${hit[1]}. Click to hide this and every better standing."
-      aria-label="${hit[1]}">${hit[0]}</span>`;
+      title="@${esc(user)} &mdash; ${said}. Click to hide this and every better standing."
+      aria-label="${said}">${hit[0]}</span>`;
 }
 
 // The same badge standing in for a whole band, on the tier tab's headings and rail. Takes a
@@ -1171,7 +1290,8 @@ function rowHtml(x, i, user, mark){
   const viewMy = mark
     ? ` <span class="sep">&middot;</span><a class="viewMy" href="${esc(taxonObsUrl(t.id, user))}"
           target="_blank" rel="noopener"
-          title="${esc(user)}&#39;s own records of this ${rowNoun()}, everywhere">View my</a>`
+          title="${esc(user)}&#39;s own records of this ${rowNoun()}, ${
+            readingHere() ? "inside this area" : "everywhere"}">View my</a>`
     : "";
   // Birds only, and painted empty and hidden: the code eBird needs is looked up behind the
   // finished list, the same way family names are, and the link appears if and when one lands.
@@ -1210,7 +1330,33 @@ const SSP_HINT = "Split every species into the subspecies recorded in this scope
 
 const MONTH_HINT = "Only records made in these months, in any year — the years are never "
   + "shortened, so this is still what the area holds ever, read one season at a time. Your own "
-  + "ticks and tier badges are not filtered: they say what you have on a species, not when.";
+  + "ticks and tier badges are never filtered by season: they say what you have on a species, "
+  + "not when. Where they are read is the Recorded switch's own question, not this one's.";
+
+const HERE_HINT = "Read your own ticks and tier badges against this area alone. A green tick "
+  + "then means you have recorded the species here, and a tier badge your best tag on a "
+  + "photograph taken here. The season never narrows them, either way round. Two kinds of "
+  + "record cannot count as here, and both are iNaturalist's doing rather than this page's: "
+  + "one it holds no usable location for, and one whose coordinates are obscured — which is "
+  + "every record of a threatened species. Anywhere has neither problem.";
+
+// Where the reader's own records are read, and the third of the place tab's asking controls: it
+// changes what iNaturalist is asked about them rather than how the rows already on the page are
+// read, so it sits with the season and the split rather than in the sortbar. Drawn only where it
+// could mean something — an area to be in, and a username to be it about. Anywhere is the
+// default and lights the left button, so an address that never mentions it reads exactly as this
+// page always has. `data-where` rather than `data-seen`, which a row already carries meaning
+// something else entirely.
+function heldRowHtml(){
+  if(!canReadHere()) return "";
+  const on = w => ` aria-pressed="${(view.seen === "here") === (w === "here")}"`;
+  return `<div class="heldbar" role="group" aria-label="Where your own records are read"
+        title="${esc(HERE_HINT)}">
+    <span class="hb-label">Recorded</span>
+    <button type="button" data-where="anywhere"${on("anywhere")}>Anywhere</button>
+    <button type="button" data-where="here"${on("here")}>Here</button>
+  </div>`;
+}
 
 // The season control, and the place tab's second asking control. Deliberately not in the
 // sortbar: that bar holds only what re-reads rows already on the page, and a month is a
@@ -1352,26 +1498,41 @@ function legendHtml(){
 // `counts` is missing while a fetch is out, when the numbers are simply not known yet: the
 // line keeps its shape and shows an em dash for each — the same mark the page header uses for
 // a username it has not been given — so nothing shifts when the real numbers land.
+// What the pair on that line is called, which the Recorded switch changes — kept in one place
+// because retally rewrites the line as rows drop out, and would otherwise put "observed" back
+// the first time the threshold moved.
+function tallyWord(){ return readingHere() ? "recorded here" : "observed"; }
+
 function placeTallyHtml(counts){
   const sep = `<span class="sep">|</span>`;
   const held = counts ? counts.held : "&mdash;";
   const total = counts ? counts.total : "&mdash;";
   const badge = view.user
-    ? `<span class="who">@${esc(view.user)}</span>${sep}<span class="n have" title="Already recorded, of the species showing">${held} / ${total} observed</span>`
+    ? `<span class="who">@${esc(view.user)}</span>${sep}<span class="n have" title="Already recorded${
+        readingHere() ? " inside this area" : ", anywhere"}, of the species showing">${
+        held} / ${total} ${tallyWord()}</span>`
     : `<span class="n">${total}</span>`;
   return `<h2><a href="${esc(areaSpeciesUrl())}" target="_blank" rel="noopener"
         title="The same area on iNaturalist"></a>${badge}</h2>`;
 }
 
 // The place tab's controls, apart from the rows they act on: the legend, sort, the subspecies
-// split, months and the count line. Every one of them reads off `view`, never off a fetch's
-// rows, so the whole block can be drawn — and answer clicks — before that fetch has landed.
+// split, where the ticks are read, months and the count line. Every one of them reads off
+// `view`, never off a fetch's rows, so the whole block can be drawn — and answer clicks —
+// before that fetch has landed.
 function placeToolbarHtml(sortBy, counts){
+  // The legend names the badges; under `here` something also has to name what they are being
+  // read against, and it belongs directly above them rather than only on the switch's tooltip.
+  // A phone has no hover to fall back on, and a tick quietly meaning something narrower than it
+  // did is the one thing on this tab that must not go unsaid.
   const lede = view.user
-    ? `<p class="blurb">Click the tiers below to hide them.</p>${legendHtml()}`
+    ? `<p class="blurb">${readingHere()
+        ? `Read against <b>${esc(areaLabel())}</b> alone &mdash; a tick means you have recorded
+           it here. ` : ""}Click the tiers below to hide them.</p>${legendHtml()}`
     : `<p class="blurb">Add a username to tick off the ones you have already recorded.</p>`;
   return `${lede}
     ${sortbarHtml(sortBy)}
+    ${heldRowHtml()}
     ${monthRowHtml()}
     <label class="onlySub" title="${esc(SSP_HINT)}">
     <input type="checkbox"${view.ssp ? " checked" : ""}>Show only subspecies?</label>
@@ -1487,15 +1648,19 @@ function drawFamilies(ul, on){
     const head = document.createElement("li");
     head.className = "fam";
     // The name opens this family within the current region — same place/pin scope as every
-    // row's own link. "View my" is unscoped by area on purpose: it is the one place on this
-    // page that answers "everywhere I've ever seen this family", not just here.
+    // row's own link. "View my" follows the rows' own, which means it follows the Recorded
+    // switch: everywhere by default, this area under `here`. It used to be unscoped on purpose,
+    // as the one link answering "everywhere I have ever seen this family" — but a band sitting
+    // over rows badged against one area cannot be the page's one exception to that, or the
+    // heading and the rows under it read as two different questions.
     head.innerHTML = fam
       ? `<a class="famName" href="${esc(taxonAreaUrl(fam.id))}" target="_blank" rel="noopener"
             title="This family's species here, on iNaturalist">
           <b>${esc(fam.name)}</b>${fam.common ? ` <span class="famCommon">${esc(fam.common)}</span>` : ""}
         </a>${view.user
           ? `<a class="viewMy" href="${esc(taxonObsUrl(fam.id, view.user))}" target="_blank" rel="noopener"
-                title="${esc(view.user)}'s own records of this family, everywhere">View my</a>`
+                title="${esc(view.user)}'s own records of this family, ${
+                  readingHere() ? "inside this area" : "everywhere"}">View my</a>`
           : ""}`
       : `<b>Family not recorded</b>`;
     ul.insertBefore(head, li);
@@ -1512,7 +1677,7 @@ function retally(ul, shown, held){
   // single number everywhere else. Both halves follow the visible rows: the threshold only
   // ever trims a species the reader has nothing on, so it moves the total alone, while the
   // rank cascade hides recorded ones and moves both.
-  if(n) n.textContent = n.classList.contains("have") ? `${held} / ${shown} observed` : shown;
+  if(n) n.textContent = n.classList.contains("have") ? `${held} / ${shown} ${tallyWord()}` : shown;
   const rail = document.querySelector(`.index a[href="#${sec.id}"] .n`);
   if(rail) rail.textContent = shown;
 }
@@ -1768,8 +1933,16 @@ function csvHeadLines(rows){
   out.push([noun[0].toUpperCase() + noun.slice(1), rows.length]);
   // Only where a standing means something: on the tier tab every row is the reader's own by
   // definition, so "412 of 412" there would be a line that says nothing.
+  //
+  // What "recorded" meant goes directly above the number it qualifies, and is printed either way
+  // round rather than only under `here`. A default that writes nothing is right for an address,
+  // which is always read beside the page it opens; this is a file, opened months later with
+  // nothing beside it at all, and "144 of 332" with no word on which question was asked is the
+  // exact ambiguity the switch exists to end. Named for the column it also explains.
   if(view.tab === "place" && view.user){
     const held = rows.filter(li => li.dataset.standing).length;
+    out.push(["Standing", readingHere() ? "read against this area alone"
+                                        : "read against everywhere"]);
     out.push(["Recorded", `${held} of ${rows.length}`]);
   }
   // Both of these are in the URL below, but a printed sheet is read without following it, and a
@@ -1941,6 +2114,27 @@ function wireOnlySub(){
   }));
 }
 
+// The third control that asks iNaturalist something new, and the plainest of them: one tap, with
+// no run of taps to wait out, so no debounce — the month row's half-second below exists because
+// a summer is three of them and this is never more than one. A tap on the button already lit is
+// not a change and must not cost a query.
+//
+// Found by its own class, like the subspecies checkbox, so moving it around the toolbar costs
+// nothing here. The list is repainted from the tab's own query, so the row goes with it and comes
+// back showing the side it was put on.
+function wireHeld(){
+  document.querySelectorAll(".heldbar").forEach(row => row.addEventListener("click", e => {
+    const b = e.target.closest("button[data-where]");
+    if(!b) return;
+    const want = b.dataset.where === "here" ? "here" : "";
+    if(want === view.seen) return;
+    view.seen = want;
+    // Anywhere is the default, so it leaves no key behind — same as sort's "count".
+    writeState({ seen: view.seen });
+    runPlace();
+  }));
+}
+
 // The other control that asks iNaturalist something new — and the only one worked in several
 // taps, a summer being three of them. Firing on the tap would spend an area query on each, and
 // throw away the first two before they landed, so the row lights and the address is rewritten
@@ -1993,14 +2187,16 @@ function wireLayout(){
   }));
 }
 
-// The four controls that mean something on `view` alone, with no rows required to answer a
-// click — sort, layout, the subspecies split and months. Bound after any paint that can grow
-// one of them into the page, including the place tab's own loading state (see runPlace),
-// since the buttons a reader just used are still live even while their fetch is out.
+// The five controls that mean something on `view` alone, with no rows required to answer a
+// click — sort, layout, the subspecies split, where the ticks are read, and months. Bound after
+// any paint that can grow one of them into the page, including the place tab's own loading state
+// (see runPlace), since the buttons a reader just used are still live even while their fetch is
+// out.
 function wireToolbar(){
   wireSort();
   wireLayout();
   wireOnlySub();
+  wireHeld();                   // place tab only, and only with an area and a username to read
   wireMonths();                 // place tab only — no month row is painted anywhere else
 }
 
@@ -2102,35 +2298,42 @@ let placeRun = 0;
 async function runPlace(){
   const mine = ++placeRun;
   document.title = placeTitle();
+  // The note is rebuilt here for the same reason the title is: the month row and the Recorded
+  // switch change what this list is without reloading the page, and a note still describing the
+  // old one would be the last thing on screen still claiming it.
+  document.getElementById("note").innerHTML = NOTES.place();
   paint(placeShellHtml(`<div class="state">
     <div class="state-lede">Reading the area&hellip;</div>
     <div class="state-hint">Every species recorded in ${esc(areaLabel())}${
       view.months.length ? " " + esc(seasonLabel()) : ""}${
-      view.user ? `, then checking them against @${esc(view.user)}'s own species` : ""}.${
+      view.user ? (readingHere()
+        ? `, then checking them against what @${esc(view.user)} has recorded here`
+        : `, then checking them against @${esc(view.user)}'s own species`) : ""}.${
       view.ssp ? " Splitting each into its subspecies takes a few more passes." : ""}</div>
   </div>`), "", true);
   wirePlaceShell();
   try{
     // Whole species can be asked about all at once, none of the three depending on another:
-    // `unseen` answers which of the area's species this user is missing, `bestOf` what they
-    // hold on the ones they do have. Subspecies cannot — the questions are asked by id, so
-    // the list has to exist first — and they replace both, so neither is fetched then.
+    // `has` answers which of the area's species this user already holds, `bestOf` what they
+    // hold on them. Subspecies cannot — the questions are asked by id, so the list has to
+    // exist first — and they replace both, so neither is fetched then.
     const split = view.ssp && !!view.user;
-    const [rows, unseen, bestOf] = await Promise.all([
+    const [rows, has, bestOf] = await Promise.all([
       speciesHere(),
-      view.user && !split ? unseenHere(view.user) : Promise.resolve(null),
+      view.user && !split ? alreadyHas(view.user) : Promise.resolve(null),
       view.user && !split ? standingLookup(view.user) : Promise.resolve(null)
     ]);
     // One lookup for the renderer, taking a row rather than an id so that each list can
     // answer at its own rank: "" for something they have never recorded, otherwise their
     // standing on it. Missing beats standing — a taxon absent from their list has no tags to
-    // rank, whatever a stale tag search might say.
+    // rank, whatever a stale tag search might say. One reading of it whichever way round
+    // `alreadyHas` had to ask, which is the whole reason it hands back a predicate.
     let standing = null;
     if(split){
       const bySsp = await sspStanding(rows, view.user, false);
       standing = x => bySsp(x.taxon.id);
-    }else if(unseen){
-      standing = x => unseen.has(x.taxon.id) ? "" : (bestOf ? bestOf(x.taxon.id) : "seen");
+    }else if(has){
+      standing = x => has(x.taxon.id) ? (bestOf ? bestOf(x.taxon.id) : "seen") : "";
     }
     if(mine !== placeRun) return;              // a later selection is already being read
     // No tally in the header: this tab is one list, and its count belongs on it, where it can
@@ -2291,18 +2494,22 @@ function wireTaxonFinder(){
 
 /* ---------------- boot ---------------- */
 
+// Functions rather than strings, for the place tab's sake: its note has to say which way the
+// ticks are being read, and the Recorded switch changes that without reloading the page. So it
+// is rebuilt on every run, beside the title — see runPlace.
 const NOTES = {
-  tier: `Every species this user has recorded, banded by the best tier tag it carries
+  tier: () => `Every species this user has recorded, banded by the best tier tag it carries
      and listed weakest first. The tiers override downwards &mdash; S beats B beats C &mdash; so a
      species tagged S counts as tier S whatever else sits on it, and appears once. IDs left
      coarser than species are not counted. Each link opens their observations of that species,
      casual ones included.`,
-  place: `Every species recorded inside this area, with the ones the named user has already
-     recorded &mdash; anywhere, not just here &mdash; ticked off. Counts are iNaturalist's own
-     observation totals for the area, so the default order is the same one their species view
-     leads with. Casual records are not counted; the years are never shortened, so this answers
-     what has been found in this place, ever &mdash; and the month row cuts that by season
-     without cutting it short.`
+  place: () => `Every species recorded inside this area, with the ones the named user has already
+     recorded ${readingHere() ? "&mdash; here, inside this area &mdash;"
+                              : "&mdash; anywhere, not just here &mdash;"} ticked off. Counts are
+     iNaturalist's own observation totals for the area, so the default order is the same one their
+     species view leads with. Casual records are not counted; the years are never shortened, so
+     this answers what has been found in this place, ever &mdash; and the month row cuts that by
+     season without cutting it short.`
 };
 
 (function init(){
@@ -2339,7 +2546,7 @@ const NOTES = {
   // Without it the gallery falls back to its own default and quietly shows someone else's.
   document.getElementById("galleryLink").href =
     "gallery.html" + (view.user ? "?u=" + encodeURIComponent(view.user) : "");
-  document.getElementById("note").innerHTML = NOTES[view.tab];
+  document.getElementById("note").innerHTML = NOTES[view.tab]();
   // Named here only on the tier tab, where it is the whole subject of the page. The place
   // tab folds it into the list heading instead, beside the count it explains — see
   // placeListHtml — so this has nothing to add there, and paint() hides the line when empty.

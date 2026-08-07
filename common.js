@@ -15,11 +15,15 @@
    map or a report. That is the line, and it is what keeps a shared file from becoming a place
    things are put to get them out of the way.
 
-   `userScope` looks like it belongs here and does not. The two copies are the same five lines
-   over different ground: the map projects `state`, the report projects `view`, and the objects
-   are nothing alike beyond the two fields it reads. Unifying them means handing the state in
-   at all six call sites to save five lines, which makes both pages read worse than the
-   duplication does. Two functions that look alike are not one function.
+   `userScope` looks like it belongs here and does not — and it has since stopped even looking
+   like it. The two were once the same five lines over different ground: the map projects
+   `state`, the report projects `view`, and the objects are nothing alike beyond the two fields
+   each reads. The report's has since grown a branch the map has no counterpart for, the ground
+   its `seen=here` switch puts in (see species.js), so the case is now made by the code rather
+   than only by the argument. The argument stood on its own first: unifying them meant handing
+   the state in at every call site to save five lines, which read worse on both pages than the
+   duplication did. Two functions that look alike are not one function, and these two have
+   stopped looking alike.
 
    The gallery does not load this, and should not be made to. It asks iNaturalist in a shape of
    its own — one shelf, paged in sequence, sleeping between pages — and it is deliberately the

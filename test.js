@@ -65,6 +65,15 @@ function same(got, want, why){
 }
 function show(v){ return typeof v === "string" ? JSON.stringify(v) : String(v); }
 
+// Half of species.js reads the address rather than a parameter, and the harness boots with an
+// empty one — so a claim about a place, a season or a switch has to put one there and take it
+// back off again, whether the claim passed or threw.
+function withView(over, run){
+  const was = {};
+  Object.keys(over).forEach(k => { was[k] = view[k]; view[k] = over[k]; });
+  try{ return run(); }finally{ Object.assign(view, was); }
+}
+
 /* ---------------- the boot ----------------
 
    The premise everything below stands on, so it is asserted rather than assumed: an empty
@@ -288,11 +297,8 @@ const names = rs => rs.map(x => x.taxon.preferred_common_name);
 const arrived = [R(11, "crake", 9), R(12, "adder", 5), R(13, "buzzard", 5), R(14, "dipper", 1)];
 const arrivedNames = names(arrived);
 
-function withRev(rev, run){
-  const was = view.rev;
-  view.rev = rev;
-  try{ return run(); }finally{ view.rev = was; }
-}
+// The direction is on `view` like everything else, so this is withView with one key named.
+function withRev(rev, run){ return withView({ rev }, run); }
 
 claim("forwards, the count order is the order the rows already arrived in", () => {
   withRev(false, () => same(names(sortRows(arrived, "count")), ["crake", "adder", "buzzard", "dipper"]));
@@ -483,6 +489,122 @@ claim("the header counts the rows the file actually holds", () => {
 claim("with no rows showing there is nothing to write", () => {
   // #main is back to the place prompt here — the state the boot left it in.
   is(csvText(), null);
+});
+
+/* ---------------- where the badges are read ----------------
+
+   `seen=here` reads the reader's own ticks and tier badges against the area instead of against
+   the world, and it does it by putting the ground into `userScope` — one line, reaching the tag
+   searches, the audio pair, the subspecies path and the tick alike. Which makes `userScope` the
+   one place it can go wrong, and it can go wrong quietly in three ways.
+
+   A season leaking in would re-mean every badge on the page: "what I have on this species" would
+   become "what I happened to record in August". The ground leaking onto the tier tab would turn
+   one person's whole holding into an area's list, under a heading still claiming the first. And
+   the ground leaking in unasked would do both to a reader who never touched the switch. All
+   three paint perfectly happily, which is the whole reason they are written down here.
+
+   All of this is reachable from a harness booted with an empty query string only because
+   `areaWhere` reads `view` as it stands rather than the consts settled at load — the switch
+   moves without a navigation, so it had to. Anyone collapsing `pinSet()` back into `hasPin`
+   takes the pin claims below with it. */
+
+group("areaWhere / userScope");
+
+// A place tab with somewhere to be, someone to be it about, and the switch thrown.
+const somewhere = { place: "7122", user: "someone", tab: "place", seen: "here" };
+
+claim("the ground on its own is the place, and nothing else", () => {
+  withView({ ...somewhere, months: [6, 7], taxon: "12345" }, () =>
+    same(areaWhere(), { place_id: "7122" }));
+});
+
+claim("while the area's own scope still carries the season and the taxon", () => {
+  withView({ ...somewhere, months: [6, 7], taxon: "12345" }, () =>
+    same(areaScope(), { place_id: "7122", taxon_id: "12345", month: "6,7" }));
+});
+
+claim("with no place the pin is the ground, in the map's own three parts", () => {
+  withView({ ...somewhere, place: "", lat: "38.72", lng: "-9.14", radius: "5" }, () =>
+    same(areaWhere(), { lat: "38.72", lng: "-9.14", radius: "5" }));
+});
+
+claim("a named place wins over a pin — one area at a time", () => {
+  withView({ ...somewhere, lat: "38.72", lng: "-9.14", radius: "5" }, () =>
+    same(areaWhere(), { place_id: "7122" }));
+});
+
+claim("a pin needs all three of its parts to be a place at all", () => {
+  withView({ ...somewhere, place: "", lat: "38.72", lng: "", radius: "5" }, () =>
+    same(areaWhere(), {}));
+});
+
+claim("with nowhere to be, `here` is not honoured", () => {
+  withView({ ...somewhere, place: "", lat: "", lng: "", radius: "" }, () => {
+    same(areaWhere(), {});
+    ok(!readingHere(), "`here` was honoured with no area at all");
+  });
+});
+
+claim("asked for, the ground rides in the user scope", () => {
+  withView(somewhere, () => is(userScope("someone").place_id, "7122"));
+});
+
+claim("unasked, it does not — the default reads as this page always has", () => {
+  withView({ ...somewhere, seen: "" }, () => same(userScope("someone"), { user_id: "someone" }));
+});
+
+claim("the season never reaches the user scope, whichever way the switch is set", () => {
+  withView({ ...somewhere, months: [8] }, () =>
+    ok(!("month" in userScope("someone")), "under `here`"));
+  withView({ ...somewhere, seen: "", months: [8] }, () =>
+    ok(!("month" in userScope("someone")), "under the default"));
+});
+
+claim("the tier tab never reads it — that list is a person's whole holding", () => {
+  withView({ ...somewhere, tab: "tier" }, () => {
+    ok(!readingHere(), "the tier tab honoured `here`");
+    same(userScope("someone"), { user_id: "someone" });
+  });
+});
+
+claim("with no username there is nobody for it to be about", () => {
+  withView({ ...somewhere, user: "" }, () =>
+    ok(!readingHere(), "`here` was honoured with no user"));
+});
+
+// The control and the query read one gate, so the switch can never be on screen offering
+// something the scopes would decline to do — or be missing where they would have done it.
+claim("the control is drawn on exactly the states that would honour it", () => {
+  withView(somewhere, () => ok(heldRowHtml().includes("data-where"), "with an area and a user"));
+  withView({ ...somewhere, seen: "" }, () =>
+    ok(heldRowHtml().includes("data-where"), "under the default, which it still has to offer"));
+  withView({ ...somewhere, user: "" }, () => is(heldRowHtml(), "", "with no user"));
+  withView({ ...somewhere, place: "" }, () => is(heldRowHtml(), "", "with no area"));
+  withView({ ...somewhere, tab: "tier" }, () => is(heldRowHtml(), "", "on the tier tab"));
+});
+
+claim("the link that checks a badge asks the badge's own question", () => {
+  const scoped = withView({ ...somewhere, months: [8] }, () => taxonObsUrl(19743, "someone"));
+  const world = withView({ ...somewhere, seen: "", months: [8] }, () => taxonObsUrl(19743, "someone"));
+  ok(scoped.includes("place_id=7122"), "under `here` the link should be the area's: " + scoped);
+  ok(!scoped.includes("month"), "the badge is not read by season, so nor is its link: " + scoped);
+  ok(!world.includes("place_id"), "under the default it should not be scoped: " + world);
+});
+
+// Both ways round, unlike the address, which writes nothing for a default. A file is opened with
+// nothing beside it, so "144 of 332" has to carry the question it answers — see csvHeadLines.
+claim("the export names which way the standings were read, whichever way that was", () => {
+  inMain(here(rowHtml(owl, 0, "someone", "b")), () => {
+    const scoped = withView(somewhere, () => csvText());
+    const world = withView({ ...somewhere, seen: "" }, () => csvText());
+    ok(scoped.includes("Standing,read against this area alone"), "under `here`");
+    ok(world.includes("Standing,read against everywhere"), "under the default");
+    // Directly above the pair it qualifies, a line apart being a line too far in a printed block.
+    const lines = scoped.split("\r\n");
+    is(lines[lines.findIndex(l => l.startsWith("Recorded,")) - 1],
+       "Standing,read against this area alone", "the line above the count:");
+  });
 });
 
 /* ---------------- idBatches ----------------
