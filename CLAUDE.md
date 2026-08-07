@@ -93,9 +93,26 @@ directly (or via `.claude/launch.json`'s static server) to run it.
   - `Show: Unseen / All` filters against what has already been seen; see the localStorage
     note under Conventions.
 
-Each page is a plain `<link rel="stylesheet">` + `<script src>` pair — no modules, no
-imports, everything in one script file per page. Keep it that way; don't introduce a build
-step or split further unless a file becomes unwieldy again.
+- **common.js** — the one file the map and the species report both load, ahead of their own.
+  It holds what those two genuinely share: the API's address, the request gate every call to
+  it goes through (`apiGet`), `esc`, `ICONIC`, `MONTH_NAMES`, and the `species_counts` paging
+  loop. Nothing in it reads a page's own state — it knows about iNaturalist and about HTML and
+  nothing about a map or a report, and that is the line that keeps it from becoming a drawer.
+  `userScope` is the near-miss that stays out: the two copies are the same five lines over
+  different ground (the map projects `state`, the report projects `view`), and handing the
+  state in at all six call sites to save five lines makes both pages read worse than the
+  duplication does.
+  The gallery does not load it and should not be made to — it asks iNaturalist in a shape of
+  its own and is deliberately the page with nothing to wait for on load, so it keeps its own
+  `esc` and `ICONIC`. Those copies are kept in step with common.js's by hand; the `esc` in
+  particular must stay the five-character, null-safe one, or the three pages stop agreeing
+  about what is safe to write into a page.
+
+Each page is a plain `<link rel="stylesheet">` + `<script src>` pair, with `common.js` as a
+second plain `<script src>` **before** the page script on the map, the species report and
+`test.html` — no modules, no imports, no build step, and everything still a global, which is
+why load order is the whole of the arrangement. Two scripts is the ceiling: keep it that way;
+don't introduce a build step or split further unless a file becomes unwieldy again.
 
 ## External dependencies
 
@@ -105,7 +122,7 @@ step or split further unless a file becomes unwieldy again.
   a wall of photographs has nothing to wait for.
 - iNaturalist API v1 (`https://api.inaturalist.org/v1`) for all data — species counts,
   taxa, place autocomplete. No API key; all requests are unauthenticated GETs.
-  Every one of those GETs on the map and the species page goes through that page's `apiGet` —
+  Every one of those GETs on the map and the species page goes through `apiGet` in common.js —
   a request gate holding the pace to one departure per 350ms and at most three open at once,
   retrying the statuses that mean "later" and a connection that dropped, and throwing on
   everything else as the raw `fetch` calls always did. It hands back parsed JSON, so a caller
@@ -118,8 +135,9 @@ step or split further unless a file becomes unwieldy again.
   The gallery keeps its own arrangement — it pages one shelf sequentially and already slept
   between pages and handled a 429 before any of this — and the Wikidata lookup stays outside
   the gate deliberately, being a different service with its own temper and its own retry.
-  `apiGet` is duplicated per page, as `esc` and `ICONIC` are, to keep one script file per
-  page; if that ever changes it is the first thing that should move.
+  `apiGet` lives in common.js, with `esc`, `ICONIC` and the `species_counts` paging loop; the
+  counters it keeps are one document's, the two page scripts never being in the same document,
+  so sharing the file shares the code and not the queue.
 - Wikidata Query Service (`https://query.wikidata.org/sparql`, species page only) for one
   thing: the eBird species code behind a bird row's `eBird` link. eBird addresses a species by
   its own six-letter code and publishes no key-free way to look one up — their taxonomy
@@ -185,7 +203,15 @@ step or split further unless a file becomes unwieldy again.
   The autocompletes are deliberately out of it, being cheap, already debounced, and stale in a
   way a reader would see. See the "keeping the answers" block in `species.js`.
 - iNaturalist's `verifiable=true` (research + needs-ID, casual excluded) is the default
-  filter on every query; don't drop it without a reason.
+  filter on every query; don't drop it without a reason. `speciesCounts` in common.js applies
+  it, and takes three answers rather than two: say nothing and it is set; pass `verifiable`
+  yourself and that value is sent — the species report's tag lookup passes `"any"`, because a
+  tier tag is a judgement about a photograph and stands wherever that photograph sits; pass it
+  empty and none is sent at all. The empty one has exactly one caller, the map's own tag
+  lookup, which has never sent a `verifiable` and is deliberately still not sending one. That
+  the two pages answer the same question differently is a real inconsistency, recorded here
+  rather than quietly resolved: settling it changes which species the map calls done, which is
+  a decision about the map and not a tidy-up.
 - The species page's place tab is deliberately unfiltered by date: the question is what has
   been recorded here, ever, and a date range would quietly answer a much smaller one. That
   still stands, with one qualifier — a *month* is not a date range. `m=6,7,8`
@@ -214,10 +240,12 @@ three-page navigation.
 
 How it reaches the code without a module, and without touching production code: `test.html`
 reproduces `species.html`'s body skeleton so every `getElementById` in `species.js` finds its
-element, then loads `species.js` unmodified with an empty query string. That resolves to the
-tier tab with no user and short-circuits into the username prompt before a single request
-leaves, so the script settles harmlessly with all of its top-level functions in scope for
-`test.js`, loaded after it. The "asked nothing" half is asserted rather than assumed —
+element, then loads `common.js` and `species.js` unmodified, in that order and with an empty
+query string — the page's own load order, kept, since `species.js` expects common.js's globals
+to be there already and `test.js` reaches for both (`esc` is common.js's now). That resolves to
+the place tab with no place and short-circuits into the prompt before a single request leaves,
+so the scripts settle harmlessly with all of their top-level functions in scope for `test.js`,
+loaded after them. The "asked nothing" half is asserted rather than assumed —
 `test.html` wraps `fetch` and `XMLHttpRequest` ahead of the boot and the first test reads the
 count back.
 

@@ -121,8 +121,15 @@ function sleep(ms) {
   return new Promise(function (r) { setTimeout(r, ms); });
 }
 
+// The same five characters the map and the report escape, and the same reading of null. This
+// page keeps its own copy rather than take a second script for eight lines — it is the page
+// with nothing to wait for on load — but a copy that says something different about what is
+// safe to write into a page is worse than no copy at all. Quotes matter even though every
+// value here currently lands between tags: the next line that writes one into an attribute
+// should not have to know that this page's escape was the weaker one. See common.js.
 function esc(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  var ENT = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ENT[c]; });
 }
 
 // The whole-page message: a heading in the serif, then a line of explanation which may carry

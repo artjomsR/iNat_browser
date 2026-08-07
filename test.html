@@ -105,6 +105,9 @@ XMLHttpRequest.prototype.open = function(method, url, ...rest){
 };
 </script>
 
+<!-- The page's own load order, kept: common.js declares what species.js expects to find, and
+     test.js reaches for both — `esc` is common.js's now. -->
+<script src="common.js"></script>
 <script src="species.js"></script>
 <script src="test.js"></script>
 </body>
