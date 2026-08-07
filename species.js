@@ -1101,6 +1101,15 @@ const SORT_ARROW = `<svg class="arrow" viewBox="0 0 16 16" aria-hidden="true">
         fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
+// The export's own glyph: the same arrow as above, dropping into a tray. Deliberately built
+// out of the sort arrow's line rather than a fresh drawing — the two sit inches apart in the
+// same bar, and an arrow that means "down" beside an arrow that means "out of the page" would
+// only read as two directions. currentColor, like every other icon here.
+const EXPORT_ICON = `<svg viewBox="0 0 16 16" aria-hidden="true">
+  <path d="M8 1.6v8.2M4.4 6.2L8 9.8l3.6-3.6M2 11.4v2.2h12v-2.2"
+        fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
 // What the badge says, per standing. The glyph carries the tier and the colour ramps with
 // it — bronze, silver, gold for C, B, S — so a column of these can be read at a glance
 // without stopping on each letter.
@@ -1272,6 +1281,8 @@ function sortbarHtml(sortBy, withRefresh){
       <button type="button" data-layout="list"${laid("list")}>${LAYOUT_ICON.list}List</button>
       <button type="button" data-layout="grid"${laid("grid")}>${LAYOUT_ICON.grid}Grid</button>
     </span>
+    <button type="button" class="exportCsv" title="${esc(EXPORT_HINT)}"
+      >${EXPORT_ICON}${EXPORT_LABEL}</button>
   </div>`;
 }
 
@@ -1599,6 +1610,254 @@ function wireHideToggle(){
     if(!t) return;
     e.preventDefault();
     toggleHideFrom(+t.dataset.rank);
+  });
+}
+
+/* ---------------- taking the list away ----------------
+
+   The place tab builds a target list — every species in an area, ticked against one reader,
+   banded, sorted, thinned by the threshold and by the cascade — and until now it lasted exactly
+   as long as the tab was open. This writes it to a file: a spreadsheet to sort further, or a
+   sheet of paper to tick off somewhere with no signal, which is where the list is actually read.
+
+   It reads the RENDERED ROWS, and that is the whole of its correctness. `relist` has already
+   applied the order, the threshold, the rank cascade, the subspecies split and the family bands;
+   the rows on screen are the one representation that holds all of it at once. Rebuilding any of
+   that from the fetched arrays would be a second opinion about what is showing, and the two would
+   disagree the first time either side changed. So nothing here recomputes anything — it copies
+   out what the reader can see, and if the list is wrong on screen the file is wrong the same way.
+
+   Downloaded, never copied. A clipboard write needs a secure context, and this page's whole
+   reason for existing on a phone is being opened from a LAN address — `http://192.168.x.x:8731`
+   is not secure, so `navigator.clipboard` is simply absent there. A Blob and an `<a download>`
+   work over plain HTTP, survive a reboot, and open in a spreadsheet.
+
+   CSV rather than plain text because the columns are worth keeping apart: a count to sort on, a
+   standing to filter by, a family to group by. RFC 4180 throughout — CRLF, and a cell quoted only
+   where it has to be, so numbers stay numbers to whatever opens it. */
+
+const EXPORT_LABEL = "Export CSV";
+const EXPORT_HINT = "Save what is showing — in this order, with this threshold and these tiers "
+  + "hidden — as a CSV. The file names the area, the scope and this page's own address, so the "
+  + "list can be rebuilt from it.";
+
+// What each standing is called in a file, where a glyph is no use and a colour ramp is no use
+// either. Same five marks the badges speak (see BADGE), plus the empty one — the place tab's
+// species with nothing on them at all, which is the row the whole tab is read for and so the one
+// that must not export as a blank cell.
+const STANDING_WORD = {
+  "":      "not recorded",
+  seen:    "recorded, untagged",
+  audio:   "audio only",
+  c:       "tier C",
+  b:       "tier B",
+  s:       "tier S"
+};
+
+// A row's standing, whichever tab painted it. The place tab writes it onto the row; the tier tab
+// has no per-row badge because the section IS the standing there, so it is read off the section's
+// id — `tier-N` into TIERS, then that tier's tag through the same `tag || "seen"` rule tierBadge
+// uses, so Untagged lands on the plain tick rather than on the empty mark.
+//
+// The id and not the heading: three of the five sections are titled "Tier" and are told apart on
+// screen only by the badge beside the word, so the text of the `<h2>` cannot say which band this
+// is. Reading the id also keeps the file right if the sections are ever rearranged, TIERS' order
+// being explicitly free to change.
+function standingOf(li){
+  if(li.dataset.standing) return li.dataset.standing;
+  const sec = li.closest("section");
+  const m = sec && /^tier-(\d+)$/.exec(sec.id);
+  const tier = m && TIERS[+m[1]];
+  return tier ? (tier[2] || "seen") : "";
+}
+
+// Every row the reader can actually see, in the order they are seen in.
+//
+// Not `li:not([hidden])`, which is only half the rule: the cascade hides individual rows on the
+// place tab but whole `<section>`s on the tier tab (see applyHideFrom), and a hidden section's
+// rows are not themselves hidden. `closest("[hidden]")` starts at the element itself, so one test
+// covers both — a row is out if it is hidden or if anything holding it is.
+//
+// `li.fam` is dropped rather than exported as a heading row: a CSV is one table with one shape,
+// and a family band is how the taxonomic order reads on screen, not a species. The family itself
+// is not lost — it rides on every row as a column instead, which is how a spreadsheet groups.
+function visibleRows(){
+  return [...main.querySelectorAll("ul li")]
+    .filter(li => !li.classList.contains("fam") && !li.closest("[hidden]"));
+}
+
+const CSV_COLUMNS = ["#", "Common name", "Scientific name", "Observations", "Standing",
+                     "Family", "Taxon id"];
+
+// One row, read off itself. The number comes from `.num` because that is the number the reader
+// sees — `relist` renumbers it as rows drop out, so it counts the list rather than the fetch.
+//
+// A row with no English name prints its binomial in the common slot and carries no `.sci` line at
+// all (see rowHtml). Here that name moves to the scientific column and the common one is left
+// empty, so a column of binomials never masquerades as a column of common names.
+//
+// The family is `familyOf`'s, the same lookup drawFamilies reads, so the column and the bands can
+// never name different families. It is fetched behind the finished list, so an export taken in the
+// first second or two of a paint has the column empty — absent, never wrong, which is the same
+// bargain the eBird links make.
+function rowCells(li){
+  const text = el => el ? el.textContent.trim() : "";
+  const nameEl = li.querySelector(".common");
+  const name = text(nameEl && nameEl.querySelector("a"));
+  const asSci = !!nameEl && nameEl.classList.contains("as-sci");
+  const fam = familyOf.get(+li.dataset.taxon);
+  return [
+    text(li.querySelector(".num")),
+    asSci ? "" : name,
+    asSci ? name : text(li.querySelector(".sci")),
+    li.dataset.count,
+    STANDING_WORD[standingOf(li)],
+    fam ? fam.name : "",
+    li.dataset.taxon
+  ];
+}
+
+// RFC 4180: a cell is quoted only where it has to be — a comma, a quote, a line break, or space at
+// either end that a reader would otherwise lose. Inner quotes double. Everything else goes bare,
+// so a count arrives in a spreadsheet as a number rather than as text that looks like one.
+//
+// `esc` is the wrong tool here and deliberately not used: these strings are going into a file, not
+// into `innerHTML`, and `&amp;` in a printed checklist is a bug. Common names hold commas often
+// enough ("Sparrow, House" style inversions, "Tit, Great") that this is not theoretical; nothing
+// on iNaturalist is known to hold a quote or a newline, which is exactly why the code must not
+// assume it.
+function csvCell(v){
+  const s = v == null ? "" : String(v);
+  return /[",\r\n]/.test(s) || s !== s.trim() ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function csvLine(cells){ return cells.map(csvCell).join(","); }
+
+// Local, not UTC: the reader took this list at their own clock, and an ISO string would say
+// something else by an hour or two. Minutes are enough — two exports the same afternoon want
+// telling apart, two the same minute do not.
+function stampNow(d){
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+       + ` ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// What this list is, so a file found in six months still means something — and so it can be had
+// again. Key and value, a pair per line, ahead of a blank line and the table proper: a spreadsheet
+// shows it as a small block above the columns, and a stricter parser is told to skip it.
+//
+// The URL earns its place over all the rest. The address IS the state on this page — scope, tab,
+// months, sort, direction, threshold, cascade and layout are all written into it as they change —
+// so that one line rebuilds this exact list, which is a thing no other export format gives away
+// for free.
+//
+// The counts are taken from the exported rows rather than read back off the heading, so the pair
+// in the file and the pair on screen cannot drift; they are the same rows counted the same way
+// retally counts them.
+function csvHeadLines(rows){
+  const out = [["List", view.tab === "tier" ? "By tier tag" : "Species here"]];
+  if(view.tab === "place"){
+    out.push(["Area", areaLabel()]);
+    if(view.months.length) out.push(["Season", monthsLabel(view.months)]);
+  }
+  out.push(["Scope", scopeLabel()]);
+  if(view.user) out.push(["User", view.user]);
+  // Capitalised through rowNoun so the key reads as what the rows are — "Subspecies,412" under
+  // the split, "Species,412" otherwise.
+  const noun = rowNoun();
+  out.push([noun[0].toUpperCase() + noun.slice(1), rows.length]);
+  // Only where a standing means something: on the tier tab every row is the reader's own by
+  // definition, so "412 of 412" there would be a line that says nothing.
+  if(view.tab === "place" && view.user){
+    const held = rows.filter(li => li.dataset.standing).length;
+    out.push(["Recorded", `${held} of ${rows.length}`]);
+  }
+  // Both of these are in the URL below, but a printed sheet is read without following it, and a
+  // reader holding 40 rows of a 900-species area has to be told that is what they are holding.
+  const cut = [];
+  if(view.min) cut.push(`hidden under ${view.min} observations`);
+  if(view.hide != null && STANDING_ORDER[view.hide]) {
+    cut.push(`${STANDING_WORD[STANDING_ORDER[view.hide]]} and above hidden`);
+  }
+  if(cut.length) out.push(["Filters", cut.join("; ")]);
+  out.push(["Taken", stampNow(new Date())]);
+  out.push(["URL", location.href]);
+  return out.map(csvLine);
+}
+
+// The whole file, or null where there is nothing to write — the place tab keeps its toolbar up
+// through loading, empty and failed states (see placeShellHtml), so the button is on screen at
+// moments when the list is not.
+function csvText(){
+  const rows = visibleRows();
+  if(!rows.length) return null;
+  return [...csvHeadLines(rows), "", csvLine(CSV_COLUMNS), ...rows.map(li => csvLine(rowCells(li)))]
+    .join("\r\n") + "\r\n";
+}
+
+// A name that says what the file is without being opened, and that sorts with its siblings by
+// date. Anything that is not a letter or a digit becomes a hyphen — this lands on a filesystem,
+// and a place called "Faro, Portugal" or a pin labelled "5.0 km around 38.720, -9.140" must not
+// arrive as a name Windows refuses.
+function csvName(){
+  const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-")
+                            .replace(/^-|-$/g, "").slice(0, 40);
+  const who = view.tab === "tier" ? view.user + "-tier-tags" : areaLabel();
+  return ["inat", slug(who), slug(scopeLabel()), stampNow(new Date()).slice(0, 10)]
+    .filter(Boolean).join("-") + ".csv";
+}
+
+// A Blob, an object URL, an anchor clicked and dropped, and the URL revoked behind it. The
+// timeout is what the revoke needs: a click is queued, not performed, and pulling the URL out
+// from under it in the same tick loses the file on some browsers.
+//
+// The BOM is not decoration. Without it Excel on Windows reads a .csv as the system codepage and
+// every name holding an accent or an en dash arrives mangled — and this list is full of both.
+// Named, and written as its escape rather than as the character: a bare U+FEFF in the source is
+// invisible in every editor, and the first tool to tidy this file would take it away silently
+// with nothing left to see.
+//
+// No `target` on the anchor, deliberately: the home-screen standalone build intercepts clicks on
+// `a[target="_blank"]` and turns them into navigations (see the top of this file), which would
+// send the reader to a blob URL instead of saving one.
+const BOM = "\uFEFF";
+
+function saveCsv(text, name){
+  const url = URL.createObjectURL(new Blob([BOM + text], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Delegated from the document, like the badges: the sortbar is destroyed and rebuilt on every
+// paint, on both tabs, and a listener bound to the button would go with it — so this is wired
+// once and survives every repaint there will ever be.
+//
+// Feedback is the gallery's: swap the label, put it back after a beat, no alert and no toast. The
+// label is restored from the constant rather than from what the button was reading when it was
+// clicked, so a second click inside that beat cannot leave a button permanently saying "Saved".
+function wireExport(){
+  let timer = null;
+  document.addEventListener("click", e => {
+    const btn = e.target.closest && e.target.closest(".exportCsv");
+    if(!btn) return;
+    const say = word => {
+      btn.textContent = word;
+      clearTimeout(timer);
+      timer = setTimeout(() => { btn.innerHTML = EXPORT_ICON + EXPORT_LABEL; }, 1200);
+    };
+    let text;
+    try{ text = csvText(); }catch(err){ say("Couldn't save"); return; }
+    if(!text){ say("Nothing to save"); return; }
+    // A refusal here is the browser's — no room, no permission, an old one with no `download` at
+    // all. Said out loud rather than swallowed: this is a list someone is trying to take into the
+    // field, and a button that silently does nothing is worse than one that admits it.
+    try{ saveCsv(text, csvName()); say("Saved"); }
+    catch(err){ say("Couldn't save"); }
   });
 }
 
@@ -2050,6 +2309,9 @@ const NOTES = {
   // Delegated on the document, so it covers every badge this page ever paints without
   // needing to be re-bound after each render — wired once, here, rather than per paint.
   wireHideToggle();
+  // The same arrangement, and for the same reason: the export sits in the sortbar, which is
+  // thrown away and rebuilt on every paint on both tabs.
+  wireExport();
 
   // The tabs are two addresses over one scope, so switching carries the scope across and
   // drops only what cannot apply.

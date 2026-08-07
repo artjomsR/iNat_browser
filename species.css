@@ -108,6 +108,12 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
    hover and selected because it is drawn in currentColor */
 .sortbar .layout button{display:inline-flex;align-items:center;gap:7px}
 .sortbar .layout svg{flex:0 0 auto;width:11px;height:11px}
+/* the export, last in the bar and held off the layout pair — it is the one control here that
+   produces something rather than changing what is shown, so it reads as its own thing rather
+   than as a third view. Everything else it needs it already inherits from .sortbar button; only
+   the icon and the gap are its own. It never takes `on`: there is no state to be in. */
+.sortbar .exportCsv{display:inline-flex;align-items:center;gap:7px;margin-left:11px}
+.sortbar .exportCsv svg{flex:0 0 auto;width:11px;height:11px}
 .sortbar .thresh{display:flex;align-items:center;gap:6px;margin-left:auto;
   letter-spacing:.12em;color:var(--mute)}
 /* the clear sits inside the field, between the number and the spinner arrows */
@@ -151,7 +157,7 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
 .monthbar .mbClear:hover{color:var(--mark)}
 .monthbar .mbClear[hidden]{display:none}
 @media (max-width:520px){
-  .sortbar{flex-wrap:wrap} .sortbar .thresh,.sortbar .layout{margin-left:0}
+  .sortbar{flex-wrap:wrap} .sortbar .thresh,.sortbar .layout,.sortbar .exportCsv{margin-left:0}
 }
 /* index rail — sticky beside the tiers on a wide window, a wrapping strip on a narrow one */
 .cols{display:grid;grid-template-columns:186px minmax(0,1fr);gap:34px;align-items:start;margin-top:14px}

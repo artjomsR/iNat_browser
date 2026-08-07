@@ -350,6 +350,141 @@ claim("sorting never disturbs the rows it was handed", () => {
   same(names(grown), ["crake", "adder", "buzzard"], "the fixture was reordered in place —");
 });
 
+/* ---------------- csv ----------------
+
+   The export's one claim is that the file is the list on screen, so everything here is asserted
+   against real rows in the real `#main` rather than against plain objects — the same reasoning
+   that keeps `comparator` on live elements. The rows are built by calling `rowHtml` itself, not by
+   writing markup out again here, so a change to what a row carries fails these tests rather than
+   quietly costing the file a column.
+
+   The two that fail silently, and so earn their place first: a row inside a hidden `<section>` —
+   which the tier tab's cascade produces and a row-level `:not([hidden])` sails straight past — and
+   the standing, which the place tab writes on the row and the tier tab holds only in a section id
+   that three of its five sections cannot be told apart by. */
+
+group("csv");
+
+// A species as the API hands one over, pared to what a row reads. No ancestry, so isBird is false
+// and no eBird link is painted — this is about the cells, not the links.
+const sp = (id, common, name, count) => ({
+  count,
+  taxon: { id, name, preferred_common_name: common, rank_level: 10 }
+});
+
+// Paint a fixture into the very element visibleRows() reads, then put back what was there. #main
+// holds the place prompt at this point in the harness, and the last claim below reads it.
+function inMain(html, run){
+  const was = main.innerHTML;
+  main.innerHTML = html;
+  try{ return run(); }finally{ main.innerHTML = was; }
+}
+// The place tab's shape: one section, the badge written onto each row.
+const here = (...rows) => `<section id="here"><ul>${rows.join("")}</ul></section>`;
+// The tier tab's: a section per band, rows carrying no badge at all. Asked of TIERS by tag rather
+// than by index, since TIERS' order is explicitly free to be rearranged.
+const band = (tag, ...rows) =>
+  `<section id="tier-${TIERS.findIndex(t => t[2] === tag)}"><ul>${rows.join("")}</ul></section>`;
+
+const owl = sp(19743, "Barn Owl", "Tyto alba", 318);
+
+claim("a cell holding a comma is quoted, and a quote inside it is doubled", () => {
+  is(csvCell("Sparrow, House"), '"Sparrow, House"');
+  is(csvCell('a "b" c'), '"a ""b"" c"');
+  is(csvCell("two\r\nlines"), '"two\r\nlines"');
+});
+
+claim("a plain cell is left bare, so a count arrives in a spreadsheet as a number", () => {
+  is(csvCell("Barn Owl"), "Barn Owl");
+  is(csvCell(318), "318");
+  is(csvCell(null), "");
+});
+
+claim("a cell with space at either end is quoted, so the space survives", () => {
+  is(csvCell(" Barn Owl "), '" Barn Owl "');
+});
+
+claim("a row exports the number, both names, the count, the standing and the id it was painted with", () => {
+  inMain(here(rowHtml(owl, 0, "someone", "b")), () => {
+    // Family is empty: familyOf is filled behind a real paint, and absent is the honest answer.
+    same(rowCells(visibleRows()[0]), ["1", "Barn Owl", "Tyto alba", "318", "tier B", "", "19743"]);
+  });
+});
+
+claim("a row with no common name exports its binomial as the scientific name and no common one", () => {
+  inMain(here(rowHtml(sp(1, "", "Tyto alba", 5), 0, "someone", "")), () => {
+    const cells = rowCells(visibleRows()[0]);
+    is(cells[1], "", "the common column should be empty —");
+    is(cells[2], "Tyto alba", "the scientific column:");
+    is(cells[4], "not recorded", "a place-tab row with no badge:");
+  });
+});
+
+claim("the tier tab's section names the standing its rows carry no badge for", () => {
+  inMain(band("s", rowHtml(owl, 0, "someone")) + band("", rowHtml(sp(2, "Crake", "Porzana porzana", 3), 0, "someone")),
+    () => {
+      const rows = visibleRows();
+      is(rowCells(rows[0])[4], "tier S");
+      is(rowCells(rows[1])[4], "recorded, untagged", "Untagged is the plain tick, not a blank —");
+    });
+});
+
+claim("the same standing reads the same whichever tab painted it", () => {
+  const byBadge = inMain(here(rowHtml(owl, 0, "someone", "s")), () => rowCells(visibleRows()[0])[4]);
+  const bySection = inMain(band("s", rowHtml(owl, 0, "someone")), () => rowCells(visibleRows()[0])[4]);
+  is(byBadge, bySection);
+});
+
+claim("a family heading is not a species and is not exported as one", () => {
+  inMain(here(`<li class="fam"><b>Tytonidae</b></li>`, rowHtml(owl, 0, "someone", "b")), () => {
+    is(visibleRows().length, 1);
+  });
+});
+
+claim("a hidden row is not exported", () => {
+  inMain(here(rowHtml(owl, 0, "someone", "b")), () => {
+    visibleRows()[0].hidden = true;
+    is(visibleRows().length, 0);
+  });
+});
+
+claim("a row inside a hidden section is not exported, though the row itself is not hidden", () => {
+  // The tier tab's whole cascade: applyHideFrom hides sections, never rows. Testing the row alone
+  // would export a band the reader cannot see.
+  inMain(band("s", rowHtml(owl, 0, "someone")), () => {
+    const row = visibleRows()[0];
+    row.closest("section").hidden = true;
+    ok(!row.hidden, "the fixture hid the row rather than the section —");
+    is(visibleRows().length, 0);
+  });
+});
+
+claim("the file is the header block, a blank line, the columns, then the rows", () => {
+  inMain(here(rowHtml(owl, 0, "someone", "b")), () => {
+    const lines = csvText().split("\r\n");
+    const blank = lines.indexOf("");
+    ok(blank > 0, "no blank line between the header block and the table");
+    ok(lines[0].startsWith("List,"), "the first line should say what the list is: " + lines[0]);
+    ok(lines.slice(0, blank).some(l => l.startsWith("URL,")),
+       "the address is what makes the list reproducible, and it is missing");
+    is(lines[blank + 1], csvLine(CSV_COLUMNS), "the column row:");
+    is(lines[blank + 2], csvLine(rowCells(visibleRows()[0])), "the first species row:");
+    is(lines[lines.length - 1], "", "the file should end with a line break");
+  });
+});
+
+claim("the header counts the rows the file actually holds", () => {
+  inMain(here(rowHtml(owl, 0, "someone", "b"), rowHtml(sp(3, "Crake", "Porzana porzana", 4), 1, "someone", "")), () => {
+    const lines = csvText().split("\r\n");
+    ok(lines.includes("Species,2"), "the count line should follow the rows: " + lines.slice(0, 8).join(" | "));
+  });
+});
+
+claim("with no rows showing there is nothing to write", () => {
+  // #main is back to the place prompt here — the state the boot left it in.
+  is(csvText(), null);
+});
+
 /* ---------------- idBatches ----------------
 
    iNat refuses a request past somewhere around 8,000 characters of query string, so id lists

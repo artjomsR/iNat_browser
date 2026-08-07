@@ -84,6 +84,26 @@ directly (or via `.claude/launch.json`'s static server) to run it.
     species' scientific name.
     `ssp` is the map's key and keeps the map's spelling — the map's `ssp=1` ("include
     subspecies") has no meaning here and reads as off.
+  - `Export CSV` writes the list as it is currently showing to a downloaded file — last in the
+    sortbar, and the one control there that produces something rather than changing what is read.
+    It takes the **rendered rows, not the fetched ones**, and that is the fact a change here is
+    likeliest to break: `relist` has already applied the order, the threshold, the rank cascade
+    and the subspecies split, so the rows on screen are the single representation holding all of
+    it at once, and recomputing any of it from the arrays would be a second opinion that drifts
+    the first time either side moves. Two rules do the work. A row is out if it *or anything
+    holding it* carries `hidden` — the tier tab's cascade hides whole `<section>`s and leaves
+    their rows unhidden, so a row-level `:not([hidden])` alone would export a band nobody can
+    see. And `li.fam` headings are dropped, the family riding on every row as a column instead,
+    a CSV being one table with one shape. The tier tab's banding survives as that same
+    `Standing` column, spelled as a word (`recorded, untagged`, `audio only`, `tier C`) and read
+    from the row's badge on the place tab but from the section's *id* on the tier tab — the id
+    and not the heading, three of the five sections being titled `Tier` and told apart only by
+    the badge beside it. Above the table sits a key/value block: the area, the season, the
+    scope, the user, the counts as shown, what is filtered out, the date — and the page's own
+    address, which is the state, so that one line rebuilds the list the file came from.
+    Downloaded and never copied: `navigator.clipboard` wants a secure context, and this page is
+    read off a LAN address on a phone, where there is none. See the "taking the list away" block
+    in `species.js`.
 - **gallery.html / gallery.css / gallery.js** — the photo wall, reached from the species
   page's "Gallery" link, which carries the username across. Every photo on one user's tagged
   observations in a three-up grid, with a full-screen viewer behind each tile (tap the halves,
@@ -253,10 +273,16 @@ What is covered, in the order it earns its place: `sspWaves`, whose invariant �
 two subspecies of one parent — fails silently rather than loudly, two asked together coming back
 merged; `comparator` and `sortRows`, where reversing turns over only what the order is asking
 and never the tie-break inside it, so no reversed list is a plain mirror of its forward self;
-`idBatches`; `taxoKey`; then `standingRank`/`tierRank`, `fmtRadius`, `esc` and `isSpeciesRow`.
+the CSV export, whose two silent failures are a row inside a hidden `<section>` — which the tier
+tab's cascade produces and a row-level `:not([hidden])` walks straight past — and a standing read
+off a heading three of the five sections share; `idBatches`; `taxoKey`; then
+`standingRank`/`tierRank`, `fmtRadius`, `esc` and `isSpeciesRow`.
 `comparator` is exercised against real `<li>` elements carrying the attributes `rowHtml` writes,
 since it compares `dataset` — running it against the real thing in a real browser is the point
-of a harness that lives in one, so don't refactor it to take plain objects. Test names are
+of a harness that lives in one, so don't refactor it to take plain objects. The export's fixtures
+go further and are painted into the real `#main` by calling `rowHtml` itself rather than by
+writing that markup out a second time, `#main` being put back afterwards — so a change to what a
+row carries fails a test rather than quietly costing the file a column. Test names are
 claims, so a failure reads as the sentence that stopped being true, and where a comment in
 `species.js` states a behaviour the test encodes that sentence rather than whatever the code
 happens to do.
