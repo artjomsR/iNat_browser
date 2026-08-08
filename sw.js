@@ -91,7 +91,7 @@
       it takes over with is nothing at all. */
 
 /* Bump on every change to a file in SHELL. */
-const VERSION = "v1";
+const VERSION = "v2";
 const CACHE = "inat-shell-" + VERSION;
 
 /* Relative to this file, which is the repo root, so the app still works served from a

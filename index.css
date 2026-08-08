@@ -45,29 +45,34 @@ body{
 }
 .leaflet-tooltip-top:before{border-top-color:rgba(20,33,29,.95)}
 
-/* ---------- accuracy legend ---------- */
+/* ---------- accuracy legend ----------
+   Small on purpose: it sits over the map, in the corner a thumb rests in, and everything it
+   says is a key to something drawn elsewhere — it is read once and then glanced at. The type
+   is set a step below the sheet's throughout, and the width is the narrowest that still keeps
+   `= ?m` and the four gradient ticks each on one line in the fallback stack,
+   which is wider than Archivo Narrow and so is what the measurement has to hold for. */
 .acc-legend{
   position:absolute;z-index:600;left:12px;
   bottom:calc(var(--safe-b) + 22px);
-  width:168px;padding:10px 11px 11px;
-  background:rgba(20,33,29,.92);border:1px solid var(--rule);border-radius:10px;
+  width:90px;padding:8px 9px 9px;
+  background:rgba(20,33,29,.92);border:1px solid var(--rule);border-radius:9px;
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
 }
 .acc-legend[hidden]{display:none}
 .acc-legend-title{
-  font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
-  color:var(--mute);margin-bottom:7px;
+  font-size:8px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--mute);margin-bottom:5px;
 }
-.acc-legend-bar{height:8px;border-radius:4px;margin-bottom:4px}
+.acc-legend-bar{height:6px;border-radius:3px;margin-bottom:3px}
 .acc-legend-ticks{
   display:flex;justify-content:space-between;
-  font-size:8.5px;color:var(--mute);letter-spacing:.02em;margin-bottom:9px;
+  font-size:7.5px;color:var(--mute);letter-spacing:.02em;margin-bottom:7px;
 }
 .acc-legend-unknown{
-  display:flex;align-items:center;gap:6px;
-  font-size:9.5px;color:var(--mute);margin-bottom:7px;
+  display:flex;align-items:center;gap:5px;
+  font-size:8.5px;color:var(--mute);margin-bottom:6px;
 }
-.acc-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.acc-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
 .acc-dot-unknown{background:#fff;border:1.5px solid #101613}
 /* The same colour as the dot, worn by the row's taxon glyph in the results list. Wider than
    the 8px dot it stands in for — a gull's wings or a beetle's legs need the room — and 16 is
@@ -77,11 +82,16 @@ body{
 .acc-mark{flex:0 0 auto;display:flex}
 .acc-mark svg{width:16px;height:16px;display:block}
 .acc-legend-status{
-  font-size:9.5px;color:var(--mute);line-height:1.4;
-  padding-top:7px;border-top:1px solid var(--rule);
+  font-size:8.5px;color:var(--mute);line-height:1.4;
+  padding-top:6px;border-top:1px solid var(--rule);
 }
-.acc-legend-radius{padding-top:8px;margin-top:8px;border-top:1px solid var(--rule)}
-.acc-legend-radius .seg button{padding:6px 4px;font-size:9px;letter-spacing:.08em}
+.acc-legend-radius{padding-top:6px;margin-top:6px;border-top:1px solid var(--rule)}
+/* Stacked rather than side by side, which is the sheet's arrangement and not this box's: at
+   this width two buttons on a line leave `Precise` and `Large` a few characters of room each,
+   and the pair would set the legend's width rather than the other way round. Column costs one
+   button's height and buys back a box narrow enough to be a corner mark again. */
+.acc-legend-radius .seg{flex-direction:column;gap:4px}
+.acc-legend-radius .seg button{padding:5px 4px;font-size:8.5px;letter-spacing:.06em}
 
 /* ---------- offline ----------
    A strip across the top rather than a badge in a corner: with no connection this is the only
