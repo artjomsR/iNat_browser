@@ -83,10 +83,30 @@ body{
 .acc-legend-radius{padding-top:8px;margin-top:8px;border-top:1px solid var(--rule)}
 .acc-legend-radius .seg button{padding:6px 4px;font-size:9px;letter-spacing:.08em}
 
+/* ---------- offline ----------
+   A strip across the top rather than a badge in a corner: with no connection this is the only
+   true thing on the page, and the corners are all taken. It pushes the label bar down by its
+   own measured height (--offline-h, set from index.js) instead of by a number kept in step
+   here — the line wraps to two on a narrow phone, and a label bar overlapping the sentence
+   that explains the empty map would be the one collision that matters. */
+.offline{
+  position:absolute;z-index:800;top:0;left:0;right:0;
+  padding:calc(var(--safe-t) + 7px) 12px 7px;
+  display:flex;align-items:baseline;gap:8px;
+  background:rgba(20,33,29,.94);border-bottom:1px solid var(--rule);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  font-size:10.5px;line-height:1.35;color:var(--mute);
+}
+.offline[hidden]{display:none}
+.offline b{
+  flex:0 0 auto;color:var(--mark);
+  font-size:9px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+}
+
 /* ---------- specimen label bar (signature) ---------- */
 .label-bar{
   position:absolute;z-index:600;
-  top:calc(var(--safe-t) + 8px);right:12px;left:auto;
+  top:calc(var(--safe-t) + 8px + var(--offline-h,0px));right:12px;left:auto;
   max-width:calc(100% - 24px);
   padding:8px 12px;border-radius:10px;
   background:rgba(20,33,29,.92);border:1px solid var(--rule);

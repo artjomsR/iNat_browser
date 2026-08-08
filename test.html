@@ -106,9 +106,17 @@ XMLHttpRequest.prototype.open = function(method, url, ...rest){
 </script>
 
 <!-- The page's own load order, kept: common.js declares what species.js expects to find, and
-     test.js reaches for both — `esc` is common.js's now. -->
-<script src="common.js"></script>
-<script src="species.js"></script>
+     test.js reaches for both — `esc` is common.js's now.
+
+     `?test` is addressed to the service worker rather than to the server: sw.js caches both of
+     these files and serves them cache-first, and a query is how a request says it wants the
+     file on disk instead (see shellKey there). Without it a run made after an edit but before
+     the worker's next version could tick every claim while reading yesterday's species.js —
+     a green tally that means nothing is worse than no tally. test.js needs no such thing: it
+     is not part of the shell and was never cached. This page does not register a worker of its
+     own either, which is why the whole arrangement is only ever six characters here. -->
+<script src="common.js?test"></script>
+<script src="species.js?test"></script>
 <script src="test.js"></script>
 </body>
 </html>

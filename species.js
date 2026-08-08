@@ -2251,11 +2251,22 @@ function paint(html, sub, busy){
 // `wrap` lets a tab keep whatever shell was already on screen around the message — the place
 // tab uses it to hold its toolbar in place through a failed refetch (see runPlace); the tier
 // tab has no such shell to offer, so it takes the default and paints the message bare.
+//
+// With no connection the caller's hint is simply wrong — neither rate-limiting nor a mistyped
+// username had anything to do with it — and this page can now reach this state with nothing
+// having gone out at all, since the shell comes off a cache (see sw.js) and opens where it
+// used to fail to load. So the reason is read off the browser rather than guessed at, and the
+// offline one says what is and isn't kept: no answer on this page is, deliberately.
 function failed(hint, wrap = html => html){
+  const off = navigator.onLine === false;
   paint(wrap(`<div class="state">
-    <div class="state-lede">The list didn't come back.</div>
-    <div class="state-hint">${hint}</div>
-  </div>`), "failed");
+    <div class="state-lede">${off ? "There's no connection." : "The list didn't come back."}</div>
+    <div class="state-hint">${off
+      ? `The page is cached; the list isn't. Every count on it is asked of iNaturalist when you
+         open it &mdash; nothing here is kept, so there is nothing to show you until the signal
+         is back.`
+      : hint}</div>
+  </div>`), off ? "offline" : "failed");
 }
 
 // Family names and eBird codes both cost their own requests, so they are fetched behind the

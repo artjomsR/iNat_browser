@@ -671,6 +671,45 @@ function setStow(on){
 }
 stowBtn.addEventListener("click", () => setStow(document.body.dataset.stow !== "1"));
 
+/* ---------------- offline ----------------
+
+   New, and only because of the worker. Before it, no connection meant no page: nothing loaded,
+   nothing to explain itself with. Now the app opens off its own cache with the observations
+   still on the far side of a dead line, and an empty map that looks exactly like a map with no
+   observations in it is the one state this page must not be allowed to show silently.
+
+   Nothing is cached but the app itself (see sw.js), so there is nothing to say beyond that —
+   and coming back, the map asks again straight away rather than waiting for a pan, since
+   "resumes when you next touch it" is not what the reader watching an empty map is owed. The
+   strip is measured rather than sized: the label bar reads its height, and a sentence that
+   wraps on a narrow phone still pushes the bar clear. */
+
+const offlineBar = document.getElementById("offline");
+
+// What the label bar reads to clear the strip. Zero while it is hidden, since offsetHeight is,
+// which is why nothing has to know whether it is showing.
+function measureOffline(){
+  document.body.style.setProperty("--offline-h", offlineBar.offsetHeight + "px");
+}
+
+// Only an explicit no counts: a browser that doesn't know says true, and a guess dressed as a
+// statement is worse than saying nothing.
+function syncOffline(){
+  offlineBar.hidden = navigator.onLine !== false;
+  measureOffline();
+}
+
+// The measurement is taken twice over, and both are needed: here for the appearing and the
+// going, which must land in the same beat as the strip itself, and by the observer for a
+// height that changes with the strip already up — a rotation into portrait rewraps the
+// sentence, and a rewrapped sentence is a taller strip with the label bar still cleared for
+// the old one.
+{ const ro = new ResizeObserver(measureOffline); ro.observe(offlineBar); }
+
+addEventListener("offline", syncOffline);
+addEventListener("online", () => { syncOffline(); if(map) applyStyle(); });
+syncOffline();
+
 /* ---------------- outbound links ---------------- */
 
 // Added to the home screen, this runs with no tab bar and no back button, and `_blank` has

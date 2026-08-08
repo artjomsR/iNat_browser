@@ -9,6 +9,14 @@
 <meta name="theme-color" content="#17181c">
 <title>iNat gallery</title>
 
+<!-- The manifest is the map's, and its theme_color with it: what gets installed is the app,
+     and the app is the map. The darker room is this page's own, and the meta above still
+     wins while it is open — the manifest colour only ever paints the splash and the
+     launcher, which belong to the thing that was installed. -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+
 <link rel="stylesheet" href="gallery.css">
 </head>
 <body>
@@ -66,5 +74,13 @@
 </div>
 
 <script src="gallery.js"></script>
+
+<!-- The offline shell (sw.js) — the same six lines as the map's, where the reasoning is
+     written down. This page caches the shell and not one photograph: the wall is the data. -->
+<script>
+if(location.protocol.startsWith("http") && "serviceWorker" in navigator) addEventListener("load", () => {
+  try { navigator.serviceWorker.register("sw.js").catch(() => {}); } catch(err){}
+});
+</script>
 </body>
 </html>

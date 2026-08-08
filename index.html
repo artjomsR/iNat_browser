@@ -10,6 +10,12 @@
 <meta name="theme-color" content="#0D1714">
 <title>Field — iNaturalist observations</title>
 
+<!-- The map is what "the app" means: the manifest's start_url comes back here from whichever
+     page it was installed from, and its colours are this page's. -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,6 +26,13 @@
 <body>
 
 <div id="map"></div>
+
+<!-- Only ever on screen with no connection, and then it is the first thing on it. The app
+     opens off the cache now, which means it can open into a silence it used to fail loudly
+     in; this is the page saying which. -->
+<div class="offline" id="offline" role="status" hidden>
+  <b>Offline</b><span>The app is cached &mdash; the observations aren&rsquo;t. Pins, tiles and searches come back with the signal.</span>
+</div>
 
 <button class="label-bar" id="labelBar" aria-label="Change filters">
   <span class="lozenge" aria-hidden="true"></span>
@@ -77,5 +90,25 @@
 <!-- common.js first: it declares what index.js expects to already be there. -->
 <script src="common.js"></script>
 <script src="index.js"></script>
+
+<!-- The offline shell (sw.js). Six lines rather than a file, on purpose and in all three
+     pages: a third <script src> would break the two-script ceiling CLAUDE.md sets, and a
+     block inside index.js or species.js would install a worker every time test.html loaded
+     those scripts to assert against them — a worker that would then serve the very file
+     being edited out of a cache. Registered on load so it doesn't compete with the map's
+     first burst of requests.
+
+     The protocol is checked rather than the attempt simply being allowed to fail: a worker
+     needs an origin and file:// has none, and asking anyway costs a red line in the console
+     on every disk-opened page, which the catch cannot swallow because the browser logs it
+     itself. CLAUDE.md calls file:// a supported way to run this, and supported means silent.
+     Everything else — a private window, a policy, a browser with no worker at all — is still
+     caught rather than checked for, since those are refusals and not addresses. No worker,
+     and this is the app it always was. -->
+<script>
+if(location.protocol.startsWith("http") && "serviceWorker" in navigator) addEventListener("load", () => {
+  try { navigator.serviceWorker.register("sw.js").catch(() => {}); } catch(err){}
+});
+</script>
 </body>
 </html>

@@ -1,0 +1,11 @@
+<!-- The app's own mark: the hollow diamond worn by the label bar on the map and the species
+     report's heading (.lozenge), in --mark on --ink. The drawing is here because everything
+     else in this repo is legible source and an icon should be too; icon-192.png and
+     icon-512.png are the same geometry rasterised, because iOS will not take an SVG.
+     Diamond: half-diagonal 110 of 512 (~43% across, inside the maskable safe zone), the
+     11px lozenge's 1.5px border to scale. Change it here, then re-render the two PNGs. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#0D1714"/>
+  <rect x="185.66" y="185.66" width="140.68" height="140.68" transform="rotate(45 256 256)"
+        fill="none" stroke="#FF3E7C" stroke-width="21"/>
+</svg>

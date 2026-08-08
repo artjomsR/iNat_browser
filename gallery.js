@@ -411,8 +411,17 @@ async function load() {
       // `all`, not `photos`: photos already fetched and then filtered out still mean the
       // connection was fine, and shouldn't be reported as a dead one.
       if (all.length === 0) {
-        say('Could not reach iNaturalist',
-            'The request failed &mdash; check the connection and reload. If it keeps failing, the username may be wrong.');
+        // The page itself may well have come out of a cache (see sw.js) — the wall never
+        // does, so a dead line here means an empty wall and should say so in those words
+        // rather than send the reader to check a username that is probably fine.
+        if (navigator.onLine === false) {
+          say('No connection',
+              'The app is cached; the photographs aren&rsquo;t &mdash; they come from iNaturalist ' +
+              'as you scroll. Reload when the signal is back.');
+        } else {
+          say('Could not reach iNaturalist',
+              'The request failed &mdash; check the connection and reload. If it keeps failing, the username may be wrong.');
+        }
       }
       return;
     }
