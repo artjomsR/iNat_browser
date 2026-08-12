@@ -1224,6 +1224,21 @@ const EXPORT_ICON = `<svg viewBox="0 0 16 16" aria-hidden="true">
         fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
+// The download button's own glyph, sitting right beside the export's. Built as a page with a
+// folded corner rather than a second arrow-into-tray: the two buttons are inches apart and do
+// different things — one pulls the rows out as a table, this one saves the page itself — and an
+// arrow beside an arrow would only read as the same action twice. The small stroke inside is
+// still a down-arrow, because "save" has to read as "save" somehow, but the page outline around
+// it is what tells the two glyphs apart.
+const DOWNLOAD_ICON = `<svg viewBox="0 0 16 16" aria-hidden="true">
+  <path d="M4 1.6h5.1L11.6 4.2v9.6a.6.6 0 0 1-.6.6H4.6a.6.6 0 0 1-.6-.6V2.2a.6.6 0 0 1 .6-.6Z"
+        fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+  <path d="M9.1 1.6v2.2a.4.4 0 0 0 .4.4h2.1" fill="none" stroke="currentColor" stroke-width="1.3"
+        stroke-linejoin="round"/>
+  <path d="M7.75 6.8v4.2M6 9.3l1.75 1.9L9.5 9.3" fill="none" stroke="currentColor"
+        stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
 // What the badge says, per standing. The glyph carries the tier and the colour ramps with
 // it — bronze, silver, gold for C, B, S — so a column of these can be read at a glance
 // without stopping on each letter.
@@ -1340,21 +1355,29 @@ const HERE_HINT = "Read your own ticks and tier badges against this area alone. 
   + "one it holds no usable location for, and one whose coordinates are obscured — which is "
   + "every record of a threatened species. Anywhere has neither problem.";
 
-// Where the reader's own records are read, and the third of the place tab's asking controls: it
-// changes what iNaturalist is asked about them rather than how the rows already on the page are
-// read, so it sits with the season and the split rather than in the sortbar. Drawn only where it
-// could mean something — an area to be in, and a username to be it about. Anywhere is the
-// default and lights the left button, so an address that never mentions it reads exactly as this
-// page always has. `data-where` rather than `data-seen`, which a row already carries meaning
-// something else entirely.
-function heldRowHtml(){
-  if(!canReadHere()) return "";
+// The row beneath sort: what this page can save, and — where it can mean anything — where the
+// reader's own records are being read against. One row rather than two, because neither of these
+// three buttons is a reordering control, and grouping the switch with sort was only ever this
+// bar borrowing space from the one above it.
+//
+// Drawn on both tabs, unlike the switch itself. `canReadHere` still gates the switch — it is
+// place-tab-only, and only where there is an area and a username to read it against (see
+// `canReadHere`) — but a reader on the tier tab still wants the file, so the row itself does not
+// go with it. Where the switch has nothing to say, this is just the two buttons and the
+// "Recorded" label goes with it; nothing in the row is left half-drawn.
+function toolsRowHtml(){
+  const heldOn = canReadHere();
   const on = w => ` aria-pressed="${(view.seen === "here") === (w === "here")}"`;
-  return `<div class="heldbar" role="group" aria-label="Where your own records are read"
-        title="${esc(HERE_HINT)}">
-    <span class="hb-label">Recorded</span>
+  return `<div class="heldbar"${heldOn
+      ? ` role="group" aria-label="Where your own records are read" title="${esc(HERE_HINT)}"`
+      : ""}>
+    ${heldOn ? `<span class="hb-label">Recorded</span>
     <button type="button" data-where="anywhere"${on("anywhere")}>Anywhere</button>
-    <button type="button" data-where="here"${on("here")}>Here</button>
+    <button type="button" data-where="here"${on("here")}>Here</button>` : ""}
+    <button type="button" class="exportCsv" title="${esc(EXPORT_HINT)}"
+      >${EXPORT_ICON}${EXPORT_LABEL}</button>
+    <button type="button" class="downloadPage" title="${esc(DOWNLOAD_HINT)}"
+      >${DOWNLOAD_ICON}${DOWNLOAD_LABEL}</button>
   </div>`;
 }
 
@@ -1427,8 +1450,6 @@ function sortbarHtml(sortBy, withRefresh){
       <button type="button" data-layout="list"${laid("list")}>${LAYOUT_ICON.list}List</button>
       <button type="button" data-layout="grid"${laid("grid")}>${LAYOUT_ICON.grid}Grid</button>
     </span>
-    <button type="button" class="exportCsv" title="${esc(EXPORT_HINT)}"
-      >${EXPORT_ICON}${EXPORT_LABEL}</button>
   </div>`;
 }
 
@@ -1532,7 +1553,7 @@ function placeToolbarHtml(sortBy, counts){
     : `<p class="blurb">Add a username to tick off the ones you have already recorded.</p>`;
   return `${lede}
     ${sortbarHtml(sortBy)}
-    ${heldRowHtml()}
+    ${toolsRowHtml()}
     ${monthRowHtml()}
     <label class="onlySub" title="${esc(SSP_HINT)}">
     <input type="checkbox"${view.ssp ? " checked" : ""}>Show only subspecies?</label>
@@ -1583,7 +1604,7 @@ function listHtml(buckets, user, sortBy){
         : "This user has no species recorded in this scope."}</div>
     </div>`;
   }
-  const sortbar = sortbarHtml(sortBy, true);
+  const sortbar = sortbarHtml(sortBy, true) + toolsRowHtml();
   // The rail carries the same badges as the headings it jumps to, so the two read as one
   // set rather than as a list of names beside a list of icons.
   const index = `<nav class="index">` + TIERS.map(([title, , tag], i) =>
@@ -1806,6 +1827,14 @@ const EXPORT_HINT = "Save what is showing — in this order, with this threshold
   + "hidden — as a CSV. The file names the area, the scope and this page's own address, so the "
   + "list can be rebuilt from it.";
 
+// The export saves the rows as data; this saves the page as a page. Different from a browser's
+// own "Save As", which asks first and buries the choice in a dialog — one click, same as Export
+// CSV beside it, with the same swap-the-label feedback rather than a save prompt neither button
+// shows.
+const DOWNLOAD_LABEL = "Save Page";
+const DOWNLOAD_HINT = "Download this page exactly as it looks right now — this list, this sort, "
+  + "this scope — as one HTML file you can open again later without this address.";
+
 // What each standing is called in a file, where a glyph is no use and a colour ramp is no use
 // either. Same five marks the badges speak (see BADGE), plus the empty one — the place tab's
 // species with nothing on them at all, which is the row the whole tab is read for and so the one
@@ -1972,13 +2001,20 @@ function csvText(){
 // date. Anything that is not a letter or a digit becomes a hyphen — this lands on a filesystem,
 // and a place called "Faro, Portugal" or a pin labelled "5.0 km around 38.720, -9.140" must not
 // arrive as a name Windows refuses.
-function csvName(){
+//
+// Shared with the page download below rather than written twice: the two files are named off the
+// same question — what is this a list of, and when was it taken — and only the extension says
+// which kind of file answers it.
+function fileStem(){
   const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-")
                             .replace(/^-|-$/g, "").slice(0, 40);
   const who = view.tab === "tier" ? view.user + "-tier-tags" : areaLabel();
   return ["inat", slug(who), slug(scopeLabel()), stampNow(new Date()).slice(0, 10)]
-    .filter(Boolean).join("-") + ".csv";
+    .filter(Boolean).join("-");
 }
+
+function csvName(){ return fileStem() + ".csv"; }
+function pageName(){ return fileStem() + ".html"; }
 
 // A Blob, an object URL, an anchor clicked and dropped, and the URL revoked behind it. The
 // timeout is what the revoke needs: a click is queued, not performed, and pulling the URL out
@@ -1997,6 +2033,45 @@ const BOM = "\uFEFF";
 
 function saveCsv(text, name){
   const url = URL.createObjectURL(new Blob([BOM + text], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ---------------- page download ---------------- */
+
+// The whole document, read back off itself rather than rebuilt from `view` — the same reasoning
+// as `visibleRows` above: the DOM the reader is looking at is the one representation that already
+// holds every row, every badge and every open or closed bit of state at once, so copying it is the
+// only way the file and the screen cannot disagree.
+//
+// `outerHTML` does not carry a doctype, so one is written on ahead of it — without it a saved copy
+// opens in quirks mode, which is a different page.
+//
+// This is a snapshot, not a second copy of the app: species.css, species.js and common.js are
+// still linked by their plain relative names, exactly as they sit in the `<head>` and the closing
+// scripts. Opened back from this page's own folder they resolve and the file behaves like the
+// page it was taken from; opened alone, elsewhere, the markup and the text are still there but the
+// layout and the interaction are not. Inlining all three so the file always stood alone was
+// weighed against that and set aside — it would triple what one click has to carry for a page whose
+// whole point is being small enough to hand around, for a case (moving the file out of its own
+// folder) the reader is unlikely to hit.
+//
+// A saved copy of a text `<input>` can read back empty even though the reader typed into it: the
+// DOM attribute `outerHTML` reads is the page's original markup, and typing only ever changes the
+// live value, not that attribute, unless something explicitly writes the two back together. The
+// place and taxon finders never do, so a save taken mid-search keeps the results that search
+// produced but not the letters that asked for them.
+function pageHtml(){
+  return "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+}
+
+function savePage(html, name){
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
   const a = document.createElement("a");
   a.href = url;
   a.download = name;
@@ -2030,6 +2105,23 @@ function wireExport(){
     // all. Said out loud rather than swallowed: this is a list someone is trying to take into the
     // field, and a button that silently does nothing is worse than one that admits it.
     try{ saveCsv(text, csvName()); say("Saved"); }
+    catch(err){ say("Couldn't save"); }
+  });
+}
+
+// Delegated the same way as wireExport, and for the same reason: this button lives in the
+// sortbar too, and is thrown away and rebuilt with it on every paint.
+function wireDownloadPage(){
+  let timer = null;
+  document.addEventListener("click", e => {
+    const btn = e.target.closest && e.target.closest(".downloadPage");
+    if(!btn) return;
+    const say = word => {
+      btn.textContent = word;
+      clearTimeout(timer);
+      timer = setTimeout(() => { btn.innerHTML = DOWNLOAD_ICON + DOWNLOAD_LABEL; }, 1200);
+    };
+    try{ savePage(pageHtml(), pageName()); say("Saved"); }
     catch(err){ say("Couldn't save"); }
   });
 }
@@ -2530,6 +2622,7 @@ const NOTES = {
   // The same arrangement, and for the same reason: the export sits in the sortbar, which is
   // thrown away and rebuilt on every paint on both tabs.
   wireExport();
+  wireDownloadPage();
 
   // The tabs are two addresses over one scope, so switching carries the scope across and
   // drops only what cannot apply.

@@ -89,8 +89,16 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
 .finder.filled input{padding-right:38px}
 .finder .accept:hover{color:var(--mark)}
 .finder .accept:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
-.sortbar{display:flex;align-items:center;gap:7px;margin:15px 0 4px;
+.sortbar{display:flex;flex-wrap:wrap;align-items:center;gap:7px 7px;margin:15px 0 4px;
   font-size:9.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--mute)}
+/* Nothing in this bar is allowed to compress. The default flex behaviour — shrink every child
+   to fit the row, wrapping each one's own text if it has to — quietly turns a label into two
+   stacked lines the moment the bar's natural width outgrows its container, and every button
+   looks taller for it, whichever one was actually the one that didn't fit. Refusing to shrink
+   and wrapping the whole bar instead (`flex-wrap` above) turns the same overflow into a second
+   row of whole, unsquashed buttons, which is the failure this bar should have rather than that
+   one. */
+.sortbar>*{flex-shrink:0}
 .sortbar button{padding:6px 12px;cursor:pointer;font:inherit;letter-spacing:.1em;
   color:var(--mute);background:var(--raise);border:1px solid var(--rule);border-radius:5px}
 .sortbar button:hover{color:var(--text);border-color:var(--mute)}
@@ -111,12 +119,6 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
    hover and selected because it is drawn in currentColor */
 .sortbar .layout button{display:inline-flex;align-items:center;gap:7px}
 .sortbar .layout svg{flex:0 0 auto;width:11px;height:11px}
-/* the export, last in the bar and held off the layout pair — it is the one control here that
-   produces something rather than changing what is shown, so it reads as its own thing rather
-   than as a third view. Everything else it needs it already inherits from .sortbar button; only
-   the icon and the gap are its own. It never takes `on`: there is no state to be in. */
-.sortbar .exportCsv{display:inline-flex;align-items:center;gap:7px;margin-left:11px}
-.sortbar .exportCsv svg{flex:0 0 auto;width:11px;height:11px}
 .sortbar .thresh{display:flex;align-items:center;gap:6px;margin-left:auto;
   letter-spacing:.12em;color:var(--mute)}
 /* the clear sits inside the field, between the number and the spinner arrows */
@@ -144,12 +146,26 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
    are plainly one kind of control; only the label's own width differs. */
 .heldbar{display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin:0 0 8px;
   font-size:9.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--mute)}
+/* Same reasoning as the sortbar's own rule above, and the same fix: whatever this row is
+   carrying — the Anywhere/Here switch, the two save buttons, or both — none of it should
+   compress and wrap its own label rather than the row wrapping as a whole. */
+.heldbar>*{flex-shrink:0}
 .heldbar .hb-label{margin-right:4px}
 .heldbar button{padding:5px 11px;cursor:pointer;font:inherit;letter-spacing:.08em;
   color:var(--mute);background:var(--raise);border:1px solid var(--rule);border-radius:5px}
 .heldbar button:hover{color:var(--text);border-color:var(--mute)}
 .heldbar button[aria-pressed="true"]{color:var(--ink);background:var(--mark);border-color:var(--mark)}
 .heldbar button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+/* the two save buttons, wearing this row's own button chrome rather than the sortbar's — only
+   the icon and the gap are their own. Neither ever takes `aria-pressed`: there is no state to be
+   in. Pushed to the right edge with the same `margin-left:auto` the threshold field uses in the
+   sortbar above — on the place tab that reads as held off the Anywhere/Here switch, and on the
+   tier tab, where the switch is not drawn at all (see toolsRowHtml), it's what puts the pair on
+   the right with nothing to its left. */
+.heldbar .exportCsv{display:inline-flex;align-items:center;gap:7px;margin-left:auto}
+.heldbar .exportCsv svg{flex:0 0 auto;width:11px;height:11px}
+.heldbar .downloadPage{display:inline-flex;align-items:center;gap:7px}
+.heldbar .downloadPage svg{flex:0 0 auto;width:11px;height:11px}
 /* the season, last of the page's three asking controls — they sit together above the list they
    rebuild, all wearing the sortbar's micro-caps so the run of them reads as one block of
    controls rather than as unrelated rows. Twelve months wrap rather than scroll: a reader
@@ -171,7 +187,8 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
 .monthbar .mbClear:hover{color:var(--mark)}
 .monthbar .mbClear[hidden]{display:none}
 @media (max-width:520px){
-  .sortbar{flex-wrap:wrap} .sortbar .thresh,.sortbar .layout,.sortbar .exportCsv{margin-left:0}
+  .sortbar .thresh,.sortbar .layout{margin-left:0}
+  .heldbar .exportCsv{margin-left:0}
 }
 /* index rail — sticky beside the tiers on a wide window, a wrapping strip on a narrow one */
 .cols{display:grid;grid-template-columns:186px minmax(0,1fr);gap:34px;align-items:start;margin-top:14px}
