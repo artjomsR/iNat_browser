@@ -6,7 +6,10 @@
   --ui:"Archivo Narrow","Helvetica Neue",Arial,sans-serif;--lit:"Newsreader",Georgia,"Times New Roman",serif}
 *{box-sizing:border-box}
 body{margin:0;background:var(--ink);color:var(--text);font-family:var(--ui);-webkit-font-smoothing:antialiased}
-.wrap{max-width:1080px;margin:0 auto;padding:36px 30px 80px}
+.wrap{max-width:1080px;margin:0 auto;padding:36px 30px 80px;
+  /* viewport-fit=cover lets the page draw under the status bar / notch on an installed PWA —
+     without this the header's own buttons sit under it too and end up unpressable */
+  padding-top:calc(9px + env(safe-area-inset-top,0px))}
 header{padding-bottom:16px;margin-bottom:4px;border-bottom:1px solid var(--rule)}
 h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
   font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase}
