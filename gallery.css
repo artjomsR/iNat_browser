@@ -224,6 +224,56 @@ header {
 
 .taxa button:focus-visible { outline: 1px solid var(--chrome); outline-offset: 2px; }
 
+/* ---------- narrow (date + place) ----------
+
+   One row, same rhythm as .taxa above it: a dim caps lede, then the controls. Unlike the taxa
+   chips these are inputs rather than buttons, so they get one concession the caps styling
+   doesn't otherwise allow — 16px, the same reason .status input is 16px, or the phone reads
+   focusing one as "zoom in" rather than "type here". */
+
+.narrow {
+  max-width: var(--page);
+  margin: 11px auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.narrow[hidden] { display: none; }
+
+.narrow .lede { color: var(--chrome-dim); flex: 0 0 auto; }
+.narrow .lede.where { margin-left: 6px; }
+.narrow .to { color: var(--chrome-dim); }
+
+.narrow input {
+  border: 0;
+  border-bottom: 1px solid var(--hair);
+  border-radius: 0;
+  background: transparent;
+  padding: 2px 0;
+  font-family: var(--sans);
+  font-size: 16px;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--paper);
+  color-scheme: dark;   /* the native date picker lit like the room it opens in, same as .picker select */
+  min-width: 0;
+}
+
+.narrow input::placeholder { color: var(--chrome-dim); }
+
+.narrow input[type="date"] { width: 132px; }
+
+/* The one field with no natural width of its own — takes what the row has left, same as
+   .stat does in the masthead, rather than asking for a fixed share. */
+.narrow input[type="text"] { flex: 1 1 96px; min-width: 72px; }
+
+.narrow input:focus-visible { outline: 1px solid var(--chrome); outline-offset: 3px; }
+
 /* ---------- grid ---------- */
 
 main { max-width: var(--page); margin: 0 auto; padding-bottom: calc(var(--bot) + 40px); }

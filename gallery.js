@@ -34,6 +34,14 @@
    say anything once that starting point is changed; switching shelves drops it, since one
    shelf's starting point is not the other's.
 
+   `d1` and `d2` narrow either shelf to observations made from `d1` through `d2` (each
+   YYYY-MM-DD, either end may be left off), and `place` narrows to observations whose place
+   name contains that text, case-insensitive. Both dates and the place name arrive on every
+   observation whether anyone asks to see them or not, so — like `iconic` — these read the
+   shelf already on the page rather than putting a new question to iNaturalist, and so filter
+   rather than reload. Same reasoning, same restriction: meaningless on the tagged shelf, so
+   hidden there too.
+
    `photo` is one photograph on that shelf, named by its iNaturalist photo id — the same id
    "seen" is kept against, so it survives observations being edited or re-ordered. It is
    written into the address whenever the full-screen view is open and taken out again when it
@@ -73,6 +81,11 @@ var view  = qs.get('view') === 'birds' ? 'birds' : qs.get('view') === 'all' ? 'a
 var iconic = view === 'highlights' ? [] :
   qs.has('iconic') ? qs.get('iconic').split(',').filter(Boolean) :
   view === 'birds' ? ['Aves'] : ICONIC.map(function (p) { return p[0]; });
+// Date range and place text, the other two narrowings the row offers — same restriction as
+// iconic, and for the same reason: the tagged shelf is one tag, not a spread of dates or places.
+var dateFrom = view === 'highlights' ? '' : (qs.get('d1') || '').trim();
+var dateTo   = view === 'highlights' ? '' : (qs.get('d2') || '').trim();
+var place    = view === 'highlights' ? '' : (qs.get('place') || '').trim();
 // The photograph the link asks to have open, if any. Cleared once it has been opened, or once
 // the reader has taken the wall somewhere of their own.
 var wanted = (qs.get('photo') || '').trim();
@@ -86,6 +99,10 @@ var cursor = 0;
 
 var grid     = document.getElementById('grid');
 var taxaFilter = document.getElementById('taxaFilter');
+var narrowRow = document.getElementById('narrow');
+var dateFromEl = document.getElementById('dateFrom');
+var dateToEl   = document.getElementById('dateTo');
+var placeEl    = document.getElementById('placeInput');
 var filters  = document.getElementById('filters');
 var forget   = document.getElementById('forget');
 var picker   = document.getElementById('picker');
@@ -299,7 +316,8 @@ function collect(results) {
         name: (obs.taxon && obs.taxon.name) || '',
         common: (obs.taxon && obs.taxon.preferred_common_name) || '',
         iconic: (obs.taxon && obs.taxon.iconic_taxon_name) || '',
-        date: obs.observed_on || (obs.observed_on_details && obs.observed_on_details.date) || ''
+        date: obs.observed_on || (obs.observed_on_details && obs.observed_on_details.date) || '',
+        place: obs.place_guess || ''
       });
     });
   });
@@ -315,13 +333,31 @@ function paint(fresh) {
   render(fresh);
 }
 
-// Whether the taxa row is narrowing the wall at all. It is only offered off the highlights
-// shelf, which is one tag rather than a spread of kinds: `iconic` is empty there because the
-// question was never put, not because every answer was unticked. Where the row is offered an
-// empty list means the reader really has switched every group off, and an empty wall is the
-// honest answer to that.
-function narrowed() {
-  return view !== 'highlights' && iconic.length < ICONIC.length;
+// Whether any of the when/where/kind row is narrowing the wall at all. All three are only
+// offered off the highlights shelf, which is one tag rather than a spread of kinds, dates, or
+// places: `iconic` reads empty there because the question was never put, not because every
+// answer was unticked, and `dateFrom`/`dateTo`/`place` are forced empty at the top of the file
+// for the same reason. Where the row is offered, an empty taxa list means the reader really has
+// switched every group off, and an empty wall is the honest answer to that.
+function refining() {
+  return view !== 'highlights' &&
+    (iconic.length < ICONIC.length || !!dateFrom || !!dateTo || !!place);
+}
+
+// One photo's answer to the whole row — taxa, date range, and place together, so render() and
+// refinedCount() can never read "matches" two different ways. `view === 'highlights'` short-
+// circuits the rest, same guard refining() uses, since none of the three fields are ever set
+// there to begin with.
+function matchesNarrow(photo) {
+  if (view === 'highlights') return true;
+  if (iconic.length < ICONIC.length && iconic.indexOf(photo.iconic) === -1) return false;
+  // ISO dates compare correctly as strings; an undated photo fails either bound rather than
+  // slipping through one, which is the honest read of "no date" against a range that was asked
+  // for.
+  if (dateFrom && (!photo.date || photo.date < dateFrom)) return false;
+  if (dateTo && (!photo.date || photo.date > dateTo)) return false;
+  if (place && (!photo.place || photo.place.toLowerCase().indexOf(place.toLowerCase()) === -1)) return false;
+  return true;
 }
 
 function render(list) {
@@ -330,7 +366,7 @@ function render(list) {
   list.forEach(function (photo) {
     var old = seenAtLoad.has(photo.key);
     if (mode === 'unseen' && old) return;
-    if (narrowed() && iconic.indexOf(photo.iconic) === -1) return;
+    if (!matchesNarrow(photo)) return;
 
     var index = photos.length;
     photos.push(photo);
@@ -358,12 +394,12 @@ function render(list) {
   openWanted();
 }
 
-// How many of `all` belong to one of the chosen taxa — the denominator the tally and the
-// "show all" button both need once the taxa row has narrowed the shelf.
-function taxonCount(list) {
-  if (!narrowed()) return list.length;
+// How many of `all` match the when/where/kind row as it currently stands — the denominator the
+// tally and the "show all" button both need once any of the three has narrowed the shelf.
+function refinedCount(list) {
+  if (!refining()) return list.length;
   var n = 0;
-  for (var i = 0; i < list.length; i++) if (iconic.indexOf(list[i].iconic) !== -1) n++;
+  for (var i = 0; i < list.length; i++) if (matchesNarrow(list[i])) n++;
   return n;
 }
 
@@ -372,7 +408,7 @@ function retally() {
   // photo on the shelf (or the taxon, once one is picked). In the whole view those two numbers
   // are the same one.
   tally.textContent = mode === 'unseen'
-    ? photos.length + ' / ' + taxonCount(all) + ' unseen'
+    ? photos.length + ' / ' + refinedCount(all) + ' unseen'
     : photos.length + ' photos';
 }
 
@@ -600,12 +636,14 @@ function drawRail() {
   track.innerHTML = '';
   track.appendChild(frag);
   track.appendChild(nowChip);   // put back after the wipe, so it lives in the track's own space
-  place();
+  placeChip();
 }
 
 // Where the reader is, and what date is under the top of the screen. Read off the same stops
-// the marks were drawn from, so the chip and the rail can never disagree.
-function place() {
+// the marks were drawn from, so the chip and the rail can never disagree. Named placeChip
+// rather than place — `place` is now the location filter's own name, and a var declaration of
+// that name below would otherwise silently overwrite this function the moment it ran.
+function placeChip() {
   if (rail.hidden || !stops.length || span <= 0) return;
 
   var at = Math.max(0, Math.min(span, scrollY));
@@ -636,7 +674,7 @@ addEventListener('scroll', function () {
   wake();
   if (ticking) return;
   ticking = true;
-  requestAnimationFrame(function () { ticking = false; place(); });
+  requestAnimationFrame(function () { ticking = false; placeChip(); });
 }, { passive: true });
 
 // A phone's address bar sliding away is a resize, and so is turning the thing sideways: both
@@ -679,11 +717,11 @@ rail.addEventListener('pointercancel', endScrub);
 /* ---------------- the filter ---------------- */
 
 function nothingNew() {
-  // Nothing on this shelf carries the chosen taxon at all — a different case from having
+  // Nothing on this shelf matches the row as it stands at all — a different case from having
   // already seen everything that does, and one "show all" can't fix.
-  var denom = taxonCount(all);
+  var denom = refinedCount(all);
   if (denom === 0) {
-    say('Nothing here', 'No photos of that kind found for <b>' + esc(user) + '</b>.');
+    say('Nothing here', 'No photos matching that found for <b>' + esc(user) + '</b>.');
     return;
   }
   say('All caught up',
@@ -728,6 +766,17 @@ function buildTaxaFilter() {
   syncTaxaFilter();
 }
 
+// The date range and place text sit in their own row, unhidden the same way the taxa row is —
+// static markup rather than built from a list, since there's no vocabulary to generate here,
+// just three fields to prime with whatever the address already said.
+function buildNarrow() {
+  if (view === 'highlights') return;
+  narrowRow.hidden = false;
+  dateFromEl.value = dateFrom;
+  dateToEl.value = dateTo;
+  placeEl.value = place;
+}
+
 function syncTaxaFilter() {
   Array.prototype.forEach.call(taxaFilter.querySelectorAll('button[data-iconic]'), function (b) {
     b.classList.toggle('on', iconic.indexOf(b.dataset.iconic) !== -1);
@@ -753,12 +802,46 @@ taxaFilter.addEventListener('click', function (e) {
   if (b) toggleIconic(b.dataset.iconic);
 });
 
+// A native date input fires `change` once a value is actually committed, not per keystroke, so
+// this needs no debouncing of its own — unlike the place text below.
+dateFromEl.addEventListener('change', function () {
+  dateFrom = dateFromEl.value;
+  if (dateFrom) qs.set('d1', dateFrom); else qs.delete('d1');
+  addressNow();
+  relist();
+});
+
+dateToEl.addEventListener('change', function () {
+  dateTo = dateToEl.value;
+  if (dateTo) qs.set('d2', dateTo); else qs.delete('d2');
+  addressNow();
+  relist();
+});
+
+// Typed, so batched like the seen list: filtering and rewriting the address on every keystroke
+// would fight the reader for the letter they just typed. The grid only redraws once typing has
+// actually stopped.
+var placeTimer = null;
+placeEl.addEventListener('input', function () {
+  clearTimeout(placeTimer);
+  placeTimer = setTimeout(function () {
+    place = placeEl.value.trim();
+    if (place) qs.set('place', place); else qs.delete('place');
+    addressNow();
+    relist();
+  }, 350);
+});
+
 // Changing shelf is a new question for iNaturalist, not a new slice of the answer already
 // here, so it goes through the address and the page comes back on the other one — same as
 // answering "whose gallery?" does. Anything still unwritten goes to storage first.
 viewSel.addEventListener('change', function () {
-  // A new shelf starts with every group lit again, whatever was unchecked on the last one.
+  // A new shelf starts with every group lit again and no date or place set, whatever was
+  // narrowed on the last one.
   qs.delete('iconic');
+  qs.delete('d1');
+  qs.delete('d2');
+  qs.delete('place');
   if (viewSel.value === 'highlights') qs.delete('view');
   else qs.set('view', viewSel.value);
   flush();
@@ -976,5 +1059,6 @@ function ask() {
   forget.hidden = seenAtLoad.size === 0;
   syncFilter();
   buildTaxaFilter();
+  buildNarrow();
   load();
 })();

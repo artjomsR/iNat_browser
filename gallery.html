@@ -36,6 +36,14 @@
     </div>
   </div>
   <div class="taxa" id="taxaFilter" hidden></div>
+  <div class="narrow" id="narrow" hidden>
+    <span class="lede">When</span>
+    <input type="date" id="dateFrom" aria-label="From date">
+    <span class="to">&ndash;</span>
+    <input type="date" id="dateTo" aria-label="To date">
+    <span class="lede where">Where</span>
+    <input type="text" id="placeInput" placeholder="place" aria-label="Filter by place" autocomplete="off" autocapitalize="none" spellcheck="false">
+  </div>
   <div class="filters" id="filters" hidden>
     <span class="lede">Show</span>
     <button type="button" data-show="unseen">Unseen</button>
