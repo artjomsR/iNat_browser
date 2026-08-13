@@ -133,6 +133,141 @@ header {
 /* The open list is the browser's own, at its own size: the caps belong to the closed line. */
 .picker option { background: var(--ink); color: var(--paper); text-transform: none; }
 
+/* ---------- taxon search ----------
+
+   One field searching all of iNaturalist's taxonomy, above the ten quick groups below it —
+   the same split index.js draws between its own taxonInput and iconicRow: pick exactly what
+   to see, or pick a shape of things. A result picked here reloads the shelf scoped to that
+   taxon rather than slicing the wall already on the page, so it behaves like .picker's select
+   underneath it, not like .taxa's chips: a new question put to iNaturalist, not a re-reading
+   of the answer already in hand. */
+
+.taxonSearch {
+  position: relative;
+  max-width: var(--page);
+  margin: 11px auto 0;
+}
+
+.taxonSearch[hidden] { display: none; }
+
+.taxonSearch input {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--hair);
+  border-radius: 4px;
+  background: var(--ink-deep);
+  color: var(--paper);
+  font-family: var(--sans);
+  font-size: 16px;   /* same reason as .status input: 16px, or the phone zooms in on focus */
+  color-scheme: dark;
+}
+
+.taxonSearch input::placeholder { color: var(--chrome-dim); }
+.taxonSearch input:focus { outline: none; border-color: var(--chrome-dim); }
+
+/* The open list floats over whatever sits below it rather than pushing the page down — a row
+   picked from here reloads the shelf regardless, so there is nothing under it worth keeping
+   in place while it's open. */
+.ac {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 25;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--ink);
+  border: 1px solid var(--hair);
+  border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(11, 12, 15, 0.55);
+}
+
+.ac[hidden] { display: none; }
+
+.ac button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--hair);
+  padding: 8px 10px;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ac button:last-child { border-bottom: 0; }
+.ac button:hover, .ac button.hi { background: var(--hair); }
+
+.ac img, .ac-nophoto {
+  width: 34px;
+  height: 34px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--hair);
+  flex: 0 0 auto;
+}
+
+.ac-name { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ac-common {
+  font-size: 13px;
+  color: var(--paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ac-sci {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 11px;
+  color: var(--chrome);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ac-rank {
+  flex: 0 0 auto;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--chrome-dim);
+}
+
+/* The picked taxon, sitting under the field it came from — the one chip naming what the
+   shelf is now scoped to, and the one way back out of it. The field stays live above it
+   rather than being swapped out, so changing the pick is a fresh search, not a clear-then-type. */
+.picked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--hair);
+  border-radius: 4px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--paper);
+}
+
+.picked[hidden] { display: none; }
+
+#taxonClear {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--chrome);
+  font-family: var(--sans);
+  font-style: normal;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+#taxonClear:hover { color: var(--paper); }
+
 /* ---------- filter ---------- */
 
 .filters {

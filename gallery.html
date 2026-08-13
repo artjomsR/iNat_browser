@@ -35,6 +35,15 @@
       </span>
     </div>
   </div>
+  <div class="taxonSearch" id="taxonSearch" hidden>
+    <input type="search" id="taxonInput" autocomplete="off" spellcheck="false"
+           placeholder="Search species or group&hellip;" aria-label="Search for a species or group">
+    <div class="ac" id="taxonAc" hidden></div>
+    <div class="picked" id="taxonSel" hidden>
+      <span id="taxonSelName"></span>
+      <button type="button" id="taxonClear" aria-label="Clear species">&times;</button>
+    </div>
+  </div>
   <div class="taxa" id="taxaFilter" hidden></div>
   <div class="narrow" id="narrow" hidden>
     <span class="lede">When</span>

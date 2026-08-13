@@ -19,10 +19,10 @@
 
    `view` is which shelf: `highlights`, the default, is the tagged one the gallery was built
    for; `view=birds` drops the tag and hangs this user's birds instead; `view=all` drops both
-   the tag and the taxon and hangs every verifiable observation. Changing it reloads the page
-   rather than re-filtering, because it is a different question put to iNaturalist rather than
-   a different slice of the same answer. What has been seen is remembered per photograph, so a
-   picture met on one shelf is already seen on the other.
+   the tag and the Aves scoping and hangs every verifiable observation. Changing it reloads the
+   page rather than re-filtering, because it is a different question put to iNaturalist rather
+   than a different slice of the same answer. What has been seen is remembered per photograph,
+   so a picture met on one shelf is already seen on the other.
 
    `iconic` narrows either of those shelves to one or more iconic taxa (`Aves`, `Mammalia`,
    and so on — iNaturalist's own names, comma-separated), the same key and the same quick
@@ -41,6 +41,15 @@
    shelf already on the page rather than putting a new question to iNaturalist, and so filter
    rather than reload. Same reasoning, same restriction: meaningless on the tagged shelf, so
    hidden there too.
+
+   `taxon` and `tname` are the odd one out in that list: a specific species or other exact
+   taxon, picked from the same free-text search index.js offers as `taxonInput`. Unlike the
+   three above, this can't be answered from what's already on the page — the shelf only ever
+   learns a photo's scientific name and its coarse iconic class, and telling a genus's
+   photographs apart from its neighbours' needs the ancestry iNaturalist keeps and this page
+   doesn't. So picking one reloads the shelf scoped to `taxon_id`, the same as switching shelves
+   does, rather than filtering what's already hanging. `tname` only ever rides along to save the
+   page a lookup on load — it's what's shown, `taxon` (the id) is what's asked for.
 
    `photo` is one photograph on that shelf, named by its iNaturalist photo id — the same id
    "seen" is kept against, so it survives observations being edited or re-ordered. It is
@@ -86,6 +95,11 @@ var iconic = view === 'highlights' ? [] :
 var dateFrom = view === 'highlights' ? '' : (qs.get('d1') || '').trim();
 var dateTo   = view === 'highlights' ? '' : (qs.get('d2') || '').trim();
 var place    = view === 'highlights' ? '' : (qs.get('place') || '').trim();
+// A specific taxon, picked from the free-text search rather than the ten quick groups. Read
+// straight off the address on load because picking one is a reload, same as switching shelves —
+// see the doc comment above for why this one can't just filter the shelf already on the page.
+var taxon = view === 'highlights' ? '' : (qs.get('taxon') || '').trim();
+var tname = view === 'highlights' ? '' : (qs.get('tname') || '').trim();
 // The photograph the link asks to have open, if any. Cleared once it has been opened, or once
 // the reader has taken the wall somewhere of their own.
 var wanted = (qs.get('photo') || '').trim();
@@ -99,6 +113,12 @@ var cursor = 0;
 
 var grid     = document.getElementById('grid');
 var taxaFilter = document.getElementById('taxaFilter');
+var taxonSearch  = document.getElementById('taxonSearch');
+var taxonInput   = document.getElementById('taxonInput');
+var taxonAc      = document.getElementById('taxonAc');
+var taxonSel     = document.getElementById('taxonSel');
+var taxonSelName = document.getElementById('taxonSelName');
+var taxonClear   = document.getElementById('taxonClear');
 var narrowRow = document.getElementById('narrow');
 var dateFromEl = document.getElementById('dateFrom');
 var dateToEl   = document.getElementById('dateTo');
@@ -292,8 +312,14 @@ function endpoint(page) {
   });
 
   // The three shelves differ by: a tag search, a whole class of animal, or nothing at all.
-  // Newest first either way, so "most recent" needs nothing added.
-  if (view === 'birds') p.set('iconic_taxa', 'Aves');
+  // Newest first either way, so "most recent" needs nothing added. Birds is Aves the way
+  // `iconic` starts as ['Aves'] on that shelf (see the doc comment up top) — a default the
+  // reader can narrow away from, not a hard scope stacked underneath whatever they pick next.
+  // A taxon search is the more deliberate of the two, so it replaces the default rather than
+  // joining it: search a lizard while sitting on the birds shelf and the answer is that
+  // lizard's photos, not the empty set Aves + taxon_id would otherwise silently return.
+  if (taxon) p.set('taxon_id', taxon);
+  else if (view === 'birds') p.set('iconic_taxa', 'Aves');
   else if (view === 'all') { /* every verifiable observation, no further narrowing */ }
   else { p.set('q', tag); p.set('search_on', 'tags'); }
 
@@ -473,6 +499,11 @@ async function load() {
 
   if (photos.length === 0) {
     if (all.length) nothingNew();
+    // A picked taxon explains an empty shelf on its own terms, whichever of the three shelves
+    // it was picked on top of.
+    else if (taxon)
+      say('Nothing found', 'No photographed observations of <b>' +
+          esc(tname || ('taxon ' + taxon)) + '</b> found for <b>' + esc(user) + '</b>.');
     // The tag is the highlights shelf's doing, so only that shelf explains itself by it.
     else if (view === 'birds')
       say('No birds', 'No photographed bird observations found for <b>' + esc(user) + '</b>. ' +
@@ -753,6 +784,20 @@ filters.addEventListener('click', function (e) {
   if (b) setMode(b.dataset.show);
 });
 
+// Unhides the search field on the same two shelves the quick groups offer it on. Run after
+// buildTaxaFilter() so that when a taxon is already picked — arriving on the page, not just
+// chosen from it — it can override that row's own hidden = false: a specific pick already
+// says what to see, and the ten groups under it would only be repeating the question.
+function buildTaxonSearch() {
+  if (view === 'highlights') return;
+  taxonSearch.hidden = false;
+  if (taxon) {
+    taxonSel.hidden = false;
+    taxonSelName.textContent = tname || ('Taxon ' + taxon);
+    taxaFilter.hidden = true;
+  }
+}
+
 // The same quick groups as the species report's, built once — never hunted for in the data,
 // since a group is worth offering whether or not this shelf happens to hold one yet.
 // Never built at all on the highlights shelf, one tag rather than a spread of kinds.
@@ -802,6 +847,116 @@ taxaFilter.addEventListener('click', function (e) {
   if (b) toggleIconic(b.dataset.iconic);
 });
 
+/* ---------------- taxon search ----------------
+
+   A free search across all of iNaturalist's taxonomy, the same /taxa/autocomplete index.js
+   already asks and the same shape of answer, read here without common.js's request gate —
+   this is one request at a time behind a 280ms pause, not a burst, so the gate the paged
+   fetches need would only be overhead here. Picking a result writes `taxon`/`tname` and
+   reloads, same as picking a shelf from the select above it does; see the doc comment at the
+   top of the file for why a specific taxon can't just filter what's already on the page. */
+
+var taxonTimer = null, taxonSeq = 0, taxonActive = -1;
+
+function closeTaxonAc() {
+  taxonAc.hidden = true;
+  taxonAc.innerHTML = '';
+  taxonActive = -1;
+}
+
+// Keeps the highlighted row in step with `taxonActive`, whether it moved by arrow key or the
+// list was just repainted — one place so the two can't fall out of sync, same reasoning as
+// index.js's own highlight().
+function highlightTaxonAc() {
+  Array.prototype.forEach.call(taxonAc.children, function (el, i) {
+    el.classList.toggle('hi', i === taxonActive);
+  });
+  if (taxonActive >= 0) taxonAc.children[taxonActive].scrollIntoView({ block: 'nearest' });
+}
+
+taxonInput.addEventListener('input', function () {
+  var q = taxonInput.value.trim();
+  clearTimeout(taxonTimer);
+  if (q.length < 2) { closeTaxonAc(); return; }
+  taxonTimer = setTimeout(function () {
+    var mine = ++taxonSeq;
+    fetch('https://api.inaturalist.org/v1/taxa/autocomplete?per_page=8&q=' + encodeURIComponent(q))
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (d) {
+        // A slower search that lands after a faster one is a stale answer to a question
+        // nobody's asking any longer, so it's dropped rather than drawn.
+        if (mine !== taxonSeq || !d) return;
+        var results = d.results || [];
+        if (!results.length) { closeTaxonAc(); return; }
+        taxonActive = -1;
+        taxonAc.innerHTML = results.map(function (t) {
+          var thumb = t.default_photo && t.default_photo.square_url;
+          return '<button type="button" data-id="' + t.id + '" data-name="' + esc(t.name) + '">' +
+            (thumb ? '<img src="' + esc(thumb) + '" alt="" loading="lazy">' : '<span class="ac-nophoto"></span>') +
+            '<span class="ac-name">' +
+              '<span class="ac-common">' + esc(t.preferred_common_name || t.name) + '</span>' +
+              '<span class="ac-sci">' + esc(t.name) + '</span>' +
+            '</span>' +
+            '<span class="ac-rank">' + esc(t.rank || '') + '</span>' +
+          '</button>';
+        }).join('');
+        taxonAc.hidden = false;
+      })
+      .catch(function () { closeTaxonAc(); });
+  }, 280);
+});
+
+// Arrow keys move the highlight, Enter picks it — defaulting to the top row when nothing's
+// been arrowed to yet, so Enter right after typing acts on the best match without an extra tap.
+taxonInput.addEventListener('keydown', function (e) {
+  if (taxonAc.hidden || !taxonAc.children.length) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    taxonActive = Math.min(taxonActive + 1, taxonAc.children.length - 1);
+    highlightTaxonAc();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    taxonActive = Math.max(taxonActive - 1, 0);
+    highlightTaxonAc();
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    taxonAc.children[taxonActive < 0 ? 0 : taxonActive].click();
+  } else if (e.key === 'Escape') {
+    closeTaxonAc();
+  }
+});
+
+// A tap outside the field closes the list without picking anything — the list itself stops
+// its own clicks reaching here since pickTaxon() has already moved the page on by the time one
+// would bubble.
+document.addEventListener('click', function (e) {
+  if (!taxonAc.hidden && !taxonSearch.contains(e.target)) closeTaxonAc();
+});
+
+// A new taxon is a new question, so this goes through the address and reloads — same path
+// picking a shelf takes, and for the same reason (see the doc comment up top). The quick
+// groups are dropped along with it: they'd otherwise carry over from whichever shelf this was
+// picked on, narrowing a set that's already down to one taxon.
+function pickTaxon(id, name) {
+  qs.set('taxon', id);
+  qs.set('tname', name);
+  qs.delete('iconic');
+  flush();
+  location.search = qs.toString();
+}
+
+taxonAc.addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-id]');
+  if (b) pickTaxon(b.dataset.id, b.dataset.name);
+});
+
+taxonClear.addEventListener('click', function () {
+  qs.delete('taxon');
+  qs.delete('tname');
+  flush();
+  location.search = qs.toString();
+});
+
 // A native date input fires `change` once a value is actually committed, not per keystroke, so
 // this needs no debouncing of its own — unlike the place text below.
 dateFromEl.addEventListener('change', function () {
@@ -836,12 +991,14 @@ placeEl.addEventListener('input', function () {
 // here, so it goes through the address and the page comes back on the other one — same as
 // answering "whose gallery?" does. Anything still unwritten goes to storage first.
 viewSel.addEventListener('change', function () {
-  // A new shelf starts with every group lit again and no date or place set, whatever was
+  // A new shelf starts with every group lit again, no date, place, or taxon set, whatever was
   // narrowed on the last one.
   qs.delete('iconic');
   qs.delete('d1');
   qs.delete('d2');
   qs.delete('place');
+  qs.delete('taxon');
+  qs.delete('tname');
   if (viewSel.value === 'highlights') qs.delete('view');
   else qs.set('view', viewSel.value);
   flush();
@@ -1059,6 +1216,7 @@ function ask() {
   forget.hidden = seenAtLoad.size === 0;
   syncFilter();
   buildTaxaFilter();
+  buildTaxonSearch();
   buildNarrow();
   load();
 })();
