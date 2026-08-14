@@ -32,7 +32,10 @@
    is hidden there too. Missing from the address it starts however the shelf is already
    scoped — just `Aves` on the birds shelf, every group on all's — so the address only has to
    say anything once that starting point is changed; switching shelves drops it, since one
-   shelf's starting point is not the other's.
+   shelf's starting point is not the other's. A picked taxon (see `taxon` below) replaces
+   that starting point rather than sitting inside it, so it starts unrestricted too, the same
+   as all's — otherwise the birds shelf's own `Aves` default would silently filter out
+   whatever the taxon search was asked for.
 
    `d1` and `d2` narrow either shelf to observations made from `d1` through `d2` (each
    YYYY-MM-DD, either end may be left off), and `place` narrows to observations whose place
@@ -83,23 +86,27 @@ var grade = qs.get('grade') || 'needs_id,research';
 var mode  = qs.get('show') === 'all' ? 'all' : 'unseen';
 // Which shelf. Anything unrecognised falls back to the tagged one this page was built around.
 var view  = qs.get('view') === 'birds' ? 'birds' : qs.get('view') === 'all' ? 'all' : 'highlights';
+// A specific taxon, picked from the free-text search rather than the ten quick groups. Read
+// straight off the address on load because picking one is a reload, same as switching shelves —
+// see the doc comment above for why this one can't just filter the shelf already on the page.
+// Read before `iconic` below: picking a taxon replaces the shelf's own default scope, so that
+// default (`Aves` on the birds shelf) needs to know a taxon is standing in for it already.
+var taxon = view === 'highlights' ? '' : (qs.get('taxon') || '').trim();
+var tname = view === 'highlights' ? '' : (qs.get('tname') || '').trim();
 // Narrows the shelf to a set of iconic taxa; meaningless on the tagged shelf, so it is dropped
 // there. Starts however each shelf is already scoped: birds is Aves and nothing else, since
 // that's what iNaturalist was asked for; all has no scope of its own, so every group starts
-// checked to match. The address only ever names an exception to that starting point.
+// checked to match. A picked taxon is its own scope, replacing the shelf's, so it starts
+// unrestricted the same as all does — the address only ever names an exception to that
+// starting point.
 var iconic = view === 'highlights' ? [] :
   qs.has('iconic') ? qs.get('iconic').split(',').filter(Boolean) :
-  view === 'birds' ? ['Aves'] : ICONIC.map(function (p) { return p[0]; });
+  (view === 'birds' && !taxon) ? ['Aves'] : ICONIC.map(function (p) { return p[0]; });
 // Date range and place text, the other two narrowings the row offers — same restriction as
 // iconic, and for the same reason: the tagged shelf is one tag, not a spread of dates or places.
 var dateFrom = view === 'highlights' ? '' : (qs.get('d1') || '').trim();
 var dateTo   = view === 'highlights' ? '' : (qs.get('d2') || '').trim();
 var place    = view === 'highlights' ? '' : (qs.get('place') || '').trim();
-// A specific taxon, picked from the free-text search rather than the ten quick groups. Read
-// straight off the address on load because picking one is a reload, same as switching shelves —
-// see the doc comment above for why this one can't just filter the shelf already on the page.
-var taxon = view === 'highlights' ? '' : (qs.get('taxon') || '').trim();
-var tname = view === 'highlights' ? '' : (qs.get('tname') || '').trim();
 // The photograph the link asks to have open, if any. Cleared once it has been opened, or once
 // the reader has taken the wall somewhere of their own.
 var wanted = (qs.get('photo') || '').trim();
@@ -784,10 +791,14 @@ filters.addEventListener('click', function (e) {
   if (b) setMode(b.dataset.show);
 });
 
-// Unhides the search field on the same two shelves the quick groups offer it on. Run after
-// buildTaxaFilter() so that when a taxon is already picked — arriving on the page, not just
-// chosen from it — it can override that row's own hidden = false: a specific pick already
-// says what to see, and the ten groups under it would only be repeating the question.
+// Unhides the search field on both shelves the tagged one is skipped for — unlike the quick
+// groups, a taxon search reloads rather than filters (see the doc comment up top), so it can
+// ask iNaturalist for any class at all regardless of which shelf it was picked from, and stays
+// useful on birds even though the quick groups above no longer offer themselves there. Run
+// after buildTaxaFilter() so that when a taxon is already picked — arriving on the page, not
+// just chosen from it — it can override that row's own hidden = false: a specific pick already
+// says what to see, and the groups under it (on all, where they're built at all) would only be
+// repeating the question.
 function buildTaxonSearch() {
   if (view === 'highlights') return;
   taxonSearch.hidden = false;
@@ -799,10 +810,16 @@ function buildTaxonSearch() {
 }
 
 // The same quick groups as the species report's, built once — never hunted for in the data,
-// since a group is worth offering whether or not this shelf happens to hold one yet.
-// Never built at all on the highlights shelf, one tag rather than a spread of kinds.
+// since a group is worth offering whether or not this shelf happens to hold one yet. That
+// reasoning holds on all, whose fetch asks for every class and might simply not have paged
+// one in yet — a button sitting at zero there is a "not yet". It doesn't hold on birds, whose
+// fetch is pinned to `iconic_taxa=Aves` (see endpoint()): nothing outside Aves is ever asked
+// for, so a button there sits at zero forever, not "not yet" but "not ever" — offering it
+// would just be a wrong answer with a button attached. So this only builds on all. Never
+// built on the highlights shelf either, for the same shape of reason from the other side: one
+// tag rather than a spread of kinds, the way birds is one class rather than a spread of them.
 function buildTaxaFilter() {
-  if (view === 'highlights') return;
+  if (view !== 'all') return;
 
   taxaFilter.innerHTML = '<span class="lede">Taxa</span>' + ICONIC.map(function (pair) {
     return '<button type="button" data-iconic="' + pair[0] + '">' + esc(pair[1]) + '</button>';
