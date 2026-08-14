@@ -86,6 +86,10 @@ var grade = qs.get('grade') || 'needs_id,research';
 var mode  = qs.get('show') === 'all' ? 'all' : 'unseen';
 // Which shelf. Anything unrecognised falls back to the tagged one this page was built around.
 var view  = qs.get('view') === 'birds' ? 'birds' : qs.get('view') === 'all' ? 'all' : 'highlights';
+// Switching shelves is a reload (see the doc comment above viewSel's change handler), so this
+// is settled for the whole life of the page: birds and all get a header that scrolls off
+// instead of staying pinned, since those two can grow tall enough to crowd the wall.
+document.body.classList.toggle('loose-header', view !== 'highlights');
 // A specific taxon, picked from the free-text search rather than the ten quick groups. Read
 // straight off the address on load because picking one is a reload, same as switching shelves —
 // see the doc comment above for why this one can't just filter the shelf already on the page.
@@ -542,7 +546,7 @@ var masthead = document.querySelector('header');
 
 var stops = [];    // one per month on the wall, newest first: where it starts, and what to call it
 var span  = 0;     // how far the page scrolls, which is the length the rail stands for
-var head  = 0;     // the sticky header, which the rail hangs below and scrolling stops under
+var head  = 0;     // the pinned header's height on the highlights shelf, else 0 — see measure()
 
 var MIN_LABEL = 18;   // px of rail a year needs to itself
 var MIN_TICK  = 9;    // and a month dot, which never crowds a year out
@@ -580,7 +584,9 @@ function measure() {
   var pitch = box.height + (parseFloat(style.rowGap) || 0);
   var top   = box.top + scrollY;
 
-  head = masthead.offsetHeight;
+  // Off the highlights shelf the header scrolls away with everything else, so nothing needs
+  // to be held clear of it and a stop's row can go all the way to the top of the viewport.
+  head = view === 'highlights' ? masthead.offsetHeight : 0;
   span = document.documentElement.scrollHeight - innerHeight;
   document.documentElement.style.setProperty('--railtop', head + 'px');
 

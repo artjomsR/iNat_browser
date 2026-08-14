@@ -43,6 +43,14 @@ header {
   border-bottom: 1px solid var(--hair);
 }
 
+/* Birds and all can grow the header tall — species search, the group row, date and place —
+   so pinning it there eats into the wall every time one of those rows is open. It scrolls off
+   with the rest of the page there instead; only the highlights shelf, which never grows past
+   one line, keeps it pinned. */
+body.loose-header header {
+  position: static;
+}
+
 /* One line at any width: whose gallery, how much of it, and which shelf it came off. A phone
    cannot spare the room all three would ask for, so rather than break the line in two the
    picker is the one that gives — see the three rules below, which say in what order. */
