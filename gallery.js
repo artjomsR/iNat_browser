@@ -134,6 +134,11 @@ var MAX_PAGES = 50;
 var all    = [];   // every photo fetched, whatever the filter says
 var photos = [];   // the ones on screen — what the focus view steps through
 var cursor = 0;
+// True once load() has stopped asking for more — the shelf ran out, the connection failed,
+// whatever. relist() checks this before calling nothingNew(): a filter picked while pages are
+// still arriving can only honestly report what's true of the pages already in, not the shelf
+// as a whole, and saying so anyway is what made a place picked mid-fetch look broken.
+var loadDone = false;
 
 var grid     = document.getElementById('grid');
 var taxaFilter = document.getElementById('taxaFilter');
@@ -482,7 +487,13 @@ function relist() {
   // An empty tag is not the filter's doing, so that message is left where it is.
   if (all.length) {
     statusEl.hidden = true;
-    if (!photos.length) nothingNew();
+    // Nothing matched — but only a finished load can say that honestly. Picked mid-fetch, the
+    // photo that would have matched may simply not have arrived yet, and saying "nothing here"
+    // over a wall still being hung is what made a place picked while it loaded look broken
+    // rather than just early. load()'s own end-of-run check makes the real call once fetching
+    // has actually stopped, and every page still to come renders into the grid same as ever
+    // regardless of what this said.
+    if (!photos.length && loadDone) nothingNew();
   }
 }
 
@@ -491,6 +502,7 @@ async function load() {
 
   for (var page = 1; page <= MAX_PAGES; page++) {
     var payload;
+    var pageStart = Date.now();
 
     try {
       var res = await fetch(endpoint(page), { headers: { Accept: 'application/json' } });
@@ -504,6 +516,7 @@ async function load() {
       payload = await res.json();
     } catch (err) {
       loading.hidden = true;
+      loadDone = true;
       // `all`, not `photos`: photos already fetched and then filtered out still mean the
       // connection was fine, and shouldn't be reported as a dead one.
       if (all.length === 0) {
@@ -526,9 +539,13 @@ async function load() {
     paint(collect(results));
 
     if (results.length < PER_PAGE) break;
-    await sleep(1100);   // iNaturalist asks for a second between calls; this stays inside it
+    // iNaturalist paces requests by when each one goes out, not when it comes back, so the
+    // wait only needs to cover what the fetch itself hasn't already spent — not a flat 1100ms
+    // stacked on top of however long that took.
+    await sleep(Math.max(0, 1100 - (Date.now() - pageStart)));
   }
 
+  loadDone = true;
   loading.hidden = true;
 
   if (photos.length === 0) {
