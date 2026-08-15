@@ -1233,6 +1233,10 @@ function showPhoto(i) {
   var photo = photos[i];
   markSeen(photo);
 
+  // A fresh picture starts at its own size — a zoom carried over from the last one would be
+  // answering a gesture nobody made on this one.
+  resetZoom();
+
   // What is on screen is what the address says, so the bar can be copied out of at any moment
   // without a button being pressed at all.
   qs.set('photo', photo.key);
@@ -1286,6 +1290,7 @@ function closeFocus() {
   document.body.classList.remove('focused');
   hi.removeAttribute('src');
   lo.removeAttribute('src');
+  resetZoom();
   // Nothing is open any longer, so the address stops naming a photograph — a link taken from
   // the bar now is the wall, which is what is being looked at.
   qs.delete('photo');
@@ -1348,17 +1353,133 @@ document.addEventListener('keydown', function (e) {
   if (e.key === 'Escape')     { e.preventDefault(); closeFocus(); }
 });
 
-// swipe: sideways to move, down to close
+/* ---------------- zoom, pan, and swipe ----------------
+
+   Two fingers pinch the picture in and out, the point between them held under the fingers
+   as it grows or shrinks, the same as it would in Photos. One finger does one of two things
+   depending on whether the picture is currently zoomed: dragged around it if it is, or read
+   as a swipe if it isn't, since a swipe that moved to the next photograph or closed the view
+   out from under someone mid-pan would be answering the wrong question. Both stay stateful
+   across a change in finger count instead of resetting — lifting one finger out of a pinch
+   keeps the picture at whatever size it had grown to and hands the remaining finger straight
+   to panning, rather than dropping back to a plain swipe underneath it. */
+
+var stage = focusEl.querySelector('.stage');
+var prevZoneEl = document.getElementById('prevZone');
+var nextZoneEl = document.getElementById('nextZone');
+
+var ZOOM_MAX = 4;
+var zoomScale = 1, panX = 0, panY = 0;
+
+function touchDist(a, b) {
+  var dx = a.clientX - b.clientX, dy = a.clientY - b.clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+function touchMid(a, b) {
+  return { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
+}
+
+// Kept inside the screen rather than the picture's own rendered box — close enough, since
+// object-fit: contain already holds it near that size, and it saves a layout read on every
+// frame of the gesture.
+function clampPan() {
+  var maxX = (innerWidth  * (zoomScale - 1)) / 2;
+  var maxY = (innerHeight * (zoomScale - 1)) / 2;
+  panX = Math.max(-maxX, Math.min(maxX, panX));
+  panY = Math.max(-maxY, Math.min(maxY, panY));
+}
+
+function applyZoom(settling) {
+  stage.style.transition = settling ? 'transform 150ms ease' : 'none';
+  stage.style.transform = (zoomScale === 1 && !panX && !panY) ? ''
+    : 'translate(' + panX + 'px,' + panY + 'px) scale(' + zoomScale + ')';
+  // The tap zones would otherwise steal a drag that starts on them once the picture is
+  // zoomed in, sending the reader to the next photograph instead of panning this one.
+  var zoomed = zoomScale > 1.001;
+  prevZoneEl.style.pointerEvents = zoomed ? 'none' : '';
+  nextZoneEl.style.pointerEvents = zoomed ? 'none' : '';
+}
+
+function resetZoom() {
+  zoomScale = 1; panX = 0; panY = 0;
+  applyZoom(false);
+}
+
 var sx = 0, sy = 0, tracking = false;
+var pinch = null;   // set while two fingers are down
+var pan   = null;   // set while one finger drags an already-zoomed picture
 
 focusEl.addEventListener('touchstart', function (e) {
-  if (e.touches.length !== 1) { tracking = false; return; }
-  sx = e.touches[0].clientX;
-  sy = e.touches[0].clientY;
-  tracking = true;
+  if (e.touches.length === 2) {
+    tracking = false;
+    pan = null;
+    var mid = touchMid(e.touches[0], e.touches[1]);
+    pinch = {
+      dist: touchDist(e.touches[0], e.touches[1]),
+      scale0: zoomScale,
+      // the point on the picture itself under the fingers, in its own unscaled terms, held
+      // there as the scale changes rather than recomputed fresh each frame.
+      cx: (mid.x - innerWidth / 2 - panX) / zoomScale,
+      cy: (mid.y - innerHeight / 2 - panY) / zoomScale
+    };
+    return;
+  }
+  if (e.touches.length !== 1) { tracking = false; pan = null; return; }
+  pinch = null;
+  if (zoomScale > 1.001) {
+    tracking = false;
+    pan = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  } else {
+    pan = null;
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+    tracking = true;
+  }
 }, { passive: true });
 
+focusEl.addEventListener('touchmove', function (e) {
+  if (pinch && e.touches.length === 2) {
+    e.preventDefault();
+    var dist = touchDist(e.touches[0], e.touches[1]);
+    var mid  = touchMid(e.touches[0], e.touches[1]);
+    zoomScale = Math.max(1, Math.min(ZOOM_MAX, pinch.scale0 * (dist / pinch.dist)));
+    panX = mid.x - innerWidth / 2 - pinch.cx * zoomScale;
+    panY = mid.y - innerHeight / 2 - pinch.cy * zoomScale;
+    clampPan();
+    applyZoom(false);
+    return;
+  }
+  if (pan && e.touches.length === 1) {
+    e.preventDefault();
+    var t = e.touches[0];
+    panX += t.clientX - pan.x;
+    panY += t.clientY - pan.y;
+    pan.x = t.clientX;
+    pan.y = t.clientY;
+    clampPan();
+    applyZoom(false);
+  }
+}, { passive: false });
+
 focusEl.addEventListener('touchend', function (e) {
+  if (e.touches.length >= 1) {
+    // A finger lifted out of a pinch, one still down: that finger takes over panning at
+    // whatever size the pinch had already reached, rather than the gesture ending here.
+    if (e.touches.length === 1) {
+      pinch = null;
+      pan = zoomScale > 1.001 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+    }
+    return;
+  }
+
+  pinch = null;
+  pan = null;
+
+  // A pinch that lands back near 1x settles there exactly, rather than leaving the picture
+  // a hair off its true size.
+  if (zoomScale <= 1.02) resetZoom();
+  else applyZoom(true);
+
   if (!tracking) return;
   tracking = false;
   var t = e.changedTouches[0];
@@ -1370,6 +1491,11 @@ focusEl.addEventListener('touchend', function (e) {
   } else if (dy > 80 && Math.abs(dy) > Math.abs(dx)) {
     closeFocus();
   }
+}, { passive: true });
+
+focusEl.addEventListener('touchcancel', function () {
+  tracking = false; pinch = null; pan = null;
+  if (zoomScale <= 1.02) resetZoom(); else applyZoom(true);
 }, { passive: true });
 
 /* ---------------- go ---------------- */

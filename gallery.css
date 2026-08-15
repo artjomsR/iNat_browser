@@ -689,6 +689,8 @@ body.focused .rail { display: none; }
   background: var(--ink-deep);
   display: none;
   touch-action: none;
+  /* Clips a zoomed picture to the screen rather than letting it paint past its own edges. */
+  overflow: hidden;
 }
 
 #focus.on { display: block; }
@@ -699,6 +701,10 @@ body.focused .rail { display: none; }
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Transformed directly by the pinch/pan gesture in gallery.js — flagged for the browser
+     so it can put the layer on its own compositor tile ahead of the first touch, rather
+     than promoting it mid-gesture. */
+  will-change: transform;
 }
 
 .stage img {
