@@ -46,9 +46,17 @@ header {
 /* Birds and all can grow the header tall — species search, the group row, date and place —
    so pinning it there eats into the wall every time one of those rows is open. It scrolls off
    with the rest of the page there instead; only the highlights shelf, which never grows past
-   one line, keeps it pinned. */
+   one line, keeps it pinned.
+
+   `relative` rather than `static`: laid out identically either way (no offset is ever set),
+   but `static` also switches z-index off — the header's own backdrop-filter still forces it
+   into its own stacking context regardless, so without z-index to place that context above
+   main's, DOM order alone would decide it, and main comes after header. Every dropdown this
+   row opens (taxon's and place's alike) would sit behind the very wall it's meant to float
+   over. `relative` keeps the header's z-index live, so it wins that ordering the way it does
+   on the pinned highlights shelf, while still scrolling away exactly as `static` did. */
 body.loose-header header {
-  position: static;
+  position: relative;
 }
 
 /* One line at any width: whose gallery, how much of it, and which shelf it came off. A phone
@@ -244,6 +252,25 @@ body.loose-header header {
   color: var(--chrome-dim);
 }
 
+/* Place suggestions reuse the .ac shell above but not its inner taxon styling — there's no
+   thumbnail, and the second line is a parent place ("Lisboa, Portugal"), not a scientific
+   name, so it stays upright rather than borrowing .ac-sci's italic serif. */
+.ac-place-name { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ac-place-primary {
+  font-size: 13px;
+  color: var(--paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ac-place-sub {
+  font-size: 11px;
+  color: var(--chrome);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* The picked taxon, sitting under the field it came from — the one chip naming what the
    shelf is now scoped to, and the one way back out of it. The field stays live above it
    rather than being swapped out, so changing the pick is a fresh search, not a clear-then-type. */
@@ -411,11 +438,26 @@ body.loose-header header {
 
 .narrow input[type="date"] { width: 132px; }
 
-/* The one field with no natural width of its own — takes what the row has left, same as
-   .stat does in the masthead, rather than asking for a fixed share. */
-.narrow input[type="text"] { flex: 1 1 96px; min-width: 72px; }
-
 .narrow input:focus-visible { outline: 1px solid var(--chrome); outline-offset: 3px; }
+
+/* The one field with no natural width of its own — takes what the row has left, same as
+   .stat does in the masthead, rather than asking for a fixed share. Sizing moved here from
+   the input itself once the input got a wrapper: a flex-basis on an element that is no
+   longer a direct child of the flex row does nothing. Positioned, so the suggestion list
+   below can anchor to the field rather than the whole row. */
+.narrow .placeWrap {
+  position: relative;
+  flex: 1 1 96px;
+  min-width: 72px;
+}
+
+.narrow .placeWrap input { width: 100%; }
+
+/* A pick from the dropdown is matched by iNaturalist's own place boundary rather than by
+   the text's spelling (see the "place search" doc comment in gallery.js) — worth a quiet
+   visual difference from plain typed text, so it reads as "found this" rather than risk
+   looking like the substring search silently not doing anything. */
+.narrow .placeWrap.locked input { border-bottom-color: var(--chrome); }
 
 /* ---------- grid ---------- */
 

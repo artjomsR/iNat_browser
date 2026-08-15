@@ -43,7 +43,11 @@
    observation whether anyone asks to see them or not, so — like `iconic` — these read the
    shelf already on the page rather than putting a new question to iNaturalist, and so filter
    rather than reload. Same reasoning, same restriction: meaningless on the tagged shelf, so
-   hidden there too.
+   hidden there too. `place_id` is the precise form of `place`, an iNaturalist place-boundary
+   id rather than a spelling of one — set when a suggestion is picked rather than typed (see
+   the "place search" doc comment further down), and checked against `place_ids` rather than
+   `place_guess`, since a canonical gazetteer name is not reliably a substring of what any
+   given observation's own place text happens to say.
 
    `taxon` and `tname` are the odd one out in that list: a specific species or other exact
    taxon, picked from the same free-text search index.js offers as `taxonInput`. Unlike the
@@ -111,6 +115,15 @@ var iconic = view === 'highlights' ? [] :
 var dateFrom = view === 'highlights' ? '' : (qs.get('d1') || '').trim();
 var dateTo   = view === 'highlights' ? '' : (qs.get('d2') || '').trim();
 var place    = view === 'highlights' ? '' : (qs.get('place') || '').trim();
+// A place picked from the suggestions list (see the "place search" doc comment further down)
+// is pinned to iNaturalist's own boundary for it rather than trusted to reappear as text —
+// `place` is what's shown, `place_id` is what's actually checked against each photo's own
+// `place_ids`. Typed rather than picked, `place` carries no id and falls back to the plain
+// substring search this field has always otherwise done.
+var placeId   = view === 'highlights' ? null : (Number(qs.get('place_id')) || null);
+// The exact text that id is honest for. If the field ever reads anything else the id no
+// longer names what's on screen and is dropped — see the input handler below.
+var placeName = placeId ? place : '';
 // The photograph the link asks to have open, if any. Cleared once it has been opened, or once
 // the reader has taken the wall somewhere of their own.
 var wanted = (qs.get('photo') || '').trim();
@@ -134,6 +147,8 @@ var narrowRow = document.getElementById('narrow');
 var dateFromEl = document.getElementById('dateFrom');
 var dateToEl   = document.getElementById('dateTo');
 var placeEl    = document.getElementById('placeInput');
+var placeWrap  = document.getElementById('placeWrap');
+var placeAc    = document.getElementById('placeAc');
 var filters  = document.getElementById('filters');
 var forget   = document.getElementById('forget');
 var picker   = document.getElementById('picker');
@@ -354,7 +369,11 @@ function collect(results) {
         common: (obs.taxon && obs.taxon.preferred_common_name) || '',
         iconic: (obs.taxon && obs.taxon.iconic_taxon_name) || '',
         date: obs.observed_on || (obs.observed_on_details && obs.observed_on_details.date) || '',
-        place: obs.place_guess || ''
+        place: obs.place_guess || '',
+        // The boundaries iNaturalist itself has already worked out this observation falls
+        // inside — arrives on every observation the same way place_guess does. A picked place
+        // is checked against this, not against place_guess's free text (see matchesNarrow()).
+        placeIds: obs.place_ids || []
       });
     });
   });
@@ -378,7 +397,7 @@ function paint(fresh) {
 // switched every group off, and an empty wall is the honest answer to that.
 function refining() {
   return view !== 'highlights' &&
-    (iconic.length < ICONIC.length || !!dateFrom || !!dateTo || !!place);
+    (iconic.length < ICONIC.length || !!dateFrom || !!dateTo || !!place || !!placeId);
 }
 
 // One photo's answer to the whole row — taxa, date range, and place together, so render() and
@@ -393,7 +412,11 @@ function matchesNarrow(photo) {
   // for.
   if (dateFrom && (!photo.date || photo.date < dateFrom)) return false;
   if (dateTo && (!photo.date || photo.date > dateTo)) return false;
-  if (place && (!photo.place || photo.place.toLowerCase().indexOf(place.toLowerCase()) === -1)) return false;
+  if (placeId) {
+    if (photo.placeIds.indexOf(placeId) === -1) return false;
+  } else if (place && (!photo.place || photo.place.toLowerCase().indexOf(place.toLowerCase()) === -1)) {
+    return false;
+  }
   return true;
 }
 
@@ -843,6 +866,7 @@ function buildNarrow() {
   dateFromEl.value = dateFrom;
   dateToEl.value = dateTo;
   placeEl.value = place;
+  syncPlaceLock();
 }
 
 function syncTaxaFilter() {
@@ -980,8 +1004,177 @@ taxonClear.addEventListener('click', function () {
   location.search = qs.toString();
 });
 
-// A native date input fires `change` once a value is actually committed, not per keystroke, so
-// this needs no debouncing of its own — unlike the place text below.
+/* ---------------- place search ----------------
+
+   The suggestions list stays live while typing — same /places/autocomplete index the taxon
+   search above draws on, same 280ms debounce, same up/down/Enter/Escape handling — because a
+   preview list costs nothing to keep current. What it's a preview of does not: the wall and
+   the address only change once the reader has actually decided something, not on every pause
+   mid-word. A pick decides it outright. Short of that, Enter or leaving the field both read as
+   "this is what I meant" the same way finishing a sentence does, and either commits whatever
+   text is sitting there as the plain substring search this field has always otherwise done —
+   see commitPlace() below. Only clearing the field back to nothing jumps that queue, since
+   emptying a filter is already a finished thought, not a letter more of one.
+
+   Picking a row is where matching stops being just a spelling contest: a name off
+   iNaturalist's own gazetteer ("Shetland Islands") is not reliably a substring of what any
+   given observation's place_guess happens to say ("Shetland, UK", "Lerwick, Scotland", or a
+   dozen other honest but differently-worded answers) — so a pick that only filled the text
+   field in could sit there matching nothing, looking broken while doing exactly what it was
+   told. What a pick actually hands over is a place id, checked against the `place_ids`
+   iNaturalist has already worked out for every photo (see matchesNarrow()) — a boundary, not
+   a spelling. `placeId` carries that; `placeName` is the exact text it's honest for, so
+   commitPlace() can tell a fresh pick from a pick that's since been typed over and drop the id
+   the moment the two disagree. Unlike a taxon pick, which is a new question put to
+   iNaturalist and so reloads (see the doc comment above pickTaxon()), a place pick still just
+   narrows the photos already on the page, so it applies immediately rather than waiting on
+   any of the above — a pick is already the decision the rest of this section is waiting for. */
+
+// Reflects whether the field's current value is a boundary or just a spelling, so the two
+// look different rather than leaving the pick invisible once it's been made.
+function syncPlaceLock() {
+  placeWrap.classList.toggle('locked', !!placeId);
+  placeEl.title = placeId ? 'Matched by iNaturalist place boundary, not by spelling' : '';
+}
+
+// The one place place/placeId actually reach the wall and the address bar — called only once
+// the two already say what's meant, whether that's a pick, a commit, or a plain clear.
+function applyPlace() {
+  syncPlaceLock();
+  if (place) qs.set('place', place); else qs.delete('place');
+  if (placeId) qs.set('place_id', String(placeId)); else qs.delete('place_id');
+  addressNow();
+  relist();
+}
+
+// The decisive middle ground between a pick and doing nothing: Enter, leaving the field, or
+// emptying it all read as "done" rather than "still typing" (see the doc comment above). A
+// locked id is only honest for the exact text it was picked for, so if the field no longer
+// reads that, the id is dropped back to the plain substring search instead of going on
+// matching a boundary nobody typed.
+function commitPlace() {
+  var text = placeEl.value.trim();
+  var nextId = (placeId && text === placeName) ? placeId : null;
+  if (text === place && nextId === placeId) return;   // nothing has actually changed
+  place = text;
+  placeId = nextId;
+  applyPlace();
+}
+
+var placeAcTimer = null, placeAcSeq = 0, placeAcActive = -1;
+
+function closePlaceAc() {
+  placeAc.hidden = true;
+  placeAc.innerHTML = '';
+  placeAcActive = -1;
+}
+
+function highlightPlaceAc() {
+  Array.prototype.forEach.call(placeAc.children, function (el, i) {
+    el.classList.toggle('hi', i === placeAcActive);
+  });
+  if (placeAcActive >= 0) placeAc.children[placeAcActive].scrollIntoView({ block: 'nearest' });
+}
+
+// The part of a place's full name not already said by its own name — "Lisboa, Portugal"
+// under "Amadora", not "Amadora" repeated under itself.
+function placeSub(t) {
+  var full = t.display_name || '';
+  if (full.indexOf(t.name) === 0) full = full.slice(t.name.length).replace(/^,\s*/, '');
+  return full;
+}
+
+placeEl.addEventListener('input', function () {
+  var q = placeEl.value.trim();
+  clearTimeout(placeAcTimer);
+  // Emptying the field reads as "never mind", not as a letter more of a place name — the one
+  // exception to typing not touching the wall (see the doc comment above).
+  if (!q && (place || placeId)) commitPlace();
+  if (q.length < 2) { closePlaceAc(); return; }
+  placeAcTimer = setTimeout(function () {
+    var mine = ++placeAcSeq;
+    fetch('https://api.inaturalist.org/v1/places/autocomplete?per_page=8&q=' + encodeURIComponent(q))
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (d) {
+        // A slower search that lands after a faster one is a stale answer to a question
+        // nobody's asking any longer, so it's dropped rather than drawn — same reasoning as
+        // the taxon search above.
+        if (mine !== placeAcSeq || !d) return;
+        var results = d.results || [];
+        if (!results.length) { closePlaceAc(); return; }
+        placeAcActive = -1;
+        placeAc.innerHTML = results.map(function (t) {
+          var sub = placeSub(t);
+          return '<button type="button" data-id="' + t.id + '" data-name="' + esc(t.name) + '">' +
+            '<span class="ac-place-name">' +
+              '<span class="ac-place-primary">' + esc(t.name) + '</span>' +
+              (sub ? '<span class="ac-place-sub">' + esc(sub) + '</span>' : '') +
+            '</span>' +
+          '</button>';
+        }).join('');
+        placeAc.hidden = false;
+      })
+      .catch(function () { closePlaceAc(); });
+  }, 280);
+});
+
+// Arrow keys move the highlight, Enter picks it — same defaulting-to-the-top-row reasoning
+// as the taxon field's own keydown handler above. Enter with no list open has nothing to
+// pick, so it commits the typed text instead (see commitPlace()).
+placeEl.addEventListener('keydown', function (e) {
+  if (!placeAc.hidden && placeAc.children.length) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      placeAcActive = Math.min(placeAcActive + 1, placeAc.children.length - 1);
+      highlightPlaceAc();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      placeAcActive = Math.max(placeAcActive - 1, 0);
+      highlightPlaceAc();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      placeAc.children[placeAcActive < 0 ? 0 : placeAcActive].click();
+    } else if (e.key === 'Escape') {
+      closePlaceAc();
+    }
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    commitPlace();
+  }
+});
+
+// A tap outside the field closes the list without picking anything, same as the taxon list.
+document.addEventListener('click', function (e) {
+  if (!placeAc.hidden && !placeWrap.contains(e.target)) closePlaceAc();
+});
+
+// Without this, clicking a suggestion would blur the field first (the default behaviour of
+// any mousedown on something else) — closing the list and committing whatever was typed
+// before the click handler below ever got to run its own, more specific answer.
+placeAc.addEventListener('mousedown', function (e) { e.preventDefault(); });
+
+placeAc.addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-id]');
+  if (!b) return;
+  placeEl.value = b.dataset.name;
+  closePlaceAc();
+  place = placeEl.value.trim();
+  placeId = Number(b.dataset.id);
+  placeName = place;
+  applyPlace();
+  placeEl.focus();
+});
+
+// Leaving the field is the other decisive "done" alongside Enter (see the doc comment above
+// the section) — whatever's typed is committed on the way out rather than left hanging.
+placeEl.addEventListener('blur', function () {
+  closePlaceAc();
+  commitPlace();
+});
+
+// A native date input fires `change` once a value is actually committed, not per keystroke —
+// the same "not while still deciding" reasoning the place field above now follows too, just
+// given to date inputs natively rather than needing commitPlace()'s own handling of it.
 dateFromEl.addEventListener('change', function () {
   dateFrom = dateFromEl.value;
   if (dateFrom) qs.set('d1', dateFrom); else qs.delete('d1');
@@ -994,20 +1187,6 @@ dateToEl.addEventListener('change', function () {
   if (dateTo) qs.set('d2', dateTo); else qs.delete('d2');
   addressNow();
   relist();
-});
-
-// Typed, so batched like the seen list: filtering and rewriting the address on every keystroke
-// would fight the reader for the letter they just typed. The grid only redraws once typing has
-// actually stopped.
-var placeTimer = null;
-placeEl.addEventListener('input', function () {
-  clearTimeout(placeTimer);
-  placeTimer = setTimeout(function () {
-    place = placeEl.value.trim();
-    if (place) qs.set('place', place); else qs.delete('place');
-    addressNow();
-    relist();
-  }, 350);
 });
 
 // Changing shelf is a new question for iNaturalist, not a new slice of the answer already

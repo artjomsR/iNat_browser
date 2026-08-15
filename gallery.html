@@ -51,7 +51,10 @@
     <span class="to">&ndash;</span>
     <input type="date" id="dateTo" aria-label="To date">
     <span class="lede where">Where</span>
-    <input type="text" id="placeInput" placeholder="place" aria-label="Filter by place" autocomplete="off" autocapitalize="none" spellcheck="false">
+    <span class="placeWrap" id="placeWrap">
+      <input type="text" id="placeInput" placeholder="place" aria-label="Filter by place" autocomplete="off" autocapitalize="none" spellcheck="false">
+      <div class="ac" id="placeAc" hidden></div>
+    </span>
   </div>
   <div class="filters" id="filters" hidden>
     <span class="lede">Show</span>
