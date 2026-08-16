@@ -1093,7 +1093,7 @@ async function standingLookup(user){
 // sits on the page."
 const TIERS = [
   ["Untagged",   "Not one observation carries a tier tag.",          ""],
-  ["Audio only", "Recorded by sound alone — no photograph to tag.",  "audio"],
+  ["Audio only", "Audio only.",  "audio"],
   ["Tier",     "C is the best tag on it — nothing tagged B or S.", "c"],
   ["Tier",     "B is the best tag on it — nothing tagged S.",      "b"],
   ["Tier",     "Carries an S tag, the top tier.",                  "s"],
@@ -1110,7 +1110,7 @@ const TIERS = [
 // a contiguous run to jump to.
 const PLACE_BANDS = [
   ["Unobserved", "Nothing from you here at all.",   ""],
-  ["Audio only",       "Recorded by sound alone.",        "audio"],
+  ["Audio only",       "Audio only.",        "audio"],
   ["Observed",         "Recorded, but nothing tagged.",   "seen"],
   ["Tier C",           "Best tag: tier C.",               "c"],
   ["Tier B",           "Best tag: tier B.",               "b"],
@@ -1262,7 +1262,7 @@ const DOWNLOAD_ICON = `<svg viewBox="0 0 16 16" aria-hidden="true">
 // without stopping on each letter.
 const BADGE = {
   seen:  ["&#10003;",   "recorded, but nothing tagged"],
-  audio: [SPEAKER_SVG,  "recorded by sound alone"],
+  audio: [SPEAKER_SVG,  "audio only"],
   c:     ["C",          "best tag: tier C"],
   b:     ["B",          "best tag: tier B"],
   s:     ["S",          "best tag: tier S"]
