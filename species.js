@@ -2876,11 +2876,12 @@ const NOTES = {
       return;
     }
 
-    // An area with no taxon or quick-group behind it is not a list anyone can read: a
-    // country holds tens of thousands of species, past the point where paging them is
-    // either quick or complete. Ask for a group rather than starting a request that will
-    // hang and then truncate.
-    if(!hasTaxa){
+    // An area with no taxon or quick-group behind it is not a list anyone can read — but
+    // that is a claim about a named place, which can hold tens of thousands of species, not
+    // about a pin. A pin is a radius the reader chose on the map, ordinarily after the map
+    // has already shown roughly how many species sit inside it, so it carries none of the
+    // risk a bare country name does and is let straight through even with no taxon behind it.
+    if(!hasTaxa && !hasPin){
       paint(`<div class="state">
         <div class="state-lede">Which group?</div>
         <div class="state-hint">${esc(areaLabel())} holds far too many species to list at once.
