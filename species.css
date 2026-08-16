@@ -292,6 +292,10 @@ a.viewMy:hover,a.ebird:hover{color:var(--mark)}
 .tick-c{--badge:#C08457}     /* bronze */
 .tick-b{--badge:#AFBAC4}     /* silver */
 .tick-s{--badge:#E8C468}     /* gold */
+/* the place tab index's own leading band — not a standing, only the absence of one, so a
+   hollow ring rather than one of the filled discs above: nothing to claim, nothing to ramp. */
+.tick-none{background:none;box-shadow:inset 0 0 0 1.5px var(--rule);color:var(--mute);cursor:default}
+.tick-none:hover{transform:none}
 /* the row number follows its badge, so the ramp reads down the left edge too */
 li.seen .num{color:var(--badge,var(--verified))}
 li[data-standing="audio"]{--badge:#2D9CFF}

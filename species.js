@@ -1099,6 +1099,24 @@ const TIERS = [
   ["Tier",     "Carries an S tag, the top tier.",                  "s"],
 ];
 
+// The place tab's own bands, for its own index rail. Deliberately not TIERS despite sharing
+// four of its five names: TIERS' blank means "recorded, but nothing tagged" — there is no
+// "never recorded" on the tier tab, every row being the reader's own by definition — while
+// here a blank standing means the species has no record from this reader at all, and
+// "recorded, nothing tagged" is its own band under "seen"'s tag rather than folded into the
+// blank one. Order matches STANDING_ORDER with the never-recorded band leading it, which is
+// also ascending tierRank — so this array IS the order a "tier" sort puts the list in, and the
+// rail built from it can trust that landing everyone on that order is enough to make each band
+// a contiguous run to jump to.
+const PLACE_BANDS = [
+  ["Unobserved", "Nothing from you here at all.",   ""],
+  ["Audio only",       "Recorded by sound alone.",        "audio"],
+  ["Observed",         "Recorded, but nothing tagged.",   "seen"],
+  ["Tier C",           "Best tag: tier C.",               "c"],
+  ["Tier B",           "Best tag: tier B.",               "b"],
+  ["Tier S",           "Carries an S tag, the top tier.", "s"],
+];
+
 // Hide-cascade rank — weakest standing first, and deliberately NOT the same array as TIERS:
 // the two pages show these in different orders on purpose (Untagged first on the tier tab,
 // audio first on the place tab), so display order and rank have to be free to disagree.
@@ -1564,8 +1582,39 @@ function placeToolbarHtml(sortBy, counts){
 // the list, a loading note, an empty one, a failure. So a month tap or the subspecies checkbox
 // never costs the reader the control they just used, whether the answer is still out, comes
 // back empty, or doesn't come back at all.
-function placeShellHtml(body, counts){
-  return `<section class="tier" id="here">${placeToolbarHtml(view.sort, counts)}${body}</section>`;
+//
+// `index` is the place tab's own rail — only ever passed by the populated branch of
+// placeListHtml, which is the only state that has bands to count. Loading, empty and failed
+// states all fall through to no second argument and stay a single section exactly as before,
+// same as the tier tab's own shell never grows a rail it has nothing to fill.
+function placeShellHtml(body, counts, index){
+  const section = `<section class="tier" id="here">${placeToolbarHtml(view.sort, counts)}${body}</section>`;
+  return index ? `<div class="cols">${index}<div class="tiers">${section}</div></div>` : section;
+}
+
+// How many of `rows` sit in each of PLACE_BANDS, read off the same `standing` lookup the rows
+// themselves are badged with — so the rail's counts and the ticks a reader actually sees can
+// never disagree about what a species' standing is.
+function placeBandCounts(rows, standing){
+  const counts = {};
+  PLACE_BANDS.forEach(([, , tag]) => counts[tag] = 0);
+  rows.forEach(x => counts[standing(x) || ""]++);
+  return counts;
+}
+
+// The place tab's index — the same rail the tier tab paints, but its own six bands rather
+// than TIERS' five (see PLACE_BANDS), and never shown without a username: with none, no row
+// carries a standing at all, and a rail counting a distinction nothing on the page draws
+// would only be six numbers with nothing under them to point at. The never-recorded band
+// gets a hollow ring rather than one of BADGE's ticks — it is not a standing, only the
+// absence of one, and dressing it in the same filled disc as a real tag would claim a tick
+// that species does not carry.
+function placeIndexHtml(counts){
+  return `<nav class="index">` + PLACE_BANDS.map(([title, blurb, tag]) =>
+    `<a href="#" data-band="${esc(tag)}" title="${esc(blurb)}"><span class="ix-name">${
+      tag ? tierBadge(tag) : `<span class="tick tick-none" aria-hidden="true">&mdash;</span>`
+    }${esc(title)}</span><span class="n">${counts[tag] || 0}</span></a>`
+  ).join("") + `</nav>`;
 }
 
 // The place tab: one flat list, every species recorded in the area, badged where the
@@ -1589,9 +1638,13 @@ function placeListHtml(rows, standing, sortBy){
     </div>`, { held: 0, total: 0 });
   }
   const held = standing ? rows.filter(x => standing(x)).length : 0;
+  // The rail only where there is something for it to count: without a `standing` lookup no
+  // row carries a badge, and PLACE_BANDS would just be six zeroes beside a "Not yet recorded"
+  // claiming every row on a page that has no idea who "you" are.
+  const index = standing ? placeIndexHtml(placeBandCounts(rows, standing)) : "";
   return placeShellHtml(`<ul>${sortRows(rows, sortBy, standing).map((x, n) =>
     rowHtml(x, n, view.user, standing ? standing(x) : "")).join("")}</ul>`,
-    { held, total: rows.length });
+    { held, total: rows.length }, index);
 }
 
 function listHtml(buckets, user, sortBy){
@@ -1703,6 +1756,16 @@ function retally(ul, shown, held){
   if(rail) rail.textContent = shown;
 }
 
+// The place tab's rail has no section to be found through — one flat list wears six bands,
+// not six sections — so it is retallied straight from what `relist` already counted per
+// standing instead. A no-op wherever the rail wasn't painted (see placeIndexHtml).
+function retallyPlaceBands(counts){
+  document.querySelectorAll(".index a[data-band]").forEach(a => {
+    const n = a.querySelector(".n");
+    if(n) n.textContent = counts[a.dataset.band] || 0;
+  });
+}
+
 // A row's own standing, ranked against the cutoff — only meaningful on the place tab, where
 // each row carries its badge in `data-standing`. Empty (never recorded, no badge) never
 // matches: the cascade only ever touches species that have a standing to rank, so the ones
@@ -1734,14 +1797,19 @@ function relist(){
   document.querySelectorAll("#main ul").forEach(ul => {
     [...ul.querySelectorAll("li.fam")].forEach(li => li.remove());
     let shown = 0, held = 0;
+    // Keyed the same way placeBandCounts is, and only the place tab's rows carry a
+    // `data-standing` at all — a no-op tally everywhere else.
+    const bands = {};
     [...ul.children].sort(cmp).forEach(li => {
       ul.appendChild(li);                          // moves, does not clone
       li.hidden = underMin(li) || rankHidden(li);
       if(li.hidden) return;
       li.firstElementChild.textContent = ++shown;                  // .num
       if(li.dataset.standing) held++;
+      if(li.dataset.standing != null) bands[li.dataset.standing] = (bands[li.dataset.standing] || 0) + 1;
     });
     retally(ul, shown, held);
+    retallyPlaceBands(bands);
     drawFamilies(ul, view.sort === "taxo");
   });
 }
@@ -2126,6 +2194,28 @@ function wireDownloadPage(){
   });
 }
 
+// What the place tab's rail forces before it can jump anywhere: ascending tier order, the one
+// arrangement where PLACE_BANDS' six names are six contiguous runs rather than six standings
+// scattered through whatever the reader had it sorted by. Not a toggle like the sortbar's own
+// buttons — a second click on an already-chosen tier there turns it over, but a rail badge
+// always means "take me to this band," never "reverse it," so this only ever sets the one
+// direction and does nothing if that's already where the list stands.
+// Mirrors the sort button's own click handling rather than sharing it: that handler also owns
+// the taxonomic-families redraw and the scroll-to-top a genuine button press wants, neither of
+// which belongs to a rail jump that is about to scroll somewhere of its own choosing.
+function setTierAscending(){
+  if(view.sort === "tier" && !view.rev) return;
+  view.sort = "tier";
+  view.rev = false;
+  document.querySelectorAll(".sortbar button[data-by]").forEach(x => {
+    const chosen = x.dataset.by === "tier";
+    x.className = chosen ? "on" : "";
+    if(SORT_TITLE[x.dataset.by]) x.title = SORT_TITLE[x.dataset.by][0];
+  });
+  writeState({ sort: "tier", rev: "" });
+  relist();
+}
+
 function wireSort(){
   // Rebound every paint, same as the sort buttons below — the button is destroyed and
   // recreated with the rest of the sortbar, so a listener from a previous paint is gone
@@ -2321,6 +2411,51 @@ function wireIndex(){
   }
 }
 
+// The place tab's own rail. Not wireIndex — that one walks real `<section>`s by id, and a
+// band here is a run of plain `<li>`s with nothing of its own to be found through, so this
+// finds a jump's landing spot the same way relist finds a row to hide: by `data-standing`,
+// read live rather than cached, since a threshold or the hide-cascade can take the current
+// first row of a band out from under a stale answer.
+function wirePlaceIndex(){
+  const links = [...document.querySelectorAll(".index a[data-band]")];
+  if(!links.length) return;
+  const inOrder = () => view.sort === "tier" && !view.rev;
+  const firstOf = tag => document.querySelector(`#main li[data-standing="${CSS.escape(tag)}"]:not([hidden])`);
+
+  links.forEach(a => a.addEventListener("click", e => {
+    // A badge with a rank carries its own click meaning — the hide-cascade, same as every
+    // other tick on the page (see wireHideToggle) — and stops this from also firing. The
+    // never-recorded band's hollow ring has no rank and nothing of its own to do, so a click
+    // there falls through to the jump like the rest of the link.
+    if(e.target.closest(".tick[data-rank]")) return;
+    e.preventDefault();
+    setTierAscending();
+    const li = firstOf(a.dataset.band);
+    if(li) li.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
+
+  // The highlight only means anything once the bands are actually contiguous — off that order
+  // "which one is nearest the top" would just be whichever row the reader happens to be
+  // passing, not a band at all, so it goes dark rather than claim one.
+  let queued = false;
+  const mark = () => {
+    queued = false;
+    if(!inOrder()){ links.forEach(a => a.classList.remove("on")); return; }
+    let at = "";
+    links.forEach(a => {
+      const li = firstOf(a.dataset.band);
+      if(li && li.getBoundingClientRect().top <= 90) at = a.dataset.band;
+    });
+    links.forEach(a => a.classList.toggle("on", a.dataset.band === at));
+  };
+  addEventListener("scroll", () => {
+    if(queued) return;
+    queued = true;
+    requestAnimationFrame(mark);
+  }, { passive: true });
+  mark();
+}
+
 function paint(html, sub, busy){
   main.innerHTML = html;
   // The rows are the same in either shape, so grid is one class re-asserted with each paint
@@ -2444,6 +2579,7 @@ async function runPlace(){
     // five sections have no single heading to carry a total.
     paint(placeListHtml(rows, standing, view.sort), "");
     afterPaint([rows]);
+    wirePlaceIndex();
   }catch(e){
     // An overtaken run's failure is not this list's failure — the newer one is still out, and
     // its own loading state is what should be on screen.
