@@ -1852,7 +1852,13 @@ function toggleHideFrom(i){
 // place tab's own rows, and its legend — rather than binding each kind separately.
 function wireHideToggle(){
   document.addEventListener("click", e => {
-    const t = e.target.closest(".tick[data-rank]");
+    // The legend spells the circle out in words beside it (see legendHtml) so a reader without
+    // hover has something to read — but words meant to be read are also words a thumb reaches
+    // for, so the label counts as the same hit as the circle it names rather than dead space
+    // beside it. Elsewhere a tick is the whole of what there is to click, so this only widens
+    // the target inside a legend item; nothing about a bare tick changes.
+    const item = e.target.closest(".legend-item");
+    const t = item ? item.querySelector(".tick[data-rank]") : e.target.closest(".tick[data-rank]");
     if(!t) return;
     e.preventDefault();
     e.stopPropagation();   // the rail badge sits inside its <a> — this keeps that from also firing
