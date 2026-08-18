@@ -107,7 +107,7 @@ function obsParams(){
       if(state.dmode === "unobserved"){
         p.set("unobserved_by_user_id", state.unobs);
       }else if(state.tierExclude && state.tierExclude.length){
-        // Level mode: hide species this user has already tagged at this level.
+        // Level mode: hide species this user has already tagged at a better level.
         p.set("without_taxon_id", state.tierExclude.join(","));
       }
       // Rank window on the results, driven by the two tickboxes. Unticked, the list is
@@ -165,7 +165,8 @@ function unknownParams(){
 
 // Desired-species levels, best first — each value is both the button's mode and the
 // observation tag it matches. The priority stacks: picking a level hides species already
-// tagged at that level *or better*, so the exclusion set for level i is tags 0..i.
+// tagged at a *better* level, so the exclusion set for level i is tags 0..i-1 — the level
+// itself, and anything worse, stays on the map.
 // Note the top tier is "s", not "a": iNat's search index treats "a" as an English
 // stopword and silently drops it (search_on=tags&q=a matches nothing, site-wide).
 const LEVELS = ["s","b","c"];
@@ -209,8 +210,8 @@ async function speciesIdsWithTag(user, tag, stale){
   return new Set(rows.map(x => x.taxon.id));
 }
 
-// The species a user has tagged at `level` or better. The tiers stack, so level i means
-// tags 0..i.
+// The species a user has tagged at a level better than `level`. The tiers stack, so
+// level i means tags 0..i-1.
 //
 // Only tags count here. A species recorded by sound alone carries no tag, so it stays on
 // the map at every level — which is the point: no photograph of it exists yet, so it is
@@ -218,7 +219,7 @@ async function speciesIdsWithTag(user, tag, stale){
 // their own band, but that is a way of reading a list, not a claim that the bird is done.
 async function taggedSpeciesIds(user, level, stale){
   const ids = new Set();                     // a species may be tagged at several tiers
-  for(const tag of LEVELS.slice(0, LEVELS.indexOf(level) + 1)){
+  for(const tag of LEVELS.slice(0, LEVELS.indexOf(level))){
     const tier = await speciesIdsWithTag(user, tag, stale);
     if(stale && stale()) return ids;
     tier.forEach(id => ids.add(id));
