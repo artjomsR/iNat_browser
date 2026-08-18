@@ -117,6 +117,13 @@ function obsParams(){
       // "Only subspecies" swaps it for a ceiling, leaving nothing but infraspecific taxa.
       if(state.ssp === "only") p.set("hrank", "subspecies");
       else if(!state.ssp)      p.set("lrank", "species");
+      // Level tiers (s/b/c) ask what this user still hasn't found at species level, so
+      // anything coarser than species — genus, family, order, and so on — shouldn't read as
+      // desired there either. "Only subspecies" already sits inside that window (its ceiling
+      // is finer than species), so it's left alone. Unobserved gets no such ceiling: a
+      // genus-level record can still be the first sign of something this user hasn't seen,
+      // so it stays visible there.
+      if(isTierMode() && state.ssp !== "only") p.set("hrank", "species");
       // Never show them their own shots. Redundant under Unobserved — a species they have
       // recorded is already gone whole — but in a level mode their untagged species are on
       // the map, and those pins lead back to ground they have already walked.
