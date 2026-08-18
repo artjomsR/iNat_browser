@@ -1305,10 +1305,17 @@ async function refreshAccuracyLayer(){
   if(state.style !== "accuracy") return;
   const zoom = map.getZoom();
   if(zoom < ACC_MIN_ZOOM){
+    // Below the pin floor, individual accuracy pins would mean fetching (and rendering)
+    // an unbounded number of observations, so this stays on the density tiles instead —
+    // the same grid/points overlay the other styles use — until zoom reaches the floor.
     accLayer.clearLayers();
-    accStatus.textContent = `Zoom in to load pins (zoom ${zoom} of ${ACC_MIN_ZOOM}+)`;
+    const url = tileUrl();
+    if(overlay._url !== url) overlay.setUrl(url);
+    if(!map.hasLayer(overlay)) overlay.addTo(map);
+    accStatus.textContent = `Showing density — zoom in for individual pins (zoom ${zoom} of ${ACC_MIN_ZOOM}+)`;
     return;
   }
+  if(map.hasLayer(overlay)) map.removeLayer(overlay);
   const mine = ++accSeq;
   accStatus.textContent = "Loading…";
   const b = map.getBounds();
@@ -1402,7 +1409,8 @@ async function refreshAccuracyLayer(){
 
 function applyStyle(){
   if(state.style === "accuracy"){
-    if(map.hasLayer(overlay)) map.removeLayer(overlay);
+    // Whether the overlay stays on or comes off now depends on zoom (see
+    // refreshAccuracyLayer), so it's left alone here rather than forced off.
     accLegend.hidden = false;
     refreshAccuracyLayer();
   }else{
