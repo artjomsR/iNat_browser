@@ -158,7 +158,11 @@ function unknownParams(){
   if(state.precise){ p.set("geoprivacy", "open"); p.set("taxon_geoprivacy", "open"); }
   const d1 = windowD1();
   if(d1)            p.set("d1", d1);
-  if(state.d2)      p.set("d2", state.d2);
+  // Three days' grace before a record counts as genuinely unknown, rather than just not
+  // yet looked at — the community needs time to weigh in first. This tightens the window's
+  // end but never loosens it: an explicit d2 already earlier than that stands as asked.
+  const stale = new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10);
+  p.set("d2", state.d2 && state.d2 < stale ? state.d2 : stale);
   if(state.months.length) p.set("month", state.months.join(","));
   return p;
 }
