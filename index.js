@@ -1978,8 +1978,17 @@ function wireResults(){
     if(b) b.addEventListener("click", () => openOut(b.dataset.url));
   });
   sheetBody.querySelectorAll(".result").forEach(b => {
-    b.addEventListener("click", () => {
-      openOut("https://www.inaturalist.org/observations/" + b.dataset.id);
+    const go = () => openOut("https://www.inaturalist.org/observations/" + b.dataset.id);
+    b.addEventListener("click", go);
+    // These rows are buttons, not links, so a middle click gets none of the free new-tab
+    // handling a real <a> would get from the browser — auxclick is where it has to be
+    // wired by hand. mousedown's preventDefault stops the middle-click autoscroll icon
+    // from flashing up first, the same way it would over any ordinary page text.
+    b.addEventListener("mousedown", e => { if(e.button === 1) e.preventDefault(); });
+    b.addEventListener("auxclick", e => {
+      if(e.button !== 1) return;
+      e.preventDefault();
+      go();
     });
   });
 }
