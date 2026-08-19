@@ -249,7 +249,7 @@ const view = {
   // Which way that order runs, not a fifth order — see REVERSIBLE for the ones that offer it.
   rev:    q.get("rev") === "1",
   // The shape the rows are read in, not what they hold — see the note up top.
-  layout: q.get("layout") === "grid" ? "grid" : "list",
+  layout: ["grid","detailed"].includes(q.get("layout")) ? q.get("layout") : "list",
   // Only what has been taken below species rank — a narrower question, not a narrower
   // reading of the same rows. Boolean here, "only" on the wire, matching the map. See sspOnly.
   ssp:    q.get("ssp") === "only",
@@ -928,6 +928,80 @@ async function loadFamilies(buckets){
   });
 }
 
+/* ---------------- detailed photos ----------------
+
+   The third view's one extra cost. List and grid both read a single photo off the row
+   itself — default_photo, already paid for by species_counts — but the strip iNaturalist's
+   own species page shows comes off a different field entirely, taxon_photos, which only the
+   full taxon record carries. So this asks the same question loadFamilies does, of the same
+   endpoint, batched the same way and with no rank filter this time, since every id asked
+   about is one whose photos are wanted rather than one being tested for family rank.
+
+   That filter is why the batch size differs. loadFamilies can run a batch past a thousand
+   ancestor ids under per_page:500 and still get everything back, because rank=family throws
+   almost all of them away before per_page ever has to hold that many at once. Nothing is
+   thrown away here — every id in a batch is a hit — so the batch itself has to fit under 500,
+   and 3,500 characters holds that even at iNaturalist's longest ids, with room to spare.
+
+   Kept in memory only, the same as familyOf, and for the same reason: this isn't a scoped
+   answer with a moment it stops being true, so the five-minute cache the scoped queries use
+   would be the wrong shape for it, and a species' curated photos really do turn over now and
+   then, which the eBird codes' indefinite localStorage never has to account for. A reload
+   asks again — the right cost for a view most loads never open.
+
+   And unlike either of those, this is asked for at all only if the view is: on landing here
+   with layout=detailed already in the address, or on switching into it from list or grid (see
+   wireLayout) — never on the two views this page opens in by default. photosOf is checked
+   before anything is asked for, so a second trigger while the first is still out, or a later
+   one after it has landed, both cost nothing further. */
+const photosOf = new Map();     // taxon id -> up to DETAIL_PHOTOS photo urls, iNat's own order
+const DETAIL_PHOTOS = 5;
+let photosBusy = false;         // true only while a batch is actually out
+
+async function loadDetailedPhotos(){
+  if(photosBusy) return;
+  const ids = [...new Set([...document.querySelectorAll("#main li[data-taxon]")]
+    .map(li => +li.dataset.taxon))].filter(id => !photosOf.has(id));
+  if(!ids.length) return;
+  photosBusy = true;
+  try{
+    for(const batch of idBatches(ids, 3500)){
+      let d;
+      try{ d = await apiGet(`${API}/taxa?${new URLSearchParams({ id: batch.join(","), per_page: "500" })}`); }
+      catch(e){ continue; }        // this batch's rows keep the one photo they already had
+      // Answered either way, same as ebirdCode below: a species iNat genuinely has no curated
+      // photos for — sound-only records, mostly — should not be asked about again next time.
+      batch.forEach(id => photosOf.set(+id, []));
+      (d.results || []).forEach(t => {
+        const urls = (t.taxon_photos || [])
+          .map(tp => tp.photo && (tp.photo.medium_url || tp.photo.small_url || tp.photo.square_url))
+          .filter(Boolean)
+          .slice(0, DETAIL_PHOTOS);
+        if(urls.length) photosOf.set(t.id, urls);
+      });
+      showDetailedPhotos();
+    }
+  } finally{ photosBusy = false; }
+}
+
+// Hang the strip on whatever is currently rendered, the same way showEbirdLinks does — a pass
+// over the rendered rows rather than a repaint, so this costs the sort, the threshold and the
+// hide-cascade nothing. A row nothing landed for — a failed batch, or a species iNat genuinely
+// holds no photo of — is left exactly as it was painted, .shot and its one photo showing
+// still; the strip only ever replaces that, never leaves the row with less than it had.
+function showDetailedPhotos(){
+  document.querySelectorAll("#main li[data-taxon]").forEach(li => {
+    const urls = photosOf.get(+li.dataset.taxon);
+    if(!urls || !urls.length) return;
+    const strip = li.querySelector(".strip");
+    if(!strip || strip.childElementCount) return;
+    strip.innerHTML = urls.map(u => `<img src="${esc(u)}" alt="" loading="lazy">`).join("");
+    strip.hidden = false;
+    const shot = li.querySelector(".shot");
+    if(shot) shot.hidden = true;
+  });
+}
+
 /* ---------------- eBird ----------------
 
    Bird rows carry one more link, out to the same species on eBird. eBird addresses a species
@@ -1220,6 +1294,13 @@ const LAYOUT_ICON = {
   grid: `<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
     <rect x="1" y="1" width="6" height="6" rx="1.2"/><rect x="9" y="1" width="6" height="6" rx="1.2"/>
     <rect x="1" y="9" width="6" height="6" rx="1.2"/><rect x="9" y="9" width="6" height="6" rx="1.2"/>
+  </svg>`,
+  // A row of its own: several photos across rather than one tile, a couple of text lines
+  // under them rather than beside — the shape of the row this button actually draws, not a
+  // third arrangement of the same two glyphs above.
+  detailed: `<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <rect x="1" y="1.4" width="4" height="4" rx="1"/><rect x="6" y="1.4" width="4" height="4" rx="1"/><rect x="11" y="1.4" width="4" height="4" rx="1"/>
+    <rect x="1" y="8.2" width="14" height="2" rx="1"/><rect x="1" y="11.4" width="8.5" height="2" rx="1"/>
   </svg>`
 };
 
@@ -1347,6 +1428,7 @@ function rowHtml(x, i, user, mark){
     <a class="shot" href="${esc(url)}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">${
       photo ? `<img src="${esc(photo)}" alt="" loading="lazy">`
             : `<span class="nophoto">&#9673;</span>`}</a>
+    <span class="strip" aria-hidden="true" hidden></span>
     <span class="body">
       <span class="common${common ? "" : " as-sci"}"><a href="${esc(url)}" target="_blank" rel="noopener">${
         esc(common || t.name || "Unnamed")}</a>${tick}${ebird}</span>
@@ -1467,6 +1549,7 @@ function sortbarHtml(sortBy, withRefresh){
     <span class="layout">View
       <button type="button" data-layout="list"${laid("list")}>${LAYOUT_ICON.list}List</button>
       <button type="button" data-layout="grid"${laid("grid")}>${LAYOUT_ICON.grid}Grid</button>
+      <button type="button" data-layout="detailed"${laid("detailed")}>${LAYOUT_ICON.detailed}Detailed</button>
     </span>
   </div>`;
 }
@@ -2360,10 +2443,12 @@ function wireMonths(){
   }));
 }
 
-// List or grid. Both are the same rows in the same order — the switch is one class on #main
-// and nothing else — so this touches neither the sort, the threshold, the family bands nor
-// the hide-cascade, and never refetches. Scroll position is left alone: the page changes
-// height enough that jumping to the top would be its own surprise.
+// List, grid or detailed. All three are the same rows in the same order — the switch is one
+// class on #main and nothing else — so this touches neither the sort, the threshold, the
+// family bands nor the hide-cascade, and never refetches the list itself. Scroll position is
+// left alone: the page changes height enough that jumping to the top would be its own
+// surprise. Detailed alone can cost a request the other two never do — see loadDetailedPhotos
+// — and only the first time it is opened for whatever is currently on screen.
 function wireLayout(){
   const btns = [...document.querySelectorAll(".sortbar button[data-layout]")];
   btns.forEach(b => b.addEventListener("click", () => {
@@ -2372,6 +2457,8 @@ function wireLayout(){
     // List is the default, so it leaves no key behind — same as sort's "count".
     writeState({ layout: view.layout === "list" ? "" : view.layout });
     main.classList.toggle("grid", view.layout === "grid");
+    main.classList.toggle("detailed", view.layout === "detailed");
+    if(view.layout === "detailed") loadDetailedPhotos().catch(() => {});
   }));
 }
 
@@ -2464,9 +2551,10 @@ function wirePlaceIndex(){
 
 function paint(html, sub, busy){
   main.innerHTML = html;
-  // The rows are the same in either shape, so grid is one class re-asserted with each paint
-  // rather than anything baked into the markup.
+  // The rows are the same in any shape, so which one shows is a class re-asserted with each
+  // paint rather than anything baked into the markup.
   main.classList.toggle("grid", view.layout === "grid");
+  main.classList.toggle("detailed", view.layout === "detailed");
   countEl.innerHTML = sub;
   // Nothing to say up here on the place tab once its list is on screen — who and count both
   // moved onto it. The line still carries the tier tab's own who, and the place tab's own
@@ -2504,7 +2592,9 @@ function failed(hint, wrap = html => html){
 
 // Family names and eBird codes both cost their own requests, so they are fetched behind the
 // finished list rather than in front of it. The headings and the links appear when they land,
-// and a failure on either side costs only itself — the list is already on screen.
+// and a failure on either side costs only itself — the list is already on screen. Detailed
+// photos are the same shape but not unconditional — see loadDetailedPhotos — asked for here
+// only if the address already says layout=detailed; wireLayout is the other door in.
 function afterPaint(buckets){
   wireToolbar();
   applyHideFrom();              // tier tab's sections; a no-op if nothing is cut and place-tab-safe
@@ -2514,6 +2604,7 @@ function afterPaint(buckets){
     if(view.sort === "taxo") document.querySelectorAll("#main ul").forEach(ul => drawFamilies(ul, true));
   });
   loadEbirdLinks(buckets).catch(() => {});   // no code, no link — never a broken one
+  if(view.layout === "detailed") loadDetailedPhotos().catch(() => {});
 }
 
 async function runTier(){

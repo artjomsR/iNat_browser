@@ -345,6 +345,32 @@ li[data-standing="s"]{--badge:#E8C468}
 /* a family band heads the tiles rather than standing in as one of them */
 #main.grid li.fam{display:flex;grid-column:1/-1;padding:16px 2px 8px;
   border-bottom:1px solid var(--rule)}
+/* detailed view — one row per species, several of iNat's own photos laid side by side rather
+   than list's single thumbnail or grid's one tile. Still the same rows and the same markup:
+   every one already carries an empty, hidden .strip (see rowHtml), which only ever fills in
+   once this view is actually opened — see loadDetailedPhotos in species.js. Until then a row
+   shows exactly what list already had, so opening this view is never a blank wait. */
+#main.detailed ul{margin-top:14px}
+#main.detailed li{display:block;padding:18px 2px}
+#main.detailed li[hidden]{display:none}
+/* restated for the same reason grid restates it just above: the block rule right above
+   outranks the family band's own flex, .fam being an li too */
+#main.detailed li.fam{display:flex;padding:22px 2px 7px}
+#main.detailed .num{display:none}
+#main.detailed .shot{display:block;width:100%}
+#main.detailed .shot[hidden]{display:none}
+#main.detailed .shot img,#main.detailed .shot .nophoto{width:100%;height:auto;aspect-ratio:3/2;font-size:32px}
+/* the strip itself, up to DETAIL_PHOTOS wide — shrinking together rather than wrapping, so a
+   narrow phone gets smaller photos in one row instead of a taller one */
+#main.detailed .strip{display:flex;gap:6px}
+#main.detailed .strip[hidden]{display:none}
+#main.detailed .strip img{flex:1 1 0;min-width:0;height:auto;aspect-ratio:1;
+  border-radius:5px;object-fit:cover;background:var(--raise);border:1px solid var(--rule)}
+#main.detailed .body{margin-top:11px}
+#main.detailed .common{font-size:19px}
+/* the raw address is a line of monospace as wide as the whole row — it belongs to the list,
+   same reasoning as grid's own rule just above */
+#main.detailed .url{display:none}
 .state{padding:70px 0;text-align:center;color:var(--mute)}
 .state-lede{margin-bottom:8px;font-family:var(--lit);font-size:21px;color:var(--text)}
 .state-hint{font-size:12px;letter-spacing:.05em;line-height:1.6}
