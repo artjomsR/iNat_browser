@@ -1755,7 +1755,12 @@ function hereUrl(latlng, km){
     tab: "place",
     lat: latlng.lat.toFixed(6),
     lng: latlng.lng.toFixed(6),
-    radius: km.toFixed(3)
+    radius: km.toFixed(3),
+    // Explicit rather than left to species.html's own default: that default (20) is sized for
+    // an area-wide species list, but a reader arriving from a dropped pin is looking at
+    // whatever is actually inside that circle, which is often nowhere near 20 observations
+    // per species. `min=0` survives as "show everything" the same way a typed 0 would.
+    min: "0"
   });
   if(state.unobs) p.set("u", state.unobs);
   if(state.taxon){
