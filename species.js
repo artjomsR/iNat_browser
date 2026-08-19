@@ -1988,7 +1988,7 @@ const EXPORT_HINT = "Save what is showing — in this order, with this threshold
 // own "Save As", which asks first and buries the choice in a dialog — one click, same as Export
 // CSV beside it, with the same swap-the-label feedback rather than a save prompt neither button
 // shows.
-const DOWNLOAD_LABEL = "Save Page";
+const DOWNLOAD_LABEL = "Download Page";
 const DOWNLOAD_HINT = "Download this page exactly as it looks right now — this list, this sort, "
   + "this scope — as one HTML file you can open again later without this address.";
 
