@@ -1732,6 +1732,12 @@ function fmtTime(iso){
 
 function speciesUrl(latlng, km){
   const p = obsParams();
+  // The rank window (hrank/lrank) exists to keep subspecies from reading as "desired" in our
+  // own list — a filter about how *we* count a match, not one iNat's own page should carry.
+  // Sent along, it would quietly hide subspecies/genus-level records the reader can see fine
+  // on iNat itself, for a distinction that only matters inside this tool.
+  p.delete("hrank");
+  p.delete("lrank");
   p.set("lat", latlng.lat.toFixed(6));
   p.set("lng", latlng.lng.toFixed(6));
   p.set("radius", km.toFixed(3));
