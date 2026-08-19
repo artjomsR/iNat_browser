@@ -512,6 +512,15 @@ function writeHash(){
   if(state.style !== "accuracy") p.set("s", state.style);
   if(state.base !== "light")  p.set("b", state.base);
   if(state.cursor !== "precise") p.set("cur", state.cursor);
+  // The dropped pin, so a trip out to species.html and back off the `back` link (which is
+  // just this hash, ferried along — see tierReportUrl/hereUrl) lands with the pin still down
+  // instead of asking the reader to tap the map again for ground they already picked.
+  const pin = pinScope();
+  if(pin){
+    p.set("plat", pin.lat.toFixed(6));
+    p.set("plng", pin.lng.toFixed(6));
+    p.set("pr",   pin.km.toFixed(3));
+  }
   const h = p.toString();
   history.replaceState(null, "", "#" + h);
   rememberHash(h);
@@ -540,12 +549,19 @@ function readHash(){
   state.base    = p.get("b") || "light";
   state.cursor  = p.get("cur") || "precise";
   const pinned = p.has("lat") && p.has("lng");
+  // The dropped pin (probeMark/probeRing), distinct from the viewport centre above — see the
+  // note in writeHash. All three or none: a partial write never happens, but a hand-edited
+  // link might drop one, and that is worth treating as no pin rather than a broken one.
+  const droppedPin = (p.has("plat") && p.has("plng") && p.has("pr"))
+    ? { lat: +p.get("plat"), lng: +p.get("plng"), km: +p.get("pr") }
+    : null;
   return {
     z:   p.has("z")   ? +p.get("z")   : ACC_MIN_ZOOM,   // start where accuracy pins load
     zPinned: p.has("z"),                                // an explicit z is the user's, leave it be
     lat: pinned ? +p.get("lat") : LISBON[0],
     lng: pinned ? +p.get("lng") : LISBON[1],
-    pinned                                              // a shared link — don't auto-locate over it
+    pinned,                                             // a shared link — don't auto-locate over it
+    droppedPin
   };
 }
 
@@ -658,6 +674,7 @@ function closeSheet(){
   if(probeMark){ map.removeLayer(probeMark); probeMark = null; }
   if(probeRing){ map.removeLayer(probeRing); probeRing = null; }
   if(probeAccLayer) probeAccLayer.clearLayers();
+  writeHash();   // the pin just came off the map; take it out of the address too
 }
 document.getElementById("handle").addEventListener("click", closeSheet);
 
@@ -1927,8 +1944,13 @@ function pinAt(pt){
   return hit;
 }
 
-async function probe(latlng){
-  const km = probeRadiusKm(latlng.lat, map.getZoom());
+// `km` is only ever passed on restore — a fresh tap (the only other caller) always wants the
+// live cursor-precision radius, not whatever it happened to be last time. Restoring the exact
+// figure rather than recomputing it matters because the reader may have re-tapped since with a
+// different cursor mode, or come back at a different zoom: recomputing would draw a circle
+// that quietly doesn't match the one they left.
+async function probe(latlng, km){
+  if(km == null) km = probeRadiusKm(latlng.lat, map.getZoom());
 
   if(probeMark) map.removeLayer(probeMark);
   if(probeRing) map.removeLayer(probeRing);
@@ -1940,6 +1962,10 @@ async function probe(latlng){
   probeMark = L.circleMarker(latlng, {
     radius: 4, color: MARK, weight: 2, fillColor: MARK, fillOpacity: 1, interactive: false
   }).addTo(map);
+  // Down before the fetch, not after: hereUrl/tierReportUrl read the pin straight off this
+  // hash the moment the results paint, and a reader tapping "Species here" before the request
+  // lands should still get a link that knows where they tapped.
+  writeHash();
 
   openSheet("results", `<div class="eyebrow"><span>Reading&hellip;</span></div>
     <div class="state"><div class="state-hint">Fetching observations.</div></div>`);
@@ -2157,6 +2183,12 @@ document.getElementById("locate").addEventListener("click", function(){
 
   renderLabel();
   writeHash();
+
+  // A pin carried in on the hash — either the `back` link handed back from species.html, or
+  // this reader's own last address restored by restoreHash above. Redo the tap so the marker,
+  // ring and results list all come back exactly as left, rather than an empty map that quietly
+  // dropped the one thing the reader went to species.html to look up in the first place.
+  if(v.droppedPin) probe(L.latLng(v.droppedPin.lat, v.droppedPin.lng), v.droppedPin.km);
 
   // Fresh load with no coords in the hash: start tracking, staying on Lisbon if it is
   // denied, unavailable, or slow. Only the first fix recentres — after that the dot keeps
