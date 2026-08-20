@@ -160,12 +160,8 @@ function unknownParams(){
   if(d1)            p.set("d1", d1);
   // Three days' grace before a record counts as genuinely unknown, rather than just not
   // yet looked at — the community needs time to weigh in first. Both dates matter here and
-  // separately: d2 is when it happened, created_d2 is when it landed on iNat, and a record
-  // can clear one well before the other — a photo from a spring hike uploaded yesterday is
-  // long past its observed-side grace but has had no time at all on the upload side, and
-  // the reverse holds for a backlog upload of something seen this morning. This tightens
-  // each window's end but never loosens it: an explicit d2 already earlier than that stands
-  // as asked (created_d2 has no field of its own in the sheet to be asked for).
+  // separately: d2 is when it happened, created_d2 is when it landed on iNat. This tightens
+  // each window's end but never loosens it.
   const stale = new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10);
   p.set("d2", state.d2 && state.d2 < stale ? state.d2 : stale);
   p.set("created_d2", stale);
