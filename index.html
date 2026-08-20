@@ -40,6 +40,14 @@
   <span class="label-chevron" aria-hidden="true">EDIT</span>
 </button>
 
+<!-- Purely a status light: the map and label already say what changed once a fetch or tile
+     load lands, so this has nothing of its own worth announcing to a screen reader. -->
+<div class="loading" id="loading" hidden aria-hidden="true">
+  <svg viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="15 45"/>
+  </svg>
+</div>
+
 <div class="zoom" id="zoom" role="group" aria-label="Zoom">
   <button type="button" id="zoomIn" aria-label="Zoom in">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">

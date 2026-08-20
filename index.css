@@ -140,6 +140,30 @@ body{
 .label-text .dim{color:var(--mute)}
 .label-chevron{flex:0 0 auto;color:var(--mute);font-size:10px;letter-spacing:.1em}
 
+/* ---------- loading ----------
+   Its own row under the label bar rather than sharing that line: an active filter can run
+   the label most of the width, and centring this over it would put the two on a collision
+   course on exactly the sessions with the most reading to do. The label bar's line never
+   wraps (see .label-text), so its height is fixed and this can sit a flat distance below it
+   without needing the offline banner's measured-height treatment. */
+.loading{
+  position:absolute;z-index:600;
+  top:calc(var(--safe-t) + 8px + var(--offline-h,0px) + 50px);left:50%;
+  transform:translateX(-50%);
+  width:32px;height:32px;border-radius:50%;
+  background:rgba(20,33,29,.92);border:1px solid var(--rule);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  display:grid;place-items:center;color:var(--mark);
+  pointer-events:none;
+}
+.loading[hidden]{display:none}
+.loading svg{
+  width:16px;height:16px;
+  transform-box:fill-box;transform-origin:center;
+  animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
 /* ---------- zoom ---------- */
 .zoom{
   position:absolute;z-index:600;right:12px;

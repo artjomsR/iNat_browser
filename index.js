@@ -275,6 +275,20 @@ function refreshOverlay(){
   if(overlay._url !== url) overlay.setUrl(url);
 }
 
+/* ---------------- pins: loading indicator ---------------- */
+
+// A count, not a flag, because two different things raise it — the tile overlay's own
+// image requests (wired to it in init, below) and the accuracy layer's apiGet round
+// trip in refreshAccuracyLayer — and the two can overlap, a debounced pan landing
+// mid-fetch. The icon stays up until every request that raised it has come back down,
+// not just the last one to try.
+const loading = document.getElementById("loading");
+let pinRequests = 0;
+function pinsBusy(on){
+  pinRequests = Math.max(0, pinRequests + (on ? 1 : -1));
+  loading.hidden = pinRequests === 0;
+}
+
 /* ---------------- audio-only observations ---------------- */
 
 // A sound recording with no photo. Both the map pins and the tap results swap their
@@ -1345,6 +1359,7 @@ async function refreshAccuracyLayer(){
   if(map.hasLayer(overlay)) map.removeLayer(overlay);
   const mine = ++accSeq;
   accStatus.textContent = "Loading…";
+  pinsBusy(true);
   const b = map.getBounds();
   const bbox = {
     swlat: b.getSouth().toFixed(6), swlng: b.getWest().toFixed(6),
@@ -1431,6 +1446,11 @@ async function refreshAccuracyLayer(){
   }catch(err){
     if(mine !== accSeq) return;
     accStatus.textContent = "Couldn't load pins — pan or zoom to retry.";
+  }finally{
+    // Every call that gets this far raised the count once, above, including a stale one
+    // superseded by a newer pan — so every call lowers it once here, on its own outcome,
+    // rather than only the winner clearing what every loser also raised.
+    pinsBusy(false);
   }
 }
 
@@ -2153,6 +2173,11 @@ document.getElementById("locate").addEventListener("click", function(){
     opacity: 0.85,
     crossOrigin: true
   });
+  // Leaflet's own batch-loading events: "loading" once a style/pan/zoom change sends a
+  // fresh round of tiles out, "load" once every tile in that round has settled (loaded
+  // or errored) — exactly the span the density-tile styles need the icon lit for.
+  overlay.on("loading", () => pinsBusy(true));
+  overlay.on("load",    () => pinsBusy(false));
   accLayer = L.layerGroup().addTo(map);
   probeAccLayer = L.layerGroup().addTo(map);
   accBar.style.background = legendGradientCss();
