@@ -35,6 +35,11 @@ function defaultMonths(){
 // Fallback centre when the browser won't give us a position.
 const LISBON = [38.7223, -9.1393];
 
+function defaultIconic(){ return ICONIC.map(([v]) => v).filter(v => v !== "Insecta"); }
+function isDefaultIconic(){
+  const d = defaultIconic();
+  return state.iconic.length === d.length && d.every(v => state.iconic.includes(v));
+}
 function defaultQuality(){ return ["research","needs_id"]; }
 function isDefaultQuality(){
   const d = defaultQuality();
@@ -56,7 +61,7 @@ function readMonths(raw){
 }
 
 const state = {
-  taxon:null, tname:"", iconic:[], quality:defaultQuality(),
+  taxon:null, tname:"", iconic:defaultIconic(), quality:defaultQuality(),
   d1:defaultD1(), d2:"", months:defaultMonths(),
   // Whether that d1 is still the app's own (empty) default or something asked for — see
   // windowD1.
@@ -540,7 +545,7 @@ function readHash(){
   const p = new URLSearchParams(location.hash.replace(/^#/, ""));
   state.taxon   = p.get("taxon") || null;
   state.tname   = p.get("tname") || "";
-  state.iconic  = (p.get("iconic") || "").split(",").filter(Boolean);
+  state.iconic  = p.has("iconic") ? p.get("iconic").split(",").filter(Boolean) : defaultIconic();
   state.unobs   = p.get("unobs") || "";
   // "own" rides in the hash like any other mode — an empty value would read back as the
   // default and quietly put a filter on a shared link that was made without one.
@@ -613,8 +618,8 @@ function labelBits(){
   const bits = [];
   if(state.taxon){
     bits.push(`<span class="sci">${esc(state.tname || "Taxon " + state.taxon)}</span>`);
-  } else if(state.iconic.length){
-    bits.push(state.iconic.map(v => {
+  } else if(state.iconic.length && !isDefaultIconic()){
+    bits.push(state.iconic.length === ICONIC.length ? "Everything" : state.iconic.map(v => {
       const hit = ICONIC.find(i => i[0] === v);
       return esc(hit ? hit[1] : v);
     }).join(" + "));
@@ -1474,7 +1479,7 @@ function wireFilters(){
   $("doneBtn").addEventListener("click", closeSheet);
 
   $("reset").addEventListener("click", () => {
-    Object.assign(state, { taxon:null, tname:"", iconic:[], quality:defaultQuality(), d1:defaultD1(), d1auto:true, d2:"", months:defaultMonths(), unobs:"", precise:"precise", dmode:"unobserved", tierExclude:null, ssp:"" });
+    Object.assign(state, { taxon:null, tname:"", iconic:defaultIconic(), quality:defaultQuality(), d1:defaultD1(), d1auto:true, d2:"", months:defaultMonths(), unobs:"", precise:"precise", dmode:"unobserved", tierExclude:null, ssp:"" });
     commit();
     openFilters();
   });
