@@ -1187,7 +1187,7 @@ function filtersHtml(){
 
   <div class="field">
     <span class="field-label">Quick groups</span>
-    <div class="chips" id="iconicRow">${ICONIC.map(([v,l]) =>
+    <div class="chips wrap" id="iconicRow">${ICONIC.map(([v,l]) =>
       `<button type="button" data-v="${v}" aria-pressed="${state.iconic.includes(v)}">${l}</button>`).join("")}</div>
   </div>
 
@@ -1582,20 +1582,6 @@ function wireFilters(){
     commit();
     if(isTierMode()) syncTierExclude().then(commit);
   });
-
-  // A mouse wheel only emits deltaY, which this single row would otherwise ignore —
-  // translate it to horizontal movement. Trackpads sending deltaX are left alone, and
-  // the event stays unclaimed at either end so the sheet can still scroll past it.
-  $("iconicRow").addEventListener("wheel", e => {
-    const row = e.currentTarget;
-    if(Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-    const max = row.scrollWidth - row.clientWidth;
-    if(max <= 0) return;
-    const next = Math.max(0, Math.min(max, row.scrollLeft + e.deltaY));
-    if(next === row.scrollLeft) return;
-    e.preventDefault();
-    row.scrollLeft = next;
-  }, { passive:false });
 
   // Repainted in place for the same reason as the quick groups above — see the comment there.
   $("qualityRow").addEventListener("click", e => {

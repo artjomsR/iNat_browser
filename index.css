@@ -457,6 +457,14 @@ label.check{
 .chips button[aria-pressed="true"]{color:var(--ink);background:var(--mark);border-color:var(--mark)}
 .chips button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
 
+/* rows whose chips vary too much in width for the months' fixed grid — flex-wrap instead,
+   so a reader sees every option at a glance rather than swiping a strip to find one.
+   Desktop only (mouse/trackpad, per the hover+pointer:fine check above): touch devices
+   keep the scrolling strip, since folding rows costs more vertical space on a small screen. */
+@media (hover:hover) and (pointer:fine){
+  .chips.wrap{flex-wrap:wrap;overflow-x:visible;padding-bottom:0}
+}
+
 /* the months — the same chips, laid out as a calendar rather than a strip. Twelve of them
    would scroll like the quick groups do, and a reader reaching for November should not have
    to swipe a row to find it; six columns puts the year in two readable halves and every
