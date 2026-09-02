@@ -239,17 +239,31 @@ function readMonths(raw){
   return [...seen].sort((a, b) => a - b);
 }
 
+// A pin's own default state, read straight off the address rather than off `view` — the
+// sort and layout defaults just below are decided while `view` is still being built, and
+// pinSet() below can't exist until it is. A pin already carries its own narrowing, chosen on
+// the map before this page ever ran a query, so a load that arrives with one skips past the
+// plain list and the plain observation count that a search still finding its shape wants.
+const pinAtLoad = !!(q.get("lat") && q.get("lng") && q.get("radius"));
+
 const view = {
   tab,
   user:   (q.get("u") || "").trim(),
   taxon:  q.get("taxon") || "",
   tname:  q.get("tname") || "",
   iconic: (q.get("iconic") || "").split(",").filter(Boolean),
-  sort:   ["name","taxo","tier"].includes(q.get("sort")) ? q.get("sort") : "count",
+  // Falls back to `tier` rather than the plain count when the address already carries a
+  // pin — see pinAtLoad above. The fallback below reverts this to `count` again where
+  // there is no user to band by, exactly as it already does for an explicit ?sort=tier
+  // that arrives the same way, so a pin with no user is no different from one with no
+  // sort named at all.
+  sort:   ["name","taxo","tier"].includes(q.get("sort")) ? q.get("sort") : (pinAtLoad ? "tier" : "count"),
   // Which way that order runs, not a fifth order — see REVERSIBLE for the ones that offer it.
   rev:    q.get("rev") === "1",
-  // The shape the rows are read in, not what they hold — see the note up top.
-  layout: ["grid","detailed"].includes(q.get("layout")) ? q.get("layout") : "list",
+  // The shape the rows are read in, not what they hold — see the note up top. A pin's own
+  // radius is already small enough to read comfortably as tiles, so it defaults to grid
+  // instead of list too — see pinAtLoad above.
+  layout: ["grid","detailed"].includes(q.get("layout")) ? q.get("layout") : (pinAtLoad ? "grid" : "list"),
   // Only what has been taken below species rank — a narrower question, not a narrower
   // reading of the same rows. Boolean here, "only" on the wire, matching the map. See sspOnly.
   ssp:    q.get("ssp") === "only",
@@ -293,6 +307,12 @@ if(view.sort === "tier" && !canTier) view.sort = "count";
 // Direction survives a fallback where it can: tier order dropping to the count keeps its
 // arrow, since the count is reversible too — only taxonomic has nothing to do with one.
 if(!REVERSIBLE.includes(view.sort)) view.rev = false;
+// The layout and sort's own true defaults, now that hasPin and canTier both exist to say
+// them properly — pinAtLoad above stood in before `view` did. Read by wireLayout, wireSort
+// and setTierAscending below, so a click landing back on either writes no key, the same as
+// a click back to the plain list or the plain count always has.
+const defaultLayout = hasPin ? "grid" : "list";
+const defaultSort = hasPin && canTier ? "tier" : "count";
 
 // Rebuild this page's address with a few keys changed — how the tabs, the place picker and
 // the sort control all move around without losing the rest of the scope.
@@ -2301,7 +2321,7 @@ function setTierAscending(){
     x.className = chosen ? "on" : "";
     if(SORT_TITLE[x.dataset.by]) x.title = SORT_TITLE[x.dataset.by][0];
   });
-  writeState({ sort: "tier", rev: "" });
+  writeState({ sort: defaultSort === "tier" ? "" : "tier", rev: "" });
   relist();
 }
 
@@ -2332,7 +2352,7 @@ function wireSort(){
       // The arrow turns with that class; the title is the one thing on a button that can't.
       if(SORT_TITLE[x.dataset.by]) x.title = SORT_TITLE[x.dataset.by][chosen && view.rev ? 1 : 0];
     });
-    writeState({ sort: view.sort === "count" ? "" : view.sort, rev: view.rev ? "1" : "" });
+    writeState({ sort: view.sort === defaultSort ? "" : view.sort, rev: view.rev ? "1" : "" });
     relist();
     scrollTo(0, 0);
     // Headings may still be in flight on the first taxonomic click; redraw when they land.
@@ -2454,8 +2474,10 @@ function wireLayout(){
   btns.forEach(b => b.addEventListener("click", () => {
     view.layout = b.dataset.layout;
     btns.forEach(x => x.classList.toggle("on", x === b));
-    // List is the default, so it leaves no key behind — same as sort's "count".
-    writeState({ layout: view.layout === "list" ? "" : view.layout });
+    // List is the default without a pin, grid with one — see defaultLayout — so this
+    // leaves no key behind only where the layout picked matches whichever of those the
+    // address already implies.
+    writeState({ layout: view.layout === defaultLayout ? "" : view.layout });
     main.classList.toggle("grid", view.layout === "grid");
     main.classList.toggle("detailed", view.layout === "detailed");
     if(view.layout === "detailed") loadDetailedPhotos().catch(() => {});
