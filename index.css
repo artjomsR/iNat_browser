@@ -279,12 +279,14 @@ body[data-stow="1"] .stow svg{transform:rotate(180deg)}
 /* Stowed: still open, still holding its list — just waiting off the left edge. The shadow
    goes with it, having nothing left to sit above. */
 body[data-stow="1"] .sheet[data-open="1"]{transform:translateX(-101%);box-shadow:none}
-/* A floor, and the accuracy legend is the reason for it: the stow button hangs above this
-   panel's top corner, and a panel short enough — one row, or nothing found — drops that
-   corner into the legend sharing the left edge. 232px is where the two just miss; both are
-   measured from the bottom, so the number holds at any viewport height. Keep it in step with
-   the legend if that grows a section. */
-body[data-sheet="results"] .sheet{min-height:240px}
+/* Fixed rather than content-sized: at a flat 82vh — the same ceiling `.sheet` already caps
+   everyone else at — the results panel holds one size whether it's showing "Reading…",
+   "Nothing here", or a full page of twenty, so nothing jumps as the fetch resolves or the
+   count changes. This also replaces the old min-height floor: that existed so the stow
+   button's corner (pinned to the panel's own top-left, see --sheet-y) wouldn't drop into
+   the accuracy legend on a one-row or empty panel — moot now that the panel is always full
+   height. sheet-body's own overflow-y still scrolls a longer list inside that fixed frame. */
+body[data-sheet="results"] .sheet{height:82vh}
 .handle{
   flex:0 0 auto;padding:9px 0 5px;border:0;background:none;width:100%;cursor:pointer;
 }
@@ -295,15 +297,22 @@ body[data-sheet="results"] .sheet{min-height:240px}
   padding:2px 14px calc(var(--safe-b) + 16px);
 }
 
-/* Wraps because the results row carries four actions, which on a narrow phone want more
-   width than is left beside the count. The actions can't shrink (see below), so without this
-   the count is the only thing that gives and "20 selected · 350 m" folds into a three-line
-   column. Wrapped, the actions drop whole to a second line and the count keeps its own. */
+/* The distance suffix ("350 m" / "1.2 km") is the reason the label ever ran long enough to
+   force a wrap: "N selected" alone is the same rough width as "Reading…" / "Not loaded" /
+   "Nothing here", but " · 350 m" tacked on could push the combined label past what's left
+   beside the four actions on a narrow phone — and unlike those other three states, this one
+   only shows up after "Reading…" resolves, so the actions visibly hopped down a line right
+   when the sheet finished loading. .eyebrow-label stacks the count and the distance in their
+   own column instead: they sit directly on top of each other regardless of how tall the
+   actions beside them are, rather than the distance being a sibling flex line of its own —
+   which put it below the *actions*' full two-line button height, not below the one-line
+   count text, leaving a gap that looked far bigger than the layout intended. */
 .eyebrow{
   display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:10px;
   font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;
   color:var(--mute);padding:8px 0 10px;
 }
+.eyebrow-label{display:flex;flex-direction:column;gap:2px}
 .linkish{
   background:none;border:0;padding:2px 0;cursor:pointer;
   font:inherit;color:var(--mark);letter-spacing:.14em;
@@ -591,6 +600,9 @@ label.check{
 }
 @media (min-width:720px){
   .sheet{left:auto;right:14px;bottom:14px;width:380px;border-radius:14px;max-height:calc(100vh - 100px)}
+  /* Same fixed-height treatment as the mobile rule above, pinned to this layout's own
+     ceiling instead of 82vh. */
+  body[data-sheet="results"] .sheet{height:calc(100vh - 100px)}
   .sheet{transform:translateY(calc(100% + 20px))}
   .sheet[data-open="1"]{transform:translateY(0)}
   /* The card is anchored to the right edge here, so a percentage of its own width leaves it

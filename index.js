@@ -1845,15 +1845,21 @@ function easilyMissedUrl(latlng, km){
   return "https://simonrolph.github.io/easily_missed/?" + p.toString();
 }
 
+// The four ways out of a pin, factored out so every state of the results sheet -
+// loading, error, empty, and populated - shows the same row in the same place,
+// rather than the exits only appearing once a fetch happens to resolve.
+function actionsHtml(latlng, km){
+  return `<span class="eyebrow-actions">
+    <button class="linkish" id="toHere" data-url="${esc(hereUrl(latlng, km))}">Species<br>here</button>
+    <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">On<br>iNat${extIcon()}</button>
+    <a class="linkish" ${outAttrs(easilyMissedUrl(latlng, km))}>Easily<br>Missed${extIcon()}</a>
+    <a class="linkish" ${outAttrs(gmapsUrl(latlng))}>GMaps${extIcon()}</a>
+  </span>`;
+}
+
 function resultsHtml(list, km, latlng){
   if(!list.length){
-    return `<div class="eyebrow"><span>Nothing here</span>
-      <span class="eyebrow-actions">
-        <button class="linkish" id="toHere" data-url="${esc(hereUrl(latlng, km))}">Species<br>here</button>
-        <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">On<br>iNat${extIcon()}</button>
-        <a class="linkish" ${outAttrs(easilyMissedUrl(latlng, km))}>Easily<br>Missed${extIcon()}</a>
-        <a class="linkish" ${outAttrs(gmapsUrl(latlng))}>GMaps${extIcon()}</a>
-      </span></div>
+    return `<div class="eyebrow"><span>Nothing here</span>${actionsHtml(latlng, km)}</div>
       <div class="state">
         <div class="state-lede">No observations within ${esc(fmtAcc(km * 1000))}.</div>
         <div class="state-hint">Zoom out and tap again, or loosen the filters.</div>
@@ -1892,13 +1898,7 @@ function resultsHtml(list, km, latlng){
       </span>
     </button>`;
   }).join("");
-  return `<div class="eyebrow"><span>${list.length} selected &middot; ${esc(fmtAcc(km * 1000))}</span>
-    <span class="eyebrow-actions">
-      <button class="linkish" id="toHere" data-url="${esc(hereUrl(latlng, km))}">Species<br>here</button>
-      <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">On<br>iNat${extIcon()}</button>
-      <a class="linkish" ${outAttrs(easilyMissedUrl(latlng, km))}>Easily<br>Missed${extIcon()}</a>
-      <a class="linkish" ${outAttrs(gmapsUrl(latlng))}>GMaps${extIcon()}</a>
-    </span></div>${rows}`;
+  return `<div class="eyebrow"><span class="eyebrow-label"><span>${list.length} selected</span><span class="eyebrow-dist">${esc(fmtAcc(km * 1000))}</span></span>${actionsHtml(latlng, km)}</div>${rows}`;
 }
 
 // Three circles, always the same three: the tightest accuracies the probe came back with,
@@ -1974,8 +1974,9 @@ async function probe(latlng, km){
   // lands should still get a link that knows where they tapped.
   writeHash();
 
-  openSheet("results", `<div class="eyebrow"><span>Reading&hellip;</span></div>
+  openSheet("results", `<div class="eyebrow"><span>Reading&hellip;</span>${actionsHtml(latlng, km)}</div>
     <div class="state"><div class="state-hint">Fetching observations.</div></div>`);
+  wireResults();
 
   const p = obsParams();
   p.set("lat", latlng.lat.toFixed(6));
@@ -1992,11 +1993,12 @@ async function probe(latlng, km){
     wireResults();
     drawAccuracyCircles(d.results || []);
   }catch(err){
-    openSheet("results", `<div class="eyebrow"><span>Not loaded</span></div>
+    openSheet("results", `<div class="eyebrow"><span>Not loaded</span>${actionsHtml(latlng, km)}</div>
       <div class="state">
         <div class="state-lede">The request didn't come back.</div>
         <div class="state-hint">Check the connection and tap the map again.</div>
       </div>`);
+    wireResults();
   }
 }
 
