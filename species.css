@@ -70,6 +70,17 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
    than sitting empty beside a scope line that knows, and carries the clear that takes it off
    again — the same in-field × the threshold has. Hidden until the page says a value is in
    force, so an empty field never shows a cross with nothing behind it. */
+/* the taxon field's rank, floating right inside the input in brackets — genus, kingdom,
+   whatever grain the set taxon sits at. Built and inserted by wireTaxonFinder rather than
+   living in the markup; `pointer-events:none` so it never steals a click meant for the field
+   or the wipe beside it. Right-anchored past the wipe's own width so the two never collide. */
+.finder .t-rank-tag{display:none;position:absolute;right:34px;top:50%;transform:translateY(-50%);
+  font-size:9.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--mute);pointer-events:none;white-space:nowrap}
+.finder.set .t-rank-tag:not(:empty){display:block}
+/* room for both the wipe and the bracketed rank ahead of it, so typed or set text never runs
+   under either */
+.finder.set #taxonInput{padding-right:104px}
 .finder .wipe{display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);
   padding:2px 7px;cursor:pointer;font:inherit;font-size:17px;line-height:1;
   color:var(--mute);background:none;border:0;border-radius:5px}

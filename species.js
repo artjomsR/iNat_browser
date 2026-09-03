@@ -251,6 +251,10 @@ const view = {
   user:   (q.get("u") || "").trim(),
   taxon:  q.get("taxon") || "",
   tname:  q.get("tname") || "",
+  // The rank that goes with `tname` — another label riding beside the id, the same trade
+  // `tname` itself makes. Only meaningful for a single named taxon, never for the iconic
+  // quick groups, which have no one rank to show.
+  trank:  q.get("trank") || "",
   iconic: (q.get("iconic") || "").split(",").filter(Boolean),
   // Falls back to `tier` rather than the plain count when the address already carries a
   // pin — see pinAtLoad above. The fallback below reverts this to `count` again where
@@ -2858,15 +2862,25 @@ function wirePlaceFinder(){
 // scopes the tier tab's user query and the place tab's area query alike.
 function wireTaxonFinder(){
   const input = document.getElementById("taxonInput");
+  // The rank riding beside the value, in brackets, floating in the field itself rather than
+  // on the scope line — genus, kingdom, whatever grain the current taxon sits at. Built here
+  // rather than in the markup, since this page's HTML is elsewhere; the finder is already the
+  // right container for it, `position:relative` and all.
+  const rankTag = document.createElement("span");
+  rankTag.className = "t-rank-tag";
+  input.closest(".finder").appendChild(rankTag);
+  function setRankTag(r){ rankTag.textContent = r ? `(${r})` : ""; }
+
   // Whatever the tree is narrowed to, at whichever grain: a named taxon, or the quick groups
   // standing in for one. scopeLabel() already chooses between them, so the field says exactly
-  // what the scope line says.
+  // what the scope line says. The rank only ever names a single taxon, never a quick group.
   if(hasTaxa) markSet(input, scopeLabel());
+  setRankTag(view.taxon ? view.trank : "");
   // The scope line names it as well, but only this can take it back off — and it takes the
   // whole filter, groups included, the two being one filter with two ways of setting it. A
   // group can still be dropped on its own from its own button.
   document.getElementById("taxonClear").addEventListener("click", () => {
-    location.href = selfUrl({ taxon: null, tname: null, iconic: null });
+    location.href = selfUrl({ taxon: null, tname: null, trank: null, iconic: null });
   });
 
   wireFinder({
@@ -2874,8 +2888,9 @@ function wireTaxonFinder(){
     hits:  document.getElementById("taxonHits"),
     find:  findTaxa,
     // Plenty of taxa have no English name, and those lead with the binomial rather than
-    // printing it on both lines — the same trade the rows below make.
-    row: t => `<button type="button" data-id="${t.id}" data-name="${esc(t.name)}">
+    // printing it on both lines — the same trade the rows below make. The rank rides along
+    // as a data attribute too now, so a pick can carry it into the address alongside the name.
+    row: t => `<button type="button" data-id="${t.id}" data-name="${esc(t.name)}" data-rank="${esc(t.rank)}">
       ${t.thumb ? `<img src="${esc(t.thumb)}" alt="" loading="lazy">`
                 : `<span class="t-nophoto"></span>`}
       <span class="t-name"><span class="t-common">${esc(t.common || t.name)}</span>${
@@ -2886,7 +2901,7 @@ function wireTaxonFinder(){
     // simply AND them and the scope line shows the taxon alone, so picking either drops the
     // other, the same trade the map's filter sheet makes.
     pick: b => { location.href = selfUrl({
-      taxon: b.dataset.id, tname: b.dataset.name, iconic: null
+      taxon: b.dataset.id, tname: b.dataset.name, trank: b.dataset.rank, iconic: null
     }); }
   });
 }
