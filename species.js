@@ -2722,6 +2722,48 @@ function wireFinder({ input, hits, find, row, pick }){
   const box = input.closest(".finder");
   let timer = null, seq = 0, active = -1;
 
+  // Only the taxon and place fields go through here, and both open a dropdown of hits
+  // underneath — so unlike an ordinary field, "visible" is not enough for them. On a phone
+  // the keyboard has already taken the bottom half of the screen; every pixel between the
+  // field and the keyboard is a row of hits the reader can see without the hit list scrolling
+  // itself, so the field wants the very top of the screen, not just wherever "into view" lands
+  // it. `(hover: none) and (pointer: coarse)` is the touch check rather than a width, since a
+  // phone rotated to landscape is still a phone; a mouse-and-keyboard reader never gets this,
+  // since nothing there is stealing their screen.
+  if(window.matchMedia && matchMedia("(hover: none) and (pointer: coarse)").matches){
+    const pinToTop = smooth =>
+      window.scrollTo({ top: input.getBoundingClientRect().top + window.scrollY, behavior: smooth ? "smooth" : "auto" });
+    input.addEventListener("focus", () => {
+      // Two things fight over this field's position, on their own schedules, not ours: the
+      // keyboard's opening animation, and the browser's own "scroll the focused field into
+      // view", which most mobile engines run whether we ask for it or not. `visualViewport`
+      // firing once doesn't mean the keyboard has finished — some engines fire it more than
+      // once while it's still sliding up, so scrolling on the first event can catch the
+      // viewport mid-animation and land short, in the middle rather than the top; the debounce
+      // below waits for the events to stop arriving before trusting the number. The browser's
+      // own scroll-into-view runs independently of any of this and can still nudge the field
+      // a moment later, off the top again — so a second, quiet correction after a short pause
+      // is what wins that race, rather than leaving the last word to the browser's guess at
+      // what counts as "visible".
+      const settle = () => { pinToTop(true); setTimeout(() => pinToTop(false), 250); };
+      if(window.visualViewport){
+        let debounce = null, backstop = null;
+        const finish = () => {
+          clearTimeout(debounce); clearTimeout(backstop);
+          window.visualViewport.removeEventListener("resize", onResize);
+          settle();
+        };
+        const onResize = () => { clearTimeout(debounce); debounce = setTimeout(finish, 150); };
+        window.visualViewport.addEventListener("resize", onResize);
+        // Backstop: an external keyboard, or an engine that never fires the event, shouldn't
+        // leave the field waiting forever for a resize that isn't coming.
+        backstop = setTimeout(finish, 1200);
+      }else{
+        setTimeout(settle, 300);
+      }
+    });
+  }
+
   const close = () => { hits.hidden = true; hits.innerHTML = ""; active = -1; };
 
   // Keeps the highlighted row in sync with `active`, whether it moved by arrow key or the
