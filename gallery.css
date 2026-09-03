@@ -790,6 +790,41 @@ body.focused .rail { display: none; }
   font-size: 19px;
   line-height: 1.25;
   color: var(--paper);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* iNaturalist's own Research Grade badge — the one grade worth borrowing their colour for,
+   since it's the one a viewer already recognises on sight. Needs ID and Casual get no badge
+   of their own; the identification count beside it covers them without new iconography. */
+.rg {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: #74ac00;
+  padding: 2px 5px;
+  border-radius: 3px;
+  line-height: 1;
+}
+
+/* How many identifications the observation has drawn, shield-and-number the way iNaturalist
+   itself shows it. Shown for every photo regardless of grade — a 0 is still worth knowing. */
+.idcount {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--chrome);
+  line-height: 1;
+}
+.idcount svg {
+  width: 13px;
+  height: 13px;
+  fill: var(--chrome);
 }
 
 .meta {

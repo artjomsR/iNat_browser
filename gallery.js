@@ -165,7 +165,10 @@ var focusEl  = document.getElementById('focus');
 var lo       = document.getElementById('lo');
 var hi       = document.getElementById('hi');
 var counter  = document.getElementById('counter');
-var binomial = document.getElementById('binomial');
+var binomialName = document.getElementById('binomialName');
+var rgBadge = document.getElementById('rgBadge');
+var idCountNum = document.getElementById('idCountNum');
+var idCount = document.getElementById('idCount');
 var metaline = document.getElementById('metaline');
 
 /* ---------------- helpers ---------------- */
@@ -373,6 +376,18 @@ function collect(results) {
         name: (obs.taxon && obs.taxon.name) || '',
         common: (obs.taxon && obs.taxon.preferred_common_name) || '',
         iconic: (obs.taxon && obs.taxon.iconic_taxon_name) || '',
+        // iNaturalist's own verification state for the observation — 'research', 'needs_id',
+        // or 'casual'. Not to be confused with `grade` above, which is what the *fetch itself*
+        // was scoped to ask for.
+        qualityGrade: obs.quality_grade || '',
+        // How many identifications the observation has drawn — current ones only. Every
+        // identification ever made stays in `obs.identifications` even after being withdrawn
+        // (superseded by a later one from the same person), so `identifications_count` on its
+        // own counts those too; filtering to `current` is what matches the number iNaturalist
+        // itself shows.
+        idCount: obs.identifications ?
+          obs.identifications.filter(function (id) { return id.current; }).length :
+          (obs.identifications_count || 0),
         date: obs.observed_on || (obs.observed_on_details && obs.observed_on_details.date) || '',
         place: obs.place_guess || '',
         // The boundaries iNaturalist itself has already worked out this observation falls
@@ -1264,7 +1279,11 @@ function showPhoto(i) {
   hi.src = sized(photo.url, 'large');
 
   counter.textContent = (i + 1) + ' / ' + photos.length;
-  binomial.textContent = photo.name || photo.common || 'Unidentified';
+  binomialName.textContent = photo.name || photo.common || 'Unidentified';
+
+  rgBadge.hidden = photo.qualityGrade !== 'research';
+  idCountNum.textContent = String(photo.idCount);
+  idCount.setAttribute('aria-label', photo.idCount + (photo.idCount === 1 ? ' identification' : ' identifications'));
 
   var obsUrl = 'https://www.inaturalist.org/observations/' + photo.obsId;
   var parts = [];
