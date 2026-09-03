@@ -109,7 +109,7 @@ var view  = qs.get('view') === 'birds' ? 'birds' : qs.get('view') === 'all' ? 'a
 // by-observation reading is the exception — a list of tall rows the reader is working through,
 // and taking the filter bar away from it would mean scrolling back up every time. So once
 // `obs=1` is on, the header stays pinned whatever the shelf.
-document.body.classList.toggle('loose-header', view !== 'highlights' && !byobs);
+document.body.classList.toggle('loose-header', view !== 'highlights');
 document.body.classList.toggle('byobs', byobs);
 // A specific taxon, picked from the free-text search rather than the ten quick groups. Read
 // straight off the address on load because picking one is a reload, same as switching shelves —
@@ -980,9 +980,6 @@ function setByObs(on) {
   if (on === byobs) return;
   byobs = on;
   document.body.classList.toggle('byobs', on);
-  // The header's pinned-ness follows the mode (see the top of the file): by-observation rows
-  // are tall, so the filter bar is kept with the reader rather than scrolled away.
-  document.body.classList.toggle('loose-header', view !== 'highlights' && !on);
   obsCheck.checked = on;
   if (on) qs.set('obs', '1'); else qs.delete('obs');
   addressNow();
