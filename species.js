@@ -1453,8 +1453,7 @@ function rowHtml(x, i, user, mark){
       <span class="common${common ? "" : " as-sci"}"><a href="${esc(url)}" target="_blank" rel="noopener">${
         esc(common || t.name || "Unnamed")}</a>${tick}${ebird}</span>
       ${common && t.name ? `<span class="sci">${esc(t.name)}</span>` : ""}
-      <span class="meta">${x.count} observations${viewMy}</span>
-      <span class="url"><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></span>
+      <span class="meta"><a class="viewMy" href="${esc(url)}" target="_blank" rel="noopener">${x.count} observations</a>${viewMy}</span>
     </span>
   </li>`;
 }
