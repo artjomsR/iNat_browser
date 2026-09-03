@@ -26,6 +26,12 @@ html, body {
   color: var(--paper);
   font-family: var(--sans);
   overscroll-behavior: none;
+  /* iOS treats user-scalable=no in the viewport meta tag as a request it can override for
+     accessibility, so a pinch on the wall can still zoom the page under it. Zooming is meant
+     to belong to an open photograph — see #focus's own touch-action below — so the page
+     itself only keeps the vertical pan it actually uses; pinch and double-tap zoom go with
+     the rest of what this rules out. */
+  touch-action: pan-y;
 }
 
 body.focused { overflow: hidden; }
@@ -829,7 +835,7 @@ body.focused .rail { display: none; }
   z-index: 100;
   background: var(--ink-deep);
   display: none;
-  touch-action: none;
+  touch-action: none;   /* zoom lives here once a photo is open — see html/body's own rule */
   /* Clips a zoomed picture to the screen rather than letting it paint past its own edges. */
   overflow: hidden;
 }
