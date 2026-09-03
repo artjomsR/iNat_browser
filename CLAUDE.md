@@ -18,7 +18,12 @@ directly (or via `.claude/launch.json`'s static server) to run it.
     `state.d1auto` is for, and it is why an untouched `d1` never rides in the hash: the address
     carries a date only when a date was meant. Both filters are named
     in the specimen label, since where both are in force the map is showing their
-    intersection and an empty one has to be readable as such. The label reads a season rather
+    intersection and an empty one has to be readable as such. The two date inputs are rendered
+    with no `value` attribute and the dates applied as properties (`wireFilters`): iOS's
+    date-picker Clear button resets a field to the `defaultValue` it was rendered with, so a
+    restored date sitting in the attribute could never be cleared — the button puts it straight
+    back. The fields are read on `change` and `focusout` as well as `input`, the picker's Clear
+    firing no event at all, so the field is the last word either way. The label reads a season rather
     than a list — `Aug`, `Jun–Aug`, or `3 months` with the months on the tooltip — and a run
     may wrap the year, `Nov–Feb` being `11,12,1,2`. Months ride along to the species page on
     both links out, as the pin does.

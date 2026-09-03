@@ -1225,8 +1225,12 @@ function filtersHtml(){
   <div class="field">
     <span class="field-label">Observed between</span>
     <div class="row2">
-      <input class="input" id="d1Input" type="date" value="${esc(state.d1)}">
-      <input class="input" id="d2Input" type="date" value="${esc(state.d2)}">
+      <!-- Deliberately no value attribute: the date rides in as a property (see wireFilters).
+           iOS's date-picker Clear button resets the field to its defaultValue — the attribute
+           it was rendered with — so a restored date written here could never be cleared: the
+           button would put it straight back. An empty attribute means Clear lands on empty. -->
+      <input class="input" id="d1Input" type="date">
+      <input class="input" id="d2Input" type="date">
     </div>
     <!-- Months of the year, under the window they cut across rather than in a field of their
          own: the two are one question about time, and read together or not at all. -->
@@ -1678,21 +1682,37 @@ function wireFilters(){
     }
   });
 
+  // The dates ride in as properties rather than attributes — see the note in filtersHtml:
+  // the attribute is the defaultValue iOS's Clear button resets to, so it must stay empty
+  // even while the restored date is shown.
+  $("d1Input").value = state.d1;
+  $("d2Input").value = state.d2;
+
   const debounced = (el, key) => {
     let t = null;
+    const settle = () => {
+      clearTimeout(t);
+      t = null;
+      const v = el.value.trim();
+      if(v === state[key]) return;
+      state[key] = v;
+      // Touched, so no longer the app's own window — including cleared, which is a
+      // deliberate "no lower bound" and not a request for the default back. From here it
+      // rides in the address and stands against a month filter (see windowD1), so the hint
+      // under the months has to be redrawn with it.
+      if(key === "d1") state.d1auto = false;
+      $("monthHint").innerHTML = monthHint();
+      commit();
+    };
     el.addEventListener("input", () => {
       clearTimeout(t);
-      t = setTimeout(() => {
-        state[key] = el.value.trim();
-        // Touched, so no longer the app's own window — including cleared, which is a
-        // deliberate "no lower bound" and not a request for the default back. From here it
-        // rides in the address and stands against a month filter (see windowD1), so the hint
-        // under the months has to be redrawn with it.
-        if(key === "d1") state.d1auto = false;
-        $("monthHint").innerHTML = monthHint();
-        commit();
-      }, 420);
+      t = setTimeout(settle, 420);
     });
+    // iOS's date picker can change the value without an input event — its Clear button
+    // famously fires nothing at all — so change and the field losing focus are read back
+    // too, through the same settle: the field is the last word either way.
+    el.addEventListener("change", settle);
+    el.addEventListener("focusout", settle);
   };
   debounced($("d1Input"), "d1");
   debounced($("d2Input"), "d2");
