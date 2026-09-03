@@ -6,6 +6,7 @@
      gallery.html?user=USER
      gallery.html?user=USER&tag=b&show=all
      gallery.html?user=USER&view=birds
+     gallery.html?user=USER&obs=1
      gallery.html?user=USER&photo=PHOTO_ID
 
    `user` is the iNaturalist login. `u` and `user_id` are accepted as spellings of the same
@@ -16,6 +17,13 @@
    `tag` is the tier tag an observation must carry (default `s`), `grade` the quality grades
    to accept, and `show=all` turns the unseen filter off. The rest of the query is fixed:
    verifiable observations with photos, newest first.
+
+   `obs=1` re-reads the same shelf rather than asking a new question: hang it observation by
+   observation — each row carrying that observation's name and research grade on the left and
+   that observation's photographs after them — instead of as one wall of photographs. Like the
+   unseen filter it rearranges what has already been fetched, so it neither reloads nor
+   refetches; the address only carries it because a shared link should land on the reading it
+   was taken in.
 
    `view` is which shelf: `highlights`, the default, is the tagged one the gallery was built
    for; `view=birds` drops the tag and hangs this user's birds instead; `view=all` drops both
@@ -88,12 +96,18 @@ var grade = qs.get('grade') || 'needs_id,research';
 // Which half of the shelf to show. Unseen is the default because the gallery is meant to be
 // worked through rather than re-read; `?show=all` is the way back to the whole thing.
 var mode  = qs.get('show') === 'all' ? 'all' : 'unseen';
+// Whether the wall is hung observation by observation (`obs=1`, see the doc comment up top)
+// rather than as one wall of photographs. A display choice over the photos already fetched,
+// so toggling it rehangs without refetching — the same deal the unseen filter's own toggle
+// makes, which is why it sits beside it.
+var byobs = qs.get('obs') === '1';
 // Which shelf. Anything unrecognised falls back to the tagged one this page was built around.
 var view  = qs.get('view') === 'birds' ? 'birds' : qs.get('view') === 'all' ? 'all' : 'highlights';
 // Switching shelves is a reload (see the doc comment above viewSel's change handler), so this
 // is settled for the whole life of the page: birds and all get a header that scrolls off
 // instead of staying pinned, since those two can grow tall enough to crowd the wall.
 document.body.classList.toggle('loose-header', view !== 'highlights');
+document.body.classList.toggle('byobs', byobs);
 // A specific taxon, picked from the free-text search rather than the ten quick groups. Read
 // straight off the address on load because picking one is a reload, same as switching shelves —
 // see the doc comment above for why this one can't just filter the shelf already on the page.
@@ -156,6 +170,7 @@ var placeWrap  = document.getElementById('placeWrap');
 var placeAc    = document.getElementById('placeAc');
 var filters  = document.getElementById('filters');
 var forget   = document.getElementById('forget');
+var obsCheck = document.getElementById('byObs');
 var picker   = document.getElementById('picker');
 var viewSel  = document.getElementById('view');
 var loading  = document.getElementById('loading');
@@ -440,33 +455,128 @@ function matchesNarrow(photo) {
   return true;
 }
 
-function render(list) {
-  var frag = document.createDocumentFragment();
+// One photograph as a tap target, wherever it hangs — the wall's uniform squares, or one in an
+// observation's own run. `big` is the sole photograph of an observation filling the whole
+// photos column, which asks for a fetch above the wall's standard small square; its rare case,
+// so the usual tile stays exactly as cheap as it always was.
+function tileFor(photo, index, big) {
+  var tile = document.createElement('button');
+  tile.className = 'tile' + (mode === 'all' && !seenAtLoad.has(photo.key) ? ' fresh' : '');
+  tile.setAttribute('aria-label', photo.common || photo.name || 'Photo');
 
+  var img = document.createElement('img');
+  img.loading = 'lazy';
+  img.decoding = 'async';
+  img.alt = '';
+  img.src = sized(photo.url, big ? 'medium' : 'small');
+  img.addEventListener('load', function () { img.classList.add('in'); });
+
+  tile.appendChild(img);
+  tile.addEventListener('click', function () { openPhoto(index); });
+  watch(tile, photo);
+  return tile;
+}
+
+// The identification count, shield-and-number — the same reading the full-screen label gives
+// every photograph, built by the one function so the two never disagree about what a count
+// looks like. (The label's own copy stays in the HTML, where the address bar's markup lives.)
+function idBadge(n) {
+  var badge = document.createElement('span');
+  badge.className = 'idcount';
+  badge.setAttribute('aria-label', n + (n === 1 ? ' identification' : ' identifications'));
+  badge.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L4 5v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V5l-8-3z"></path></svg>' +
+    '<span>' + n + '</span>';
+  return badge;
+}
+
+// One observation's label in the by-observation reading: what it is, then what the photos
+// carry with them — iNaturalist's own grade, and the identification count beside it. Same
+// voice as the full-screen label's, sized down to a caption that has to sit in a phone's
+// width. All of an observation's photographs share these, so the first one standing in speaks
+// for the row.
+function obsHead(p) {
+  var head = document.createElement('div');
+  head.className = 'obs-head';
+
+  var name = document.createElement('div');
+  // A common name reads as a name; a scientific name with none reads as one too, but in the
+  // serif italics the page reserves for science. "Unidentified" is the full-screen label's
+  // own word for a photograph whose observation names nothing.
+  name.className = 'obs-name' + (p.common ? '' : ' sci');
+  name.textContent = p.common || p.name || 'Unidentified';
+  head.appendChild(name);
+
+  if (p.common && p.name) {
+    var sci = document.createElement('div');
+    sci.className = 'obs-sci';
+    sci.textContent = p.name;
+    head.appendChild(sci);
+  }
+
+  var status = document.createElement('div');
+  status.className = 'obs-status';
+  var grade = document.createElement('span');
+  if (p.qualityGrade === 'research') {
+    grade.className = 'rg';
+    grade.textContent = 'RG';
+  } else {
+    // Needs ID is the state this page is normally scoped to fetch, so it earns its own dim
+    // spelling rather than going unmarked; casual is only reachable by asking for it.
+    grade.className = 'nd';
+    grade.textContent = p.qualityGrade === 'casual' ? 'Casual' : 'Needs ID';
+  }
+  status.appendChild(grade);
+  status.appendChild(idBadge(p.idCount));
+  head.appendChild(status);
+  return head;
+}
+
+function render(list) {
+  // The photographs that survive the filters, in their fetched order, with their place on the
+  // on-screen list already settled — one pass, so the two readings of "what is here" (the
+  // wall, and the rows of the by-observation mode) can never disagree about it.
+  var shown = [];
   list.forEach(function (photo) {
     var old = seenAtLoad.has(photo.key);
     if (mode === 'unseen' && old) return;
     if (!matchesNarrow(photo)) return;
-
-    var index = photos.length;
+    shown.push({ photo: photo, at: photos.length });
     photos.push(photo);
-
-    var tile = document.createElement('button');
-    tile.className = 'tile' + (mode === 'all' && !old ? ' fresh' : '');
-    tile.setAttribute('aria-label', photo.common || photo.name || 'Photo');
-
-    var img = document.createElement('img');
-    img.loading = 'lazy';
-    img.decoding = 'async';
-    img.alt = '';
-    img.src = sized(photo.url, 'small');
-    img.addEventListener('load', function () { img.classList.add('in'); });
-
-    tile.appendChild(img);
-    tile.addEventListener('click', function () { openPhoto(index); });
-    watch(tile, photo);
-    frag.appendChild(tile);
   });
+
+  var frag = document.createDocumentFragment();
+
+  if (byobs) {
+    // One observation's photographs arrive together (see collect()), so the shelf in date
+    // order is already grouped: each run of a single observation id is one row. The row leads
+    // with the observation's name and grade, then hangs that observation's own photographs
+    // after it, wrapping at three to a line. Fewer than three photographs share the column
+    // between them instead, so a one-photograph observation reads as one large picture beside
+    // its label rather than as a lonely third of a row.
+    var start = 0;
+    for (var i = 1; i <= shown.length; i++) {
+      if (i < shown.length && shown[i].photo.obsId === shown[start].photo.obsId) continue;
+
+      var n = i - start;
+      var row = document.createElement('div');
+      row.className = 'obs';
+      row.appendChild(obsHead(shown[start].photo));
+
+      var pics = document.createElement('div');
+      pics.className = 'obs-pics';
+      pics.style.gridTemplateColumns = 'repeat(' + Math.min(n, 3) + ', minmax(0, 1fr))';
+      for (var k = start; k < i; k++) {
+        pics.appendChild(tileFor(shown[k].photo, shown[k].at, n === 1));
+      }
+      row.appendChild(pics);
+      frag.appendChild(row);
+
+      start = i;
+    }
+  } else {
+    // The wall: one square after another, nothing between them.
+    shown.forEach(function (it) { frag.appendChild(tileFor(it.photo, it.at)); });
+  }
 
   grid.appendChild(frag);
   retally();
@@ -664,6 +774,12 @@ function drawRail() {
   // hung underneath; closing the view draws the rail against it then.
   if (document.body.classList.contains('focused')) return;
 
+  // The rail is arithmetic over a fixed grid — so many squares to a row, so a photograph's
+  // place in the scroll is its index divided by that count. The by-observation reading wraps
+  // each row's own photographs (one alone, two to a line), which is no fixed grid, so there
+  // is nothing honest to measure there and no ruler to draw.
+  if (byobs) { rail.hidden = true; return; }
+
   findStops();
   rail.hidden = false;
 
@@ -851,6 +967,23 @@ filters.addEventListener('click', function (e) {
   var b = e.target.closest('button[data-show]');
   if (b) setMode(b.dataset.show);
 });
+
+// The row's second toggle, for a different question: not which photographs (Unseen / All
+// above), but how the ones already fetched are hung — one wall, or observation by observation.
+// Same shape of decision as setMode, so it takes the same path: the photos are already here,
+// so this rewrites the address and rehangs rather than reloads, and the body class keeps the
+// CSS in step with `byobs` for the whole life of the page.
+function setByObs(on) {
+  if (on === byobs) return;
+  byobs = on;
+  document.body.classList.toggle('byobs', on);
+  obsCheck.checked = on;
+  if (on) qs.set('obs', '1'); else qs.delete('obs');
+  addressNow();
+  relist();
+}
+
+obsCheck.addEventListener('change', function () { setByObs(obsCheck.checked); });
 
 // Unhides the search field on both shelves the tagged one is skipped for — unlike the quick
 // groups, a taxon search reloads rather than filters (see the doc comment up top), so it can
@@ -1578,6 +1711,7 @@ function ask() {
   picker.hidden = false;
   filters.hidden = false;
   forget.hidden = seenAtLoad.size === 0;
+  obsCheck.checked = byobs;
   syncFilter();
   buildTaxaFilter();
   buildTaxonSearch();

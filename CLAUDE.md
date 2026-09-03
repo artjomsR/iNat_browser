@@ -139,6 +139,12 @@ directly (or via `.claude/launch.json`'s static server) to run it.
   With no username in the address it asks for one rather than guessing.
   - `Show: Unseen / All` filters against what has already been seen; see the localStorage
     note under Conventions.
+  - The `By observation` check in the same row (`obs=1`) re-hangs that same shelf instead:
+    each observation becomes a row, its name and research grade on the left and that
+    observation's own photographs after it, wrapping at three to a line. It is a re-reading
+    of the photos already fetched, so it rehangs without refetching — and the date rail
+    steps aside while it is on, its ruler being arithmetic over the wall's fixed grid that
+    the rows do not keep.
 
 - **common.js** — the one file the map and the species report both load, ahead of their own.
   It holds what those two genuinely share: the API's address, the request gate every call to
