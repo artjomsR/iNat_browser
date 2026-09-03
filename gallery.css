@@ -351,7 +351,11 @@ body.loose-header header {
    arranged. A state of its own rather than a choice between two, which is what the checkbox
    says: the tick marks the mode it is in, and unlike Unseen/All there is no second button for
    the other way round. The hairline keeps it visibly apart from the Show pair. */
-.byobs {
+/* This is the control's own class, and deliberately NOT `byobs`: the <body> carries the
+   by-observation state under the class `byobs` (see body.byobs #grid below), and a control
+   class of that name would turn the whole body into an inline-flex — collapsing the page to
+   a sliver pushed to the right edge on a phone. Two names, one state. */
+.obstoggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -364,7 +368,7 @@ body.loose-header header {
 
 /* The native box is the label's activation target and nothing else — invisible, so the room's
    own box below is all that is seen, but still focusable and still toggled by the label. */
-.byobs input {
+.obstoggle input {
   position: absolute;
   opacity: 0;
   pointer-events: none;
@@ -392,11 +396,11 @@ body.loose-header header {
   opacity: 0;
 }
 
-.byobs input:checked + .ck { border-color: var(--paper); }
-.byobs input:checked + .ck svg { opacity: 1; }
-.byobs input:checked ~ .cklab { color: var(--paper); }
+.obstoggle input:checked + .ck { border-color: var(--paper); }
+.obstoggle input:checked + .ck svg { opacity: 1; }
+.obstoggle input:checked ~ .cklab { color: var(--paper); }
 
-.byobs input:focus-visible + .ck { outline: 1px solid var(--paper); outline-offset: 2px; }
+.obstoggle input:focus-visible + .ck { outline: 1px solid var(--paper); outline-offset: 2px; }
 
 /* Iconic taxon chips, the same quick groups and the same toggle as the species report's —
    ported to this room's own palette rather than its. Several may be lit at once, so they wrap

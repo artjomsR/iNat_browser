@@ -105,8 +105,11 @@ var byobs = qs.get('obs') === '1';
 var view  = qs.get('view') === 'birds' ? 'birds' : qs.get('view') === 'all' ? 'all' : 'highlights';
 // Switching shelves is a reload (see the doc comment above viewSel's change handler), so this
 // is settled for the whole life of the page: birds and all get a header that scrolls off
-// instead of staying pinned, since those two can grow tall enough to crowd the wall.
-document.body.classList.toggle('loose-header', view !== 'highlights');
+// instead of staying pinned, since those two can grow tall enough to crowd the wall. The
+// by-observation reading is the exception — a list of tall rows the reader is working through,
+// and taking the filter bar away from it would mean scrolling back up every time. So once
+// `obs=1` is on, the header stays pinned whatever the shelf.
+document.body.classList.toggle('loose-header', view !== 'highlights' && !byobs);
 document.body.classList.toggle('byobs', byobs);
 // A specific taxon, picked from the free-text search rather than the ten quick groups. Read
 // straight off the address on load because picking one is a reload, same as switching shelves —
@@ -977,6 +980,9 @@ function setByObs(on) {
   if (on === byobs) return;
   byobs = on;
   document.body.classList.toggle('byobs', on);
+  // The header's pinned-ness follows the mode (see the top of the file): by-observation rows
+  // are tall, so the filter bar is kept with the reader rather than scrolled away.
+  document.body.classList.toggle('loose-header', view !== 'highlights' && !on);
   obsCheck.checked = on;
   if (on) qs.set('obs', '1'); else qs.delete('obs');
   addressNow();
