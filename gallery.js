@@ -501,7 +501,12 @@ function obsHead(p) {
   var head = document.createElement('div');
   head.className = 'obs-head';
 
-  var name = document.createElement('div');
+  // The name is the row's link to the observation it heads, same address and same new-tab
+  // convention as the full-screen label's "View on iNaturalist".
+  var name = document.createElement('a');
+  name.href = 'https://www.inaturalist.org/observations/' + p.obsId;
+  name.target = '_blank';
+  name.rel = 'noopener';
   // A common name reads as a name; a scientific name with none reads as one too, but in the
   // serif italics the page reserves for science. "Unidentified" is the full-screen label's
   // own word for a photograph whose observation names nothing.
