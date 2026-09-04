@@ -207,6 +207,47 @@ don't introduce a build step or split further unless a file becomes unwieldy aga
   and has to be asked in small sequential batches; asking in parallel earns a 429. See the
   eBird block in `species.js` before changing any of that.
 
+## No service worker — updates are the server's again
+
+There is no service worker. The offline shell was removed because offline kept the furniture
+and not the data — every observation, count, tile and photograph on these pages is asked of
+iNaturalist live, so a cached shell was an app that opened in a field to say it could not
+reach the field it was standing in — and because a stale worker is the one bug here that
+cannot be fixed by editing a file: it kept serving the old shell through any number of
+launches, and a home screen has no tab to close to coax a new worker in. The pages register
+nothing, so an update is the ordinary thing it was before: the browser asks for each file
+and takes what it is given. The `apple-mobile-web-app` metas predate all of this and are
+untouched — a home-screen shortcut opens chromeless and goes straight to the network every
+launch, with nothing between a launch and the current files.
+
+**`sw.js` remains, but only as the defuse.** A registered worker cannot be told to leave by
+deleting the file — the browser keeps the last worker it fetched. So the same address now
+serves a stub that, when a browser still holding the old shell checks in, takes over
+immediately, deletes every cache and unregisters itself; the reader sees one last old
+launch, and the next is fresh. It must never grow a `fetch` handler — it exists to leave,
+and a handler would be a way back in — and it must not be deleted while an install of the
+old shell may still be out there; once unregistered, a browser never asks for it again, so
+keeping it costs nothing. A reader who wants the old worker gone *right now* can paste, on
+any page of the app:
+
+    navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister()));
+    caches.keys().then(ks => ks.forEach(k => caches.delete(k)));
+
+and reload — or, on iOS with no console, clear the site's data under Settings → Safari →
+Advanced → Website Data.
+
+**The server sends the cache headers the updates rest on** — `serve.py`, wired into
+`.claude/launch.json` in place of the bare `python -m http.server`, is that server:
+`Cache-Control: no-cache` on the HTML (a page is revalidated on every navigation, so an edit
+shows on the next reload) and `no-cache, no-store` on `sw.js` (a browser still holding the
+old worker must always look the defuse up fresh — iOS Safari trusts the header over a
+registration's own update options). Everything else keeps the ordinary `Last-Modified`
+conditional handling. Serving the files some other way, keep those two headers; there is no
+`VERSION` to bump anymore.
+
+**`test.html`** loads `common.js` and `species.js` with plain script tags again; with no
+worker there is no cache to route around, so it needs no query and no special handling.
+
 ## Conventions
 
 - CSS custom properties for the whole palette (`--ink`, `--raise`, `--rule`, `--text`,
@@ -286,7 +327,7 @@ don't introduce a build step or split further unless a file becomes unwieldy aga
 ## Tests
 
 `test.html` + `test.js` at the repo root, opened over the same static server as everything else
-(`python -m http.server 8731`, then `localhost:8731/test.html`). A green tally means every claim
+(`python serve.py`, then `localhost:8731/test.html`). A green tally means every claim
 held. Hand-rolled assert harness, no runner, no dependency, no build step — a test that needed
 one would break the only constraint the project has.
 

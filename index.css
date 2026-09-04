@@ -124,11 +124,10 @@ body{
    Its own row under the label bar rather than sharing that line: an active filter can run
    the label most of the width, and centring this over it would put the two on a collision
    course on exactly the sessions with the most reading to do. The label bar's line never
-   wraps (see .label-text), so its height is fixed and this can sit a flat distance below it
-   without needing the offline banner's measured-height treatment. */
+   wraps (see .label-text), so its height is fixed and this can sit a flat distance below it. */
 .loading{
   position:absolute;z-index:600;
-  top:calc(var(--safe-t) + 8px + var(--offline-h,0px) + 50px);left:50%;
+  top:calc(var(--safe-t) + 8px + 50px);left:50%;
   transform:translateX(-50%);
   width:32px;height:32px;border-radius:50%;
   background:rgba(20,33,29,.92);border:1px solid var(--rule);
