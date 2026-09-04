@@ -20,7 +20,7 @@
    store refuses the app is exactly the app it was before that feature existed. This is that
    bargain again: no worker — a private window, a policy, an old browser, or the file:// path
    CLAUDE.md still calls a supported way to run this — and all three pages work as they always
-   did, off the network, unchanged. Registration is six lines in each page's tail and is allowed
+   did, off the network, unchanged. Registration sits inline in each page's tail and is allowed
    to fail silently for that reason.
 
    WHAT IS CACHED is an allowlist and not a filter: SHELL below, and nothing else, ever, under
@@ -48,13 +48,19 @@
    CLAUDE.md notes loads no fonts at all, is untouched by any of this and is the page that
    survives it best.
 
-   UPDATE POLICY: NO skipWaiting AND NO clients.claim. A new worker installs, fills its cache,
-   and then waits until every page using the old one is gone. A field session stays open for
-   hours; swapping species.js under an HTML page that loaded an hour ago is how you get a
-   version mismatch that only one person can reproduce and nobody can explain. The cost is that
-   a change reaches the reader on the next cold start rather than the next reload, which on a
-   home-screen app is the next time they open it. That is the right trade for a repo with no
-   build step and no staging: correctness first, and a day's delay at most.
+   UPDATE POLICY: skipWaiting AND clients.claim. A new worker installs, fills its cache, and
+   takes over at once; the three pages listen for controllerchange and reload onto it, once.
+   The first version of this file made the new worker wait instead, on the fear of swapping
+   species.js under an HTML page that loaded an hour ago — a version mismatch only one person
+   can reproduce. The fear did not survive contact with the device: a home screen has no tab
+   to close, so a worker told to wait could wait through any number of launches, and the only
+   thing that ever showed new content was a window where no worker had ever registered. The
+   mismatch the policy feared is impossible here by construction: every file of a version
+   lands in that version's own cache, and an install that cannot fetch every one of the app's
+   own files fails outright and leaves the old worker in charge (see install below), so no
+   page can ever be served half of one version and half of another. What the takeover reload
+   costs a reader is at most an uncommitted edit in a filter field; every page's state is its
+   address — the hash, the query — and rides the reload untouched.
 
    ---------------- the way out ----------------
 
@@ -80,10 +86,10 @@
           await self.registration.unregister();
         })()));
 
-      This is the one place skipWaiting is right: taking over instantly is the point, and what
-      it takes over with is nothing at all. */
+      The skipWaiting here is the same move a normal update makes, but what it takes over with
+      is nothing at all — defusing instantly is the point. */
 
-const VERSION = "v5";
+const VERSION = "v6";
 const CACHE = "inat-shell-" + VERSION;
 
 /* Relative to this file, which is the repo root, so the app still works served from a
@@ -127,7 +133,11 @@ async function stock(cache, url) {
    map page its tiles-and-furniture offline until the next online load picks it up (see the miss
    path in serve) — while a hard install failure over it would cost the reader every fix in the
    version, on all three pages, for as long as unpkg is having its afternoon. */
+/* skipWaiting up front is safe: a worker only exists to take over once the install has
+   completed, so a failed install still discards it and leaves the old worker in charge —
+   the skip just removes the wait for a cold start after a good one. */
 self.addEventListener("install", event => {
+  self.skipWaiting();
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
     await Promise.all(OWN.map(u => stock(cache, new URL(u, self.location.href).href)));
@@ -143,6 +153,9 @@ self.addEventListener("activate", event => {
   event.waitUntil((async () => {
     const names = await caches.keys();
     await Promise.all(names.filter(n => n !== CACHE).map(n => caches.delete(n)));
+    /* Take the pages that are already open, so their controllerchange fires and they reload
+       onto this version rather than finishing the session on the last one. */
+    await self.clients.claim();
   })());
 });
 

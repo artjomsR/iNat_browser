@@ -109,12 +109,23 @@
 
 <script src="gallery.js"></script>
 
-<!-- The offline shell (sw.js) — the same six lines as the map's, where the reasoning is
-     written down. This page caches the shell and not one photograph: the wall is the data. -->
+<!-- The offline shell (sw.js) — the same block as the map's, where the reasoning is written
+     down: updateViaCache:"none" keeps the look at sw.js fresh, and controllerchange reloads
+     the page once when a new worker takes over. This page caches the shell and not one
+     photograph: the wall is the data. -->
 <script>
-if(location.protocol.startsWith("http") && "serviceWorker" in navigator) addEventListener("load", () => {
-  try { navigator.serviceWorker.register("sw.js").catch(() => {}); } catch(err){}
-});
+if(location.protocol.startsWith("http") && "serviceWorker" in navigator) {
+  const held = !!navigator.serviceWorker.controller;
+  let taken = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if(!held || taken) return;
+    taken = true;
+    location.reload();
+  });
+  addEventListener("load", () => {
+    try { navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(() => {}); } catch(err){}
+  });
+}
 </script>
 </body>
 </html>
