@@ -56,13 +56,6 @@
    home-screen app is the next time they open it. That is the right trade for a repo with no
    build step and no staging: correctness first, and a day's delay at most.
 
-   Which means: BUMP `VERSION` WHENEVER A SHELL FILE CHANGES. Nothing else will. The browser
-   re-checks this file's bytes on every navigation, so a changed VERSION is what tells it there
-   is a new shell to fetch; edit index.js alone and readers with the worker keep the old one
-   until something here changes. Working on the app with the worker installed, the same trap is
-   yours: bump VERSION, or tick "Bypass for network" in DevTools' Application panel, or work
-   with it unregistered (below). test.html deliberately does not register it.
-
    ---------------- the way out ----------------
 
    A service worker is sticky, and a bad one shipped to a home screen is the one bug in this
@@ -90,8 +83,7 @@
       This is the one place skipWaiting is right: taking over instantly is the point, and what
       it takes over with is nothing at all. */
 
-/* Bump on every change to a file in SHELL. */
-const VERSION = "v4";
+const VERSION = "v5";
 const CACHE = "inat-shell-" + VERSION;
 
 /* Relative to this file, which is the repo root, so the app still works served from a
