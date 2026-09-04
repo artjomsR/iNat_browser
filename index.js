@@ -693,6 +693,10 @@ function closeSheet(){
 }
 document.getElementById("handle").addEventListener("click", closeSheet);
 
+document.addEventListener("keydown", e => {
+  if(e.key === "Escape" && sheetView === "results" && sheet.dataset.open === "1") closeSheet();
+});
+
 // Stowing is not closing: nothing is cleared and nothing is refetched. The panel slides off
 // the side with its list intact and the probe still drawn on the map underneath, which is the
 // point — the pin, its radius and the accuracy circles are what you stowed the list to see.
