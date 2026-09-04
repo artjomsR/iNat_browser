@@ -575,13 +575,18 @@ claim("with no username there is nobody for it to be about", () => {
 
 // The control and the query read one gate, so the switch can never be on screen offering
 // something the scopes would decline to do — or be missing where they would have done it.
+// The row itself is drawn everywhere (export and download want to be on the tier tab too),
+// so this reads the switch out of the row rather than asking whether the row exists.
 claim("the control is drawn on exactly the states that would honour it", () => {
-  withView(somewhere, () => ok(heldRowHtml().includes("data-where"), "with an area and a user"));
+  withView(somewhere, () => ok(toolsRowHtml().includes("data-where"), "with an area and a user"));
   withView({ ...somewhere, seen: "" }, () =>
-    ok(heldRowHtml().includes("data-where"), "under the default, which it still has to offer"));
-  withView({ ...somewhere, user: "" }, () => is(heldRowHtml(), "", "with no user"));
-  withView({ ...somewhere, place: "" }, () => is(heldRowHtml(), "", "with no area"));
-  withView({ ...somewhere, tab: "tier" }, () => is(heldRowHtml(), "", "on the tier tab"));
+    ok(toolsRowHtml().includes("data-where"), "under the default, which it still has to offer"));
+  withView({ ...somewhere, user: "" }, () =>
+    ok(!toolsRowHtml().includes("data-where"), "with no user"));
+  withView({ ...somewhere, place: "" }, () =>
+    ok(!toolsRowHtml().includes("data-where"), "with no area"));
+  withView({ ...somewhere, tab: "tier" }, () =>
+    ok(!toolsRowHtml().includes("data-where"), "on the tier tab"));
 });
 
 claim("the link that checks a badge asks the badge's own question", () => {

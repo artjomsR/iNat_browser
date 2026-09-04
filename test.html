@@ -76,9 +76,16 @@ h2 code{font-size:12px;letter-spacing:0;text-transform:none;color:var(--text)}
     </div>
   </div>
   <div class="finder" id="taxonBar">
-    <input id="taxonInput" type="search" placeholder="Search any taxon">
-    <button type="button" class="wipe" id="taxonClear" aria-label="Clear the taxon filter">&times;</button>
-    <div class="hits taxa" id="taxonHits" hidden></div>
+    <div class="finder-io">
+      <input id="taxonInput" type="search" placeholder="Search any taxon">
+      <button type="button" class="wipe" id="taxonClear" aria-label="Clear the taxon filter">&times;</button>
+      <div class="hits taxa" id="taxonHits" hidden></div>
+    </div>
+    <div class="taxon-actions" id="taxonActions" hidden>
+      <button type="button" id="taxonParent" disabled aria-label="Set the taxon to its parent"></button>
+      <a id="taxonInat" href="#" target="_blank" rel="noopener" aria-label="View this taxon on iNaturalist"></a>
+      <a id="taxonWiki" href="#" target="_blank" rel="noopener" aria-label="View this taxon on Wikipedia"></a>
+    </div>
   </div>
   <div class="picks" id="groupPicks"></div>
 </header>
