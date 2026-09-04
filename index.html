@@ -99,7 +99,7 @@
 <script src="common.js"></script>
 <script src="index.js"></script>
 
-<!-- The offline shell (sw.js). Inline rather than a file, on purpose and in all three
+<!-- The offline shell (sw.js). Six lines rather than a file, on purpose and in all three
      pages: a third <script src> would break the two-script ceiling CLAUDE.md sets, and a
      block inside index.js or species.js would install a worker every time test.html loaded
      those scripts to assert against them — a worker that would then serve the very file
@@ -112,28 +112,11 @@
      itself. CLAUDE.md calls file:// a supported way to run this, and supported means silent.
      Everything else — a private window, a policy, a browser with no worker at all — is still
      caught rather than checked for, since those are refusals and not addresses. No worker,
-     and this is the app it always was.
-
-     updateViaCache:"none" asks the browser to look for a new sw.js on the network rather
-     than in its HTTP cache, which is what makes a bump to VERSION inside sw.js noticed. The
-     controllerchange listener then reloads the page once a new worker has taken over, so a
-     shell update lands on the same launch instead of the next one. It only fires where this
-     page already had a worker in charge (held) — the first visit, when the worker merely
-     claims the page, must not double-load it — and a reload is safe to take unasked because
-     the page's state is its address: the hash rides a reload untouched. -->
+     and this is the app it always was. -->
 <script>
-if(location.protocol.startsWith("http") && "serviceWorker" in navigator) {
-  const held = !!navigator.serviceWorker.controller;
-  let taken = false;
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if(!held || taken) return;
-    taken = true;
-    location.reload();
-  });
-  addEventListener("load", () => {
-    try { navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(() => {}); } catch(err){}
-  });
-}
+if(location.protocol.startsWith("http") && "serviceWorker" in navigator) addEventListener("load", () => {
+  try { navigator.serviceWorker.register("sw.js").catch(() => {}); } catch(err){}
+});
 </script>
 </body>
 </html>

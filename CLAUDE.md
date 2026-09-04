@@ -178,7 +178,7 @@ second plain `<script src>` **before** the page script on the map, the species r
 `test.html` — no modules, no imports, no build step, and everything still a global, which is
 why load order is the whole of the arrangement. Two scripts is the ceiling: keep it that way;
 don't introduce a build step or split further unless a file becomes unwieldy again. The one
-thing in a page's tail that is not a `<script src>` is the worker-registration block, and it
+thing in a page's tail that is not a `<script src>` is the six-line worker registration, and it
 is inline in all three for exactly that reason: a file would be a third script, and the same
 lines living inside `index.js` or `species.js` would install a worker every time `test.html`
 loaded those scripts to assert against them.
@@ -264,27 +264,17 @@ vary by browser across two hosts, and both stylesheets ask with `display=swap`, 
 connection the type simply renders in the fallback stack the CSS already names and nothing waits.
 The gallery, which loads no fonts at all, survives this best of the three.
 
-**A new worker takes over and the page reloads onto it** — `skipWaiting` and `clients.claim`
-in `sw.js`, and a `controllerchange` listener in each page's tail that reloads the page once
-the worker changes. The old policy — the new worker waits for a cold start, on the fear of
-swapping `species.js` under an HTML page that loaded an hour ago — did not deliver even its
-own bargain: a home screen has no tab to close, so a worker told to wait can wait through any
-number of launches, and the only window that ever showed new content was one where no worker
-had ever registered. The mismatch the old policy feared is prevented by construction instead:
-a version's files all land in that version's own cache, and an install that cannot fetch every
-one of the app's own files fails outright and leaves the old worker in charge, so no page can
-be half of one version and half of another. The reload is safe to take unasked because every
-page's state is its address — the hash, the query — and rides a reload untouched; the first
-visit is exempt, the listener only firing where the page already had a worker in charge. The
-rule stays: **bump `VERSION` in `sw.js` whenever a shell file changes**, because nothing else
-will tell a browser there is a new shell to fetch. The pages register the worker with
-`updateViaCache: "none"` so the look at `sw.js` bypasses the browser's HTTP cache, and anything
-serving the files should send `sw.js` with `Cache-Control: no-cache` for the same reason — iOS
-trusts the header more than the registration option. Working on the app with the worker
-installed, bump and reload: the page takes the second reload itself. `test.html` registers no
-worker at all and asks for `common.js` and `species.js` with a `?test` query, which `shellKey`
-treats as a deliberate way round the cache: a green tally read off yesterday's `species.js`
-would be worse than no tally.
+**A new worker waits rather than taking over** — no `skipWaiting`, no `clients.claim`. A field
+session stays open for hours, and swapping `species.js` under an HTML page that loaded an hour
+ago is how you get a version mismatch only one person can reproduce. The cost is that a change
+lands on the next cold start rather than the next reload; in Chrome that means genuinely leaving
+the origin or closing the app, not two reloads in the same tab. Which makes the rule: **bump
+`VERSION` in `sw.js` whenever a shell file changes**, because nothing else will tell a browser
+there is a new shell to fetch. Working on the app with the worker installed, the same trap is
+yours — bump it, tick "Bypass for network" in DevTools, or work with it unregistered. `test.html`
+registers no worker at all and asks for `common.js` and `species.js` with a `?test` query, which
+`shellKey` treats as a deliberate way round the cache: a green tally read off yesterday's
+`species.js` would be worse than no tally.
 
 **Offline, each page says what is true.** The map opens to its own furniture with grey tiles and
 a strip across the top — the app is cached, the observations aren't — and the label bar moves
