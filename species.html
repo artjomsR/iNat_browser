@@ -6,12 +6,6 @@
 <meta name="theme-color" content="#0D1714">
 <title>Species by tier tag</title>
 
-<!-- Same manifest as the map's, so installing from here installs the same app and lands on
-     the map — a report is a view of a scope, not something to keep an icon for. -->
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon-192.png">
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
@@ -105,14 +99,5 @@
 <!-- common.js first: it declares what species.js expects to already be there. -->
 <script src="common.js"></script>
 <script src="species.js"></script>
-
-<!-- The offline shell (sw.js) — the same six lines as the map's, where the reasoning for them
-     being here rather than in a file is written down. test.html reproduces this page's
-     skeleton and deliberately leaves them out. -->
-<script>
-if(location.protocol.startsWith("http") && "serviceWorker" in navigator) addEventListener("load", () => {
-  try { navigator.serviceWorker.register("sw.js").catch(() => {}); } catch(err){}
-});
-</script>
 </body>
 </html>

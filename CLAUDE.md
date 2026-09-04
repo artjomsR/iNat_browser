@@ -168,20 +168,11 @@ directly (or via `.claude/launch.json`'s static server) to run it.
   particular must stay the five-character, null-safe one, or the three pages stop agreeing
   about what is safe to write into a page.
 
-- **manifest.json / sw.js / icon.svg / icon-192.png / icon-512.png** — not a page, and between
-  them the whole of what makes this an app you can install and open with no signal. All three
-  pages link the manifest and register the worker; neither changes anything about a page opened
-  in an ordinary browser tab with a connection. See **Installed, and offline** below.
-
 Each page is a plain `<link rel="stylesheet">` + `<script src>` pair, with `common.js` as a
 second plain `<script src>` **before** the page script on the map, the species report and
 `test.html` — no modules, no imports, no build step, and everything still a global, which is
 why load order is the whole of the arrangement. Two scripts is the ceiling: keep it that way;
-don't introduce a build step or split further unless a file becomes unwieldy again. The one
-thing in a page's tail that is not a `<script src>` is the six-line worker registration, and it
-is inline in all three for exactly that reason: a file would be a third script, and the same
-lines living inside `index.js` or `species.js` would install a worker every time `test.html`
-loaded those scripts to assert against them.
+don't introduce a build step or split further unless a file becomes unwieldy again.
 
 ## External dependencies
 
@@ -215,85 +206,6 @@ loaded those scripts to assert against them.
   open: scientific name (P225) in, eBird taxon id (P3444) out. It is a shared public endpoint
   and has to be asked in small sequential batches; asking in parallel earns a 429. See the
   eBird block in `species.js` before changing any of that.
-
-## Installed, and offline
-
-The app was already built for a phone in a field and already behaved as an installed one —
-chromeless metas, links that navigate rather than open a tab, a request gate that retries a
-dropped connection — without ever having been declared an app or being able to open without a
-signal. `manifest.json` and `sw.js` are that declaration and that opening.
-
-**The manifest is the map's.** `start_url` comes back to `index.html` from whichever page it was
-installed from, `short_name` is the "Field" the `apple-mobile-web-app-title` already said, and
-the colours are the map's `#0D1714` and not the gallery's `#17181c`: what gets installed is the
-app, and the app is the map. The gallery is a darker room inside it and its own `theme-color`
-still wins while that page is open — the manifest's colour only ever paints the splash screen and
-the launcher, which belong to the thing that was installed. A report or a wall of photographs is
-a view of a scope, not something to keep an icon for, so installing from either lands on the map.
-
-**The icons are the app's own mark**: the hollow diamond the label bar and the report's heading
-wear (`.lozenge`), `--mark` on `--ink`. `icon.svg` is the drawing — legible source, like
-everything else here, and the favicon browsers use — and the two PNGs are the same geometry
-rasterised, because iOS will not take an SVG for a home-screen icon. They are 693 bytes and
-2.3KB: flat colour compresses to almost nothing, which is how a repo with no pipeline can afford
-real PNGs rather than a generated letter. The diamond spans 43% of the canvas, well inside the
-maskable safe zone, so one drawing serves `any` and `maskable` both. To change it, edit the SVG
-and re-render the two — the geometry is written down at the top of the file.
-
-**The worker caches the shell and nothing else.** Fourteen of the app's own files — the three
-HTML, the three CSS, the four JS (`common.js` is the one a count of "nine" forgets, and a shell
-without it is two pages that open to an exception), the manifest and the icons — plus Leaflet's
-CSS and JS. Cache-first for those; everything else goes to the network untouched. That is an
-allowlist and not a filter, which is the important part: the worker answers only what is in
-`SHELL`, so `api.inaturalist.org`, `query.wikidata.org`, every map tile and every photograph on
-the gallery wall are network-only *by construction* rather than by a rule someone has to remember
-to keep exempting.
-
-**No API response is cached, ever**, in any store, under any TTL — a species tally is a thing
-that moves all day, and served back out of a cache it would be a photograph of an earlier day
-wearing today's face, with no line on any page to say so. Response caching is a separate decision
-and belongs to whatever makes it. Tiles are the near-miss and stay out for a second reason as
-well: a cache of the tiles you happened to look at is an app that is a map in four places and a
-grey field everywhere else, and it fills a phone to do it.
-
-**Leaflet is in the shell and the fonts are not.** Without Leaflet the map page is not furniture
-but a blank page, since `index.js` reaches for `L` on the way up; so its CSS and JS are cached,
-fetched in cors mode rather than no-cors so that a real status comes back and a 404 or a captive
-portal's sign-in page is never stored as if it were the library. The fonts stay out: their URLs
-vary by browser across two hosts, and both stylesheets ask with `display=swap`, so with no
-connection the type simply renders in the fallback stack the CSS already names and nothing waits.
-The gallery, which loads no fonts at all, survives this best of the three.
-
-**A new worker waits rather than taking over** — no `skipWaiting`, no `clients.claim`. A field
-session stays open for hours, and swapping `species.js` under an HTML page that loaded an hour
-ago is how you get a version mismatch only one person can reproduce. The cost is that a change
-lands on the next cold start rather than the next reload; in Chrome that means genuinely leaving
-the origin or closing the app, not two reloads in the same tab. Which makes the rule: **bump
-`VERSION` in `sw.js` whenever a shell file changes**, because nothing else will tell a browser
-there is a new shell to fetch. Working on the app with the worker installed, the same trap is
-yours — bump it, tick "Bypass for network" in DevTools, or work with it unregistered. `test.html`
-registers no worker at all and asks for `common.js` and `species.js` with a `?test` query, which
-`shellKey` treats as a deliberate way round the cache: a green tally read off yesterday's
-`species.js` would be worse than no tally.
-
-**Offline, each page says what is true.** The map opens to its own furniture with grey tiles and
-a strip across the top — the app is cached, the observations aren't — and the label bar moves
-down by the strip's own measured height so a wrapped sentence is never covered by it. The
-species report's `failed` reads the reason off the browser rather than guessing at rate-limiting,
-and the gallery's loader does the same. All three say the same thing in their own voice: the page
-is kept, the data is not, and it will be there when the signal is.
-
-**The bargain is the storage bargain.** No worker — a private window, a policy, an old browser,
-or the `file://` path that is still a supported way to run this — and all three pages work as
-they always did. Registration is guarded on the protocol (a worker needs an origin and `file://`
-has none, and asking anyway costs a red console line the `catch` cannot swallow), then wrapped
-twice more for everything that is a refusal rather than an address.
-
-**There is a way out, and it is written in `sw.js`**: the two console lines that unregister the
-worker and delete every cache, where to find the same thing in DevTools and on iOS, and — for a
-bad worker already out on phones you cannot reach — the four-line replacement file that defuses
-itself on the next check-in. A service worker is sticky, and a bad one shipped to a home screen
-is the one bug in this repo that cannot be fixed by editing a file.
 
 ## Conventions
 
@@ -399,12 +311,6 @@ so the scripts settle harmlessly with all of their top-level functions in scope 
 loaded after them. The "asked nothing" half is asserted rather than assumed —
 `test.html` wraps `fetch` and `XMLHttpRequest` ahead of the boot and the first test reads the
 count back.
-
-The two script tags carry a `?test` query and the page registers no service worker, both for the
-same reason: `sw.js` caches `common.js` and `species.js` and serves them cache-first, so a run
-made after an edit but before the worker's next version would tick every claim while reading the
-old file. A query is how a request says it wants what is on disk (see `shellKey` in `sw.js`), and
-a green tally that means nothing is worse than no tally. Keep both if you touch this page's tail.
 
 What is covered, in the order it earns its place: `sspWaves`, whose invariant — no wave holding
 two subspecies of one parent — fails silently rather than loudly, two asked together coming back
