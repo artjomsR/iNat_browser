@@ -645,6 +645,39 @@ async function findTaxa(text){
   }));
 }
 
+// The parent button and the two "view elsewhere" links share one lookup: the plain taxon
+// object. Not the `/taxa?id=` index loadDetailedPhotos and sspCandidates already call
+// elsewhere on this page -- that answers with the same reduced shape a search does, bare
+// `ancestor_ids` and no `ancestors` objects -- but the single-taxon show endpoint, the one
+// place iNat actually hangs the full ancestor chain and the Wikipedia link off a taxon.
+// Cached like every other derived answer here -- the taxon sitting in the field does not
+// change under a session, so revisiting one through the parent chain costs one ask each,
+// not one a trip -- and a failed ask is a miss rather than an answer, same as everywhere
+// else cachedAsk wraps: nothing is written for a request that never resolved.
+async function taxonDetail(id){
+  return cachedAsk("taxondetail", { id }, async () => {
+    const d = await apiGet(`${API}/taxa/${id}`);
+    const t = (d.results || [])[0];
+    if(!t) return null;
+    // iNat lists a taxon's ancestors root-first, so the immediate parent is simply the last
+    // one before the taxon itself -- nothing about rank has to be reasoned about here, and
+    // a taxon with no ancestors at all (a kingdom) simply has no parent to find.
+    const anc = t.ancestors || [];
+    const parent = anc.length ? anc[anc.length - 1] : null;
+    return {
+      parent: parent ? {
+        id: parent.id,
+        name: parent.name,
+        common: parent.preferred_common_name || "",
+        rank: parent.rank || ""
+      } : null,
+      // Not every taxon has one -- recent splits, and anything obscure enough that nobody
+      // has written the page yet -- so this is "" rather than a link guaranteed to 404.
+      wikipedia: t.wikipedia_url || ""
+    };
+  });
+}
+
 // iNat's own place search, the one behind the place field on their observation pages.
 async function findPlaces(text){
   const p = new URLSearchParams({ q: text, per_page: "8" });
@@ -2868,7 +2901,7 @@ function wireTaxonFinder(){
   // right container for it, `position:relative` and all.
   const rankTag = document.createElement("span");
   rankTag.className = "t-rank-tag";
-  input.closest(".finder").appendChild(rankTag);
+  input.closest(".finder-io").appendChild(rankTag);
   function setRankTag(r){ rankTag.textContent = r ? `(${r})` : ""; }
 
   // Whatever the tree is narrowed to, at whichever grain: a named taxon, or the quick groups
@@ -2882,6 +2915,56 @@ function wireTaxonFinder(){
   document.getElementById("taxonClear").addEventListener("click", () => {
     location.href = selfUrl({ taxon: null, tname: null, trank: null, iconic: null });
   });
+
+  // The three actions beside the field. All three need one actual taxon rather than the
+  // quick groups (see the markup's own comment), so the row stays hidden without view.taxon
+  // and nothing here has to account for a group being on instead.
+  const actions = document.getElementById("taxonActions");
+  const parentBtn = document.getElementById("taxonParent");
+  const inatLink = document.getElementById("taxonInat");
+  const wikiLink = document.getElementById("taxonWiki");
+  // Set once the lookup below resolves and read by the one click handler wired here -- the
+  // button stays disabled until then, so nothing can click through to a target not yet known.
+  let parentTarget = null;
+  parentBtn.addEventListener("click", () => {
+    if(!parentTarget) return;
+    location.href = selfUrl({
+      taxon: parentTarget.id, tname: parentTarget.name, trank: parentTarget.rank, iconic: null
+    });
+  });
+  if(!view.taxon){
+    actions.hidden = true;
+  }else{
+    actions.hidden = false;
+    // iNat's own taxon pages resolve from the bare id, so this needs no lookup and is right
+    // immediately. A Wikipedia search on the name stands in the same way until the lookup
+    // below lands -- usable straight away, the same trade the field's own value already
+    // makes showing `tname` before it has been confirmed live.
+    inatLink.href = `https://www.inaturalist.org/taxa/${view.taxon}`;
+    wikiLink.href = `https://en.wikipedia.org/w/index.php?search=${encodeURIComponent(view.tname || view.taxon)}`;
+    parentBtn.disabled = true;
+    parentBtn.title = "Set the taxon to its parent";
+    // A failed ask leaves both links exactly as they already are -- the iNat one right, the
+    // Wikipedia one a working search rather than the exact page -- and the parent button
+    // simply stays disabled, so there is nothing else to unwind here.
+    taxonDetail(view.taxon).then(d => {
+      if(!d) return;
+      if(d.wikipedia) wikiLink.href = d.wikipedia;
+      if(d.parent){
+        parentTarget = d.parent;
+        parentBtn.disabled = false;
+        // The button is icon-only, so its title carries its actual destination -- and with
+        // it, the accessible name too, since there's no visible text left to fall back on.
+        const label = "Set the taxon to " + (d.parent.common || d.parent.name);
+        parentBtn.title = label;
+        parentBtn.setAttribute("aria-label", label);
+      }else{
+        const label = "Already at the root of the tree";
+        parentBtn.title = label;
+        parentBtn.setAttribute("aria-label", label);
+      }
+    }).catch(() => {});
+  }
 
   wireFinder({
     input,

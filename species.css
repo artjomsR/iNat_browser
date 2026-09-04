@@ -100,6 +100,29 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
 .finder.filled input{padding-right:38px}
 .finder .accept:hover{color:var(--mark)}
 .finder .accept:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+
+/* the taxon field's three actions -- climb to the parent, or open the same taxon elsewhere --
+   sit beside the field rather than over it, since #taxonBar is now a flex row: the field's
+   own wrapper (.finder-io) on one side, holding the max-width the field always had, and this
+   row of buttons on the other, sized to its own content instead. */
+#taxonBar{display:flex;align-items:flex-start;gap:7px;max-width:none}
+.finder-io{position:relative;flex:1 1 auto;min-width:0;max-width:420px}
+.taxon-actions{display:flex;gap:6px;flex:0 0 auto;padding-top:1px}
+.taxon-actions[hidden]{display:none}   /* the flex below outruns the built-in [hidden] rule */
+/* all three are icon-only -- the parent button's actual destination (which taxon) rides in
+   its title/aria-label rather than on its face, updated live by wireTaxonFinder once the
+   lookup resolves */
+.taxon-actions button,.taxon-actions a{display:inline-flex;align-items:center;justify-content:center;
+  padding:11px 12px;cursor:pointer;text-decoration:none;font:inherit;
+  color:var(--mute);background:var(--raise);border:1px solid var(--rule);border-radius:7px}
+.taxon-actions button svg,.taxon-actions a svg{width:14px;height:14px;display:block}
+.taxon-actions button:hover,.taxon-actions a:hover{color:var(--mark);border-color:var(--mark)}
+.taxon-actions button:focus-visible,.taxon-actions a:focus-visible{
+  outline:2px solid var(--mark);outline-offset:2px}
+/* the parent button has nowhere left to climb once the lookup lands on the root of the tree,
+   or before it has landed at all -- disabled rather than hidden, so the row never changes
+   width under the two links either side of it */
+.taxon-actions button[disabled]{opacity:.4;cursor:default;color:var(--mute);border-color:var(--rule)}
 .sortbar{display:flex;flex-wrap:wrap;align-items:center;gap:7px 7px;margin:15px 0 4px;
   font-size:9.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--mute)}
 /* Nothing in this bar is allowed to compress. The default flex behaviour — shrink every child

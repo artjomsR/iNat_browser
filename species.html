@@ -54,11 +54,48 @@
     </div>
   </div>
   <div class="finder" id="taxonBar">
-    <input id="taxonInput" type="search" enterkeyhint="search"
-           placeholder="Search any taxon &mdash; Odonata, Barn Owl&hellip;"
-           autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
-    <button type="button" class="wipe" id="taxonClear" aria-label="Clear the taxon filter">&times;</button>
-    <div class="hits taxa" id="taxonHits" hidden></div>
+    <!-- The field's own overlay -- the wipe, the rank tag, the hit list -- anchors to this
+         wrapper rather than to the row as a whole, so it keeps sitting against the input's
+         own right edge now that the three actions below sit beside it as flex siblings. -->
+    <div class="finder-io">
+      <input id="taxonInput" type="search" enterkeyhint="search"
+             placeholder="Search any taxon &mdash; Odonata, Barn Owl&hellip;"
+             autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
+      <button type="button" class="wipe" id="taxonClear" aria-label="Clear the taxon filter">&times;</button>
+      <div class="hits taxa" id="taxonHits" hidden></div>
+    </div>
+    <!-- One actual taxon, never the quick groups standing in for one -- those have no single
+         parent and no one Wikipedia page between them -- so this stays hidden without a
+         specific taxon set. Filled in and shown by wireTaxonFinder. -->
+    <div class="taxon-actions" id="taxonActions" hidden>
+      <button type="button" id="taxonParent" disabled
+              title="Set the taxon to its parent" aria-label="Set the taxon to its parent">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 13V3M8 3L4 7M8 3l4 4"
+                fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <a id="taxonInat" href="#" target="_blank" rel="noopener"
+         title="View this taxon on iNaturalist" aria-label="View this taxon on iNaturalist">
+        <!-- a leaf, standing in for the natural world generically rather than for iNat's own
+             mark -->
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M3 13C3 6.5 7 3 13.5 3 13.5 9.5 9.5 13 3 13z"
+                fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+          <path d="M4 12L12 4" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+        </svg>
+      </a>
+      <a id="taxonWiki" href="#" target="_blank" rel="noopener"
+         title="View this taxon on Wikipedia" aria-label="View this taxon on Wikipedia">
+        <!-- a plain globe, the generic mark for "a reference site elsewhere" rather than
+             Wikipedia's own puzzle-piece one -->
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M2 8h12M8 2c2.1 1.9 2.1 10.1 0 12M8 2c-2.1 1.9-2.1 10.1 0 12"
+                fill="none" stroke="currentColor" stroke-width="1.1"/>
+        </svg>
+      </a>
+    </div>
   </div>
   <div class="picks" id="groupPicks"></div>
 </header>
