@@ -522,6 +522,15 @@ function obsHead(p) {
     head.appendChild(sci);
   }
 
+  // When and where the observation was made — the same two facts the full-screen label's
+  // metaline carries, read here off the row instead of a click into a photo.
+  if (p.date || p.place) {
+    var when = document.createElement('div');
+    when.className = 'obs-when';
+    when.textContent = [p.date ? prettyDate(p.date) : '', p.place || ''].filter(Boolean).join(' · ');
+    head.appendChild(when);
+  }
+
   var status = document.createElement('div');
   status.className = 'obs-status';
   var grade = document.createElement('span');
