@@ -89,7 +89,7 @@
       The skipWaiting here is the same move a normal update makes, but what it takes over with
       is nothing at all — defusing instantly is the point. */
 
-const VERSION = "v6";
+const VERSION = "v7";
 const CACHE = "inat-shell-" + VERSION;
 
 /* Relative to this file, which is the repo root, so the app still works served from a

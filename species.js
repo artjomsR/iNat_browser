@@ -646,7 +646,7 @@ async function findTaxa(text){
 }
 
 // The parent button and the two "view elsewhere" links share one lookup: the plain taxon
-// object. Not the `/taxa?id=` index loadDetailedPhotos and sspCandidates already call
+// object. Not the `/taxa?id=` index loadFamilies and sspCandidates already call
 // elsewhere on this page -- that answers with the same reduced shape a search does, bare
 // `ancestor_ids` and no `ancestors` objects -- but the single-taxon show endpoint, the one
 // place iNat actually hangs the full ancestor chain and the Wikipedia link off a taxon.
@@ -990,15 +990,18 @@ async function loadFamilies(buckets){
    The third view's one extra cost. List and grid both read a single photo off the row
    itself — default_photo, already paid for by species_counts — but the strip iNaturalist's
    own species page shows comes off a different field entirely, taxon_photos, which only the
-   full taxon record carries. So this asks the same question loadFamilies does, of the same
-   endpoint, batched the same way and with no rank filter this time, since every id asked
-   about is one whose photos are wanted rather than one being tested for family rank.
-
-   That filter is why the batch size differs. loadFamilies can run a batch past a thousand
-   ancestor ids under per_page:500 and still get everything back, because rank=family throws
-   almost all of them away before per_page ever has to hold that many at once. Nothing is
-   thrown away here — every id in a batch is a hit — so the batch itself has to fit under 500,
-   and 3,500 characters holds that even at iNaturalist's longest ids, with room to spare.
+   full taxon record carries. And the full record is only ever the *show* answer: the
+   `/taxa?id=` index loadFamilies calls answers with a deliberately reduced shape that,
+   however the ids are asked, has never carried taxon_photos — one request would happily
+   cover a whole list, and return nothing this view needs. The show route, `/taxa/{id}`,
+   carries the field on every record, and it will take several ids at once, comma-separated
+   in the path — but at most 30 of them, which is why the ids are asked in rounds of that
+   many rather than in one batch sized by URL length (30 ids is a few hundred characters, so
+   length never comes into it). per_page:30 rides along to match: the route caps per_page
+   there anyway, and a default that one day shrank would silently cut a round short with
+   nothing to say so. Nothing else changes hands — the strip's order is iNat's own, and a
+   species asked about but missing from the answer (a bad id, a deletion) is a species with
+   no strip.
 
    Kept in memory only, the same as familyOf, and for the same reason: this isn't a scoped
    answer with a moment it stops being true, so the five-minute cache the scoped queries use
@@ -1013,6 +1016,7 @@ async function loadFamilies(buckets){
    one after it has landed, both cost nothing further. */
 const photosOf = new Map();     // taxon id -> up to DETAIL_PHOTOS photo urls, iNat's own order
 const DETAIL_PHOTOS = 5;
+const DETAIL_BATCH = 30;        // ids per round — the show route's own cap, not a URL-length budget
 let photosBusy = false;         // true only while a batch is actually out
 
 async function loadDetailedPhotos(){
@@ -1022,9 +1026,10 @@ async function loadDetailedPhotos(){
   if(!ids.length) return;
   photosBusy = true;
   try{
-    for(const batch of idBatches(ids, 3500)){
+    for(let i = 0; i < ids.length; i += DETAIL_BATCH){
+      const batch = ids.slice(i, i + DETAIL_BATCH);
       let d;
-      try{ d = await apiGet(`${API}/taxa?${new URLSearchParams({ id: batch.join(","), per_page: "500" })}`); }
+      try{ d = await apiGet(`${API}/taxa/${batch.join(",")}?per_page=${DETAIL_BATCH}`); }
       catch(e){ continue; }        // this batch's rows keep the one photo they already had
       // Answered either way, same as ebirdCode below: a species iNat genuinely has no curated
       // photos for — sound-only records, mostly — should not be asked about again next time.
