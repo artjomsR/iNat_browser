@@ -160,11 +160,12 @@ var loadDone = false;
 var grid     = document.getElementById('grid');
 var taxaFilter = document.getElementById('taxaFilter');
 var taxonSearch  = document.getElementById('taxonSearch');
-var taxonInput   = document.getElementById('taxonInput');
-var taxonAc      = document.getElementById('taxonAc');
-var taxonSel     = document.getElementById('taxonSel');
-var taxonSelName = document.getElementById('taxonSelName');
-var taxonClear   = document.getElementById('taxonClear');
+var taxonInput     = document.getElementById('taxonInput');
+var taxonAc        = document.getElementById('taxonAc');
+var taxonSel       = document.getElementById('taxonSel');
+var taxonSelName   = document.getElementById('taxonSelName');
+var taxonParentBtn = document.getElementById('taxonParent');
+var taxonClear     = document.getElementById('taxonClear');
 var narrowRow = document.getElementById('narrow');
 var dateFromEl = document.getElementById('dateFrom');
 var dateToEl   = document.getElementById('dateTo');
@@ -1008,6 +1009,7 @@ function buildTaxonSearch() {
     taxonSel.hidden = false;
     taxonSelName.textContent = tname || ('Taxon ' + taxon);
     taxaFilter.hidden = true;
+    loadTaxonParent();
   }
 }
 
@@ -1175,6 +1177,55 @@ taxonClear.addEventListener('click', function () {
   qs.delete('tname');
   flush();
   location.search = qs.toString();
+});
+
+/* ---------------- taxon parent ----------------
+
+   One button in the picked chip, climbing the same tree the search above it descends. Not
+   the /taxa/autocomplete index that search asks — stripped to what a hit list needs, and
+   carrying no ancestors — but the plain taxon record, whose `ancestors` iNaturalist lists
+   root-first, so the immediate parent is simply the last one before the taxon itself. Fired
+   once, when a taxon is actually picked, so it goes through a plain fetch the same as the
+   search above rather than through common.js's gate, which this file deliberately does
+   without (see the doc comment up top). Not cached: unlike the report's version of this
+   button, a session here only ever climbs one chip's worth of tree before the page reloads
+   out from under it, so there is nothing to save an ask by keeping. */
+
+var taxonParent = null;   // {id, name} once the lookup lands; the button stays disabled til then
+
+function loadTaxonParent() {
+  taxonParent = null;
+  taxonParentBtn.disabled = true;
+  taxonParentBtn.title = 'Set the taxon to its parent';
+  taxonParentBtn.setAttribute('aria-label', taxonParentBtn.title);
+  fetch('https://api.inaturalist.org/v1/taxa/' + taxon)
+    .then(function (res) { return res.ok ? res.json() : null; })
+    .then(function (d) {
+      var t = d && d.results && d.results[0];
+      if (!t) return;
+      var anc = t.ancestors || [];
+      var parent = anc.length ? anc[anc.length - 1] : null;
+      if (!parent) {
+        taxonParentBtn.title = 'Already at the root of the tree';
+        taxonParentBtn.setAttribute('aria-label', taxonParentBtn.title);
+        return;
+      }
+      taxonParent = { id: parent.id, name: parent.name };
+      taxonParentBtn.disabled = false;
+      // Icon-only, so the title carries the actual destination -- and with it the accessible
+      // name too, since there's no visible text left on the button to fall back on.
+      var label = 'Set the taxon to ' + (parent.preferred_common_name || parent.name);
+      taxonParentBtn.title = label;
+      taxonParentBtn.setAttribute('aria-label', label);
+    })
+    // A failed ask just leaves the button disabled -- the chip's own name and its clear
+    // button still work either way, so there is nothing else here to unwind.
+    .catch(function () {});
+}
+
+taxonParentBtn.addEventListener('click', function () {
+  if (!taxonParent) return;
+  pickTaxon(taxonParent.id, taxonParent.name);
 });
 
 /* ---------------- place search ----------------

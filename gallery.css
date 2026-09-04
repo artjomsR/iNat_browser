@@ -296,8 +296,24 @@ body.loose-header header {
 
 .picked[hidden] { display: none; }
 
-#taxonClear {
+/* The parent button and the clear button share the chip's right edge -- the auto margin
+   moves to whichever of the two is first in the row, so the pair stays flush right together
+   rather than the parent button sitting wherever the name's own length happens to end. */
+#taxonParent {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  padding: 2px;
+  color: var(--chrome);
+  cursor: pointer;
+}
+#taxonParent svg { width: 14px; height: 14px; display: block; }
+#taxonParent:hover { color: var(--paper); }
+#taxonParent:disabled { color: var(--chrome-dim); cursor: default; }
+
+#taxonClear {
   border: 0;
   background: transparent;
   color: var(--chrome);

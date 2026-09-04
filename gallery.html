@@ -41,6 +41,13 @@
     <div class="ac" id="taxonAc" hidden></div>
     <div class="picked" id="taxonSel" hidden>
       <span id="taxonSelName"></span>
+      <button type="button" id="taxonParent" disabled
+              title="Set the taxon to its parent" aria-label="Set the taxon to its parent">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 13V3M8 3L4 7M8 3l4 4"
+                fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
       <button type="button" id="taxonClear" aria-label="Clear species">&times;</button>
     </div>
   </div>
