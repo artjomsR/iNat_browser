@@ -234,7 +234,11 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
 .index a.on{color:var(--mark);background:var(--raise);border-color:var(--rule)}
 .index a .n{font-size:10px;letter-spacing:.05em;color:var(--rule);font-variant-numeric:tabular-nums}
 .index a.on .n{color:var(--mute)}
-@media (max-width:780px){
+/* the width check alone misses phones turned sideways — a landscape phone is often wider
+   than 780px even though it's the same device the portrait rule is meant for. The added
+   short-height clause catches that case without pulling in landscape tablets/desktops,
+   which are landscape too but tall enough to keep the sidebar. */
+@media (max-width:780px), (max-height:500px) and (orientation:landscape){
   .cols{grid-template-columns:minmax(0,1fr);gap:6px}
   .index{position:static;flex-direction:row;flex-wrap:wrap}
   .index a{flex:1 1 auto;background:var(--raise);border-color:var(--rule)}
