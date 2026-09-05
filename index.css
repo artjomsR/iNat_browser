@@ -14,6 +14,12 @@
   --peek:0px;
   --safe-t:env(safe-area-inset-top,0px);
   --safe-b:env(safe-area-inset-bottom,0px);
+
+  /* The results panel's starting height on the narrow layout — half the screen, so
+     the map stays visible under it until a swipe on the handle asks for more (see
+     index.js). The sheet rule and the zoom/locate float-above-list rule further down
+     both key off this one number, so it only needs changing here. */
+  --sheet-half:50vh;
 }
 
 *{box-sizing:border-box}
@@ -151,7 +157,7 @@ body{
   background:rgba(20,33,29,.92);border:1px solid var(--rule);
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
   overflow:hidden;
-  transition:right .26s cubic-bezier(.32,.72,0,1);
+  transition:right .26s cubic-bezier(.32,.72,0,1),bottom .26s cubic-bezier(.32,.72,0,1);
 }
 .zoom button{
   width:42px;height:42px;border:0;background:none;padding:0;cursor:pointer;
@@ -172,7 +178,7 @@ body{
   background:rgba(20,33,29,.92);border:1px solid var(--rule);
   color:var(--text);display:grid;place-items:center;cursor:pointer;
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-  transition:transform .16s ease,border-color .16s ease,right .26s cubic-bezier(.32,.72,0,1);
+  transition:transform .16s ease,border-color .16s ease,right .26s cubic-bezier(.32,.72,0,1),bottom .26s cubic-bezier(.32,.72,0,1);
 }
 .locate:active{transform:scale(.93)}
 .locate[data-busy="1"]{border-color:var(--mark)}
@@ -250,7 +256,7 @@ body[data-stow="1"] .stow svg{transform:rotate(180deg)}
   border-top:1px solid var(--rule);
   border-radius:14px 14px 0 0;
   transform:translateY(101%);
-  transition:transform .26s cubic-bezier(.32,.72,0,1);
+  transition:transform .26s cubic-bezier(.32,.72,0,1),height .26s cubic-bezier(.32,.72,0,1);
 }
 /* Only while it is up: the shadow points upwards, so a closed sheet parked just off the
    bottom would otherwise cast a dark band back onto the map it has left. */
@@ -258,16 +264,24 @@ body[data-stow="1"] .stow svg{transform:rotate(180deg)}
 /* Stowed: still open, still holding its list — just waiting off the left edge. The shadow
    goes with it, having nothing left to sit above. */
 body[data-stow="1"] .sheet[data-open="1"]{transform:translateX(-101%);box-shadow:none}
-/* Fixed rather than content-sized: at a flat 82vh — the same ceiling `.sheet` already caps
-   everyone else at — the results panel holds one size whether it's showing "Reading…",
-   "Nothing here", or a full page of twenty, so nothing jumps as the fetch resolves or the
-   count changes. This also replaces the old min-height floor: that existed so the stow
-   button's corner (pinned to the panel's own top-left, see --sheet-y) wouldn't drop into
-   the accuracy legend on a one-row or empty panel — moot now that the panel is always full
-   height. sheet-body's own overflow-y still scrolls a longer list inside that fixed frame. */
-body[data-sheet="results"] .sheet{height:82vh}
+/* Fixed rather than content-sized — the results panel holds one size whether it's showing
+   "Reading…", "Nothing here", or a full page of twenty, so nothing jumps as the fetch
+   resolves or the count changes. This also replaces the old min-height floor: that existed
+   so the stow button's corner (pinned to the panel's own top-left, see --sheet-y) wouldn't
+   drop into the accuracy legend on a one-row or empty panel — moot now that the panel is
+   always one of two fixed sizes. sheet-body's own overflow-y still scrolls a longer list
+   inside whichever frame is current.
+
+   It opens at --sheet-half rather than the old flat 82vh: half the screen leaves half the
+   map showing underneath, and a swipe on the handle (see index.js) is what asks for the
+   rest — sheet.dataset.expanded is the flag that swipe sets, read here rather than on
+   body since it belongs to the sheet's own state, not the view currently loaded into it. */
+body[data-sheet="results"] .sheet{height:var(--sheet-half)}
+body[data-sheet="results"][data-expanded="1"] .sheet{height:82vh}
 .handle{
   flex:0 0 auto;padding:9px 0 5px;border:0;background:none;width:100%;cursor:pointer;
+  touch-action:none;   /* the drag that resizes the sheet is vertical on this element alone;
+     without this iOS reads the same touch as an attempt to scroll or bounce the page */
 }
 .handle span{display:block;width:34px;height:3px;border-radius:2px;background:var(--rule);margin:0 auto}
 .handle:focus-visible{outline:2px solid var(--mark);outline-offset:-4px}
@@ -574,6 +588,22 @@ label.check{
 .state-lede{font-family:var(--lit);font-size:17px;color:var(--text);margin-bottom:7px}
 .state-hint{font-size:11.5px;letter-spacing:.06em;line-height:1.6}
 
+/* Floats the zoom/locate stack up above the half-open results list instead of letting the
+   panel cover them — mobile only; the wide layout already parks these beside its own
+   floating card (see the min-width:720px block below) and never needs this. Each keeps its
+   own existing offset (see .zoom/.locate above), just measured from the top of the panel
+   instead of the bottom of the screen, so the pair stays stacked the same way it always was.
+   Stowed or expanded, the panel isn't covering this corner (stowed: off to the side; expanded:
+   the old 82vh behaviour, where these were already out of reach) — both fall back out of this
+   rule rather than needing a second one to undo it. */
+@media (max-width:719.98px){
+  body[data-sheet="results"][data-stow="0"]:not([data-expanded="1"]) .zoom{
+    bottom:calc(var(--safe-b) + 78px + var(--sheet-half));
+  }
+  body[data-sheet="results"][data-stow="0"]:not([data-expanded="1"]) .locate{
+    bottom:calc(var(--safe-b) + 22px + var(--sheet-half));
+  }
+}
 @media (prefers-reduced-motion:reduce){
   *{transition:none!important;animation:none!important}
 }

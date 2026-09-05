@@ -693,12 +693,72 @@ function closeSheet(){
   delete document.body.dataset.sheet;
   setStow(false);
   sheetView = null;
+  sheet.dataset.expanded = "0";   // next open starts back at half height, not wherever this one ended
   if(probeMark){ map.removeLayer(probeMark); probeMark = null; }
   if(probeRing){ map.removeLayer(probeRing); probeRing = null; }
   if(probeAccLayer) probeAccLayer.clearLayers();
   writeHash();   // the pin just came off the map; take it out of the address too
 }
-document.getElementById("handle").addEventListener("click", closeSheet);
+// The handle already closed the sheet on a tap; it now also resizes it on a drag, so a
+// pointerup has to tell the two apart. A short move (under TAP_PX) is read as the tap it
+// always was. A longer one only resizes in the results view — the filters sheet sizes to
+// its own content and has no half/full state to move between — and only once it clears
+// EXPAND_PX, so a drag that falls short snaps back to whatever height it already was rather
+// than being misread as either gesture. Down (the finger moving toward the bottom of the
+// screen) expands to the panel's old full size; up returns it to half.
+const handleBtn = document.getElementById("handle");
+const EXPAND_PX = 44, TAP_PX = 8;
+let dragStartY = null, dragMoved = 0, dragActive = false;
+
+function setExpanded(on){ sheet.dataset.expanded = on ? "1" : "0"; }
+
+handleBtn.addEventListener("pointerdown", e => {
+  dragStartY = e.clientY; dragMoved = 0; dragActive = true;
+  handleBtn.setPointerCapture(e.pointerId);
+});
+handleBtn.addEventListener("pointermove", e => {
+  if(!dragActive) return;
+  dragMoved = e.clientY - dragStartY;
+});
+handleBtn.addEventListener("pointerup", () => {
+  if(!dragActive) return;
+  dragActive = false;
+  const dist = Math.abs(dragMoved);
+  if(dist < TAP_PX){ closeSheet(); return; }
+  if(sheetView === "results" && dist >= EXPAND_PX) setExpanded(dragMoved > 0);
+});
+handleBtn.addEventListener("pointercancel", () => { dragActive = false; });
+
+// The list itself reads the same swipe, so reaching for the handle first is never required.
+// It only ever means something there when the list is already scrolled to its very top: at
+// any other scroll position a downward drag is an ordinary scroll back toward the top, and
+// has to stay one, so it’s only claimed once it’s clearly headed further down than the top
+// itself allows. Touch events rather than pointer events — this is the one place that needs
+// to override a scroll the browser may already be mid-gesture on, and preventDefault on
+// touchmove is what reliably cancels that. The first DECIDE_PX of movement is left alone
+// either way, so an ordinary tap on a result row — or the very start of a genuine scroll —
+// is never mistaken for the drag. Collapsing back to half stays the handle’s job alone: the
+// matching upward drag here is indistinguishable from scrolling up to read earlier results.
+const DECIDE_PX = 10;
+let listPhase = null, listStartY = null, listMoved = 0;    // listPhase: null | "scroll" | "resize"
+
+sheetBody.addEventListener("touchstart", e => {
+  if(sheetView !== "results" || e.touches.length !== 1){ listPhase = "scroll"; return; }
+  listPhase = sheetBody.scrollTop > 0 ? "scroll" : null;   // already below the top: never ours
+  listStartY = e.touches[0].clientY;
+  listMoved = 0;
+}, {passive:true});
+sheetBody.addEventListener("touchmove", e => {
+  if(listStartY === null || e.touches.length !== 1) return;
+  const dy = e.touches[0].clientY - listStartY;
+  if(listPhase === null && Math.abs(dy) >= DECIDE_PX) listPhase = dy > 0 ? "resize" : "scroll";
+  if(listPhase === "resize"){ e.preventDefault(); listMoved = dy; }
+}, {passive:false});
+sheetBody.addEventListener("touchend", () => {
+  if(listPhase === "resize" && listMoved >= EXPAND_PX) setExpanded(true);
+  listPhase = null; listStartY = null; listMoved = 0;
+});
+sheetBody.addEventListener("touchcancel", () => { listPhase = null; listStartY = null; listMoved = 0; });
 
 document.addEventListener("keydown", e => {
   if(e.key === "Escape" && sheetView === "results" && sheet.dataset.open === "1") closeSheet();
