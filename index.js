@@ -1237,8 +1237,7 @@ function filtersHtml(){
     <span class="field-label">Base map</span>
     ${segHtml("baseRow", BASES, state.base)}
   </div>
-
-  <button class="done" id="doneBtn">Show on map</button>`;
+`;
 }
 
 function openFilters(){
@@ -1453,8 +1452,6 @@ function wireFilters(){
   const $ = id => document.getElementById(id);
 
   wireViews();
-
-  $("doneBtn").addEventListener("click", closeSheet);
 
   $("reset").addEventListener("click", () => {
     Object.assign(state, { taxon:null, tname:"", iconic:defaultIconic(), quality:defaultQuality(), d1:defaultD1(), d1auto:true, d2:"", months:defaultMonths(), unobs:"", precise:"precise", dmode:"unobserved", tierExclude:null, ssp:"" });
