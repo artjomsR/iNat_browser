@@ -1236,9 +1236,7 @@ function filtersHtml(){
   <div class="field">
     <span class="field-label">Base map</span>
     ${segHtml("baseRow", BASES, state.base)}
-  </div>
-
-  <button class="done" id="doneBtn">Show on map</button>`;
+  </div>`;
 }
 
 function openFilters(){
