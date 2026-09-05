@@ -497,7 +497,9 @@ function makeBase(kind){
       { maxNativeZoom:19, maxZoom:MAX_ZOOM, attribution:'Imagery &copy; Esri, Maxar, Earthstar Geographics &middot; ' + INAT_ATTR });
   }
   const slug = kind === "light" ? "light_all" : "dark_all";
-  return L.tileLayer(`https://{s}.basemaps.cartocdn.com/${slug}/{z}/{x}/{y}{r}.png`,
+  const key = (typeof CARTO_KEY === "string" && CARTO_KEY)
+    ? "?key=" + encodeURIComponent(CARTO_KEY) : "";
+  return L.tileLayer(`https://{s}.basemaps.cartocdn.com/${slug}/{z}/{x}/{y}{r}.png${key}`,
     { maxNativeZoom:20, maxZoom:MAX_ZOOM, subdomains:"abcd", attribution: OSM_ATTR + " &middot; " + INAT_ATTR });
 }
 
