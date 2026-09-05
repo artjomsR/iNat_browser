@@ -432,6 +432,11 @@ const ACC_STOPS = [        // [meters, hex] — log-scale interpolated between s
 const ACC_MAX_COLOR    = "#160026";  // beyond 1km, deepening toward black/purple
 const ACC_UNKNOWN_FILL = "#FFFFFF";
 const ACC_UNKNOWN_RING = "#101613";
+// Same green as --verified in the CSS (the "Research" badge in the results list), so a
+// Research Grade record reads the same way whether it's a badge in the sheet or an outline
+// on the map. Takes over the pin's outline outright — accuracy still speaks through the
+// fill colour, this only replaces the ring drawn around it.
+const RG_RING = "#6FD3A8";
 
 function hexToRgb(hex){
   const n = hex.replace("#","");
@@ -1376,8 +1381,9 @@ async function refreshAccuracyLayer(){
       const known = acc != null && isFinite(acc);
       const t = o.taxon || {};
 
-      const ring = known ? "rgba(255,255,255,.85)" : ACC_UNKNOWN_RING;
-      const halo = known ? "#FFFFFF" : ACC_UNKNOWN_RING;   // taxon glyphs need it opaque
+      const rg = o.quality_grade === "research";
+      const ring = rg ? RG_RING : (known ? "rgba(255,255,255,.85)" : ACC_UNKNOWN_RING);
+      const halo = rg ? RG_RING : (known ? "#FFFFFF" : ACC_UNKNOWN_RING);   // taxon glyphs need it opaque
       const fill = known ? accuracyColor(acc) : ACC_UNKNOWN_FILL;
       const audio = isAudioOnly(o);
 
@@ -1398,7 +1404,8 @@ async function refreshAccuracyLayer(){
       marker.obsId = o.id;                 // what pinAt opens when a tap lands on the icon
       if(!COARSE){
         marker.bindTooltip(
-          `${esc(t.preferred_common_name || t.name || "Unidentified")} — ${fmtAcc(known ? acc : null)}`,
+          `${esc(t.preferred_common_name || t.name || "Unidentified")} — ${fmtAcc(known ? acc : null)}` +
+          (rg ? " · Research Grade" : ""),
           { direction: "top", offset: [0,-4], opacity: .95 }
         );
         marker.on("click", e => {
