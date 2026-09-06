@@ -16,9 +16,9 @@
   --safe-b:env(safe-area-inset-bottom,0px);
 
   /* The results panel's starting height on the narrow layout — half the screen, so
-     the map stays visible under it until a swipe on the handle asks for more (see
-     index.js). The sheet rule and the zoom/locate float-above-list rule further down
-     both key off this one number, so it only needs changing here. */
+     the map stays visible under it until a swipe on the handle or the list asks for
+     more (see index.js). The sheet rule and the zoom/locate float-above-list rule
+     further down both key off this one number, so it only needs changing here. */
   --sheet-half:50vh;
 }
 
@@ -272,13 +272,13 @@ body[data-stow="1"] .sheet[data-open="1"]{transform:translateX(-101%);box-shadow
    always one of two fixed sizes. sheet-body's own overflow-y still scrolls a longer list
    inside whichever frame is current.
 
-   It opens at --sheet-half rather than the old flat 82vh: half the screen leaves half the
-   map showing underneath, and a swipe on the handle or the list itself (see index.js) is
-   what asks for the rest. That flag lands on body as data-expanded, alongside data-sheet
-   and data-stow, rather than on .sheet itself — the zoom/locate rule further down has to
-   read it too, and body is the nearest ancestor it shares with those two buttons. */
-body[data-sheet="results"] .sheet{height:var(--sheet-half)}
-body[data-sheet="results"][data-expanded="1"] .sheet{height:82vh}
+   On the narrow layout the panel opens at --sheet-half rather than the old flat 82vh: half
+   the screen leaves half the map showing underneath, and an upward swipe on the handle or
+   the list itself (see index.js) is what asks for the rest. Both heights live in the
+   max-width media query below, alongside the zoom/locate float, so the wide layout's own
+   card height is never undercut by a stray expanded flag. The flag itself lands on body as
+   data-expanded, beside data-sheet and data-stow, because the zoom/locate rule has to read
+   it too and body is the nearest ancestor it shares with those two buttons. */
 .handle{
   flex:0 0 auto;padding:9px 0 5px;border:0;background:none;width:100%;cursor:pointer;
   touch-action:none;   /* the drag that resizes the sheet is vertical on this element alone;
@@ -598,6 +598,8 @@ label.check{
    the old 82vh behaviour, where these were already out of reach) — both fall back out of this
    rule rather than needing a second one to undo it. */
 @media (max-width:719.98px){
+  body[data-sheet="results"] .sheet{height:var(--sheet-half)}
+  body[data-sheet="results"][data-expanded="1"] .sheet{height:82vh}
   body[data-sheet="results"][data-stow="0"]:not([data-expanded="1"]) .zoom{
     bottom:calc(var(--safe-b) + 78px + var(--sheet-half));
   }

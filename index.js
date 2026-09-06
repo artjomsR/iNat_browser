@@ -704,13 +704,17 @@ function closeSheet(){
 // always was. A longer one only resizes in the results view — the filters sheet sizes to
 // its own content and has no half/full state to move between — and only once it clears
 // EXPAND_PX, so a drag that falls short snaps back to whatever height it already was rather
-// than being misread as either gesture. Down (the finger moving toward the bottom of the
-// screen) expands to the panel's old full size; up returns it to half.
+// than being misread as either gesture. Up (the finger moving toward the top of the screen)
+// expands to the panel's old full size; down returns it to half.
 const handleBtn = document.getElementById("handle");
 const EXPAND_PX = 44, TAP_PX = 8;
 let dragStartY = null, dragMoved = 0, dragActive = false;
 
 function setExpanded(on){ document.body.dataset.expanded = on ? "1" : "0"; }
+// The resize gesture is the narrow layout's own; on the wide layout the panel is a fixed
+// card and the handle's drag means nothing, so the flag is never set there (and the CSS
+// ignores it there too — see the max-width media query).
+const isMobileLayout = () => matchMedia("(max-width:719.98px)").matches;
 
 handleBtn.addEventListener("pointerdown", e => {
   dragStartY = e.clientY; dragMoved = 0; dragActive = true;
@@ -725,25 +729,28 @@ handleBtn.addEventListener("pointerup", () => {
   dragActive = false;
   const dist = Math.abs(dragMoved);
   if(dist < TAP_PX){ closeSheet(); return; }
-  if(sheetView === "results" && dist >= EXPAND_PX) setExpanded(dragMoved > 0);
+  if(isMobileLayout() && sheetView === "results" && dist >= EXPAND_PX) setExpanded(dragMoved < 0);
 });
 handleBtn.addEventListener("pointercancel", () => { dragActive = false; });
 
 // The list itself reads the same swipe, so reaching for the handle first is never required.
 // It only ever means something there when the list is already scrolled to its very top: at
-// any other scroll position a downward drag is an ordinary scroll back toward the top, and
-// has to stay one, so it’s only claimed once it’s clearly headed further down than the top
-// itself allows. Touch events rather than pointer events — this is the one place that needs
-// to override a scroll the browser may already be mid-gesture on, and preventDefault on
-// touchmove is what reliably cancels that. The first DECIDE_PX of movement is left alone
-// either way, so an ordinary tap on a result row — or the very start of a genuine scroll —
-// is never mistaken for the drag. Collapsing back to half stays the handle’s job alone: the
-// matching upward drag here is indistinguishable from scrolling up to read earlier results.
+// any other scroll position a drag is an ordinary scroll and has to stay one. Touch events
+// rather than pointer events — this is the one place that needs to override a scroll the
+// browser may already be mid-gesture on, and preventDefault on touchmove is what reliably
+// cancels that. The first DECIDE_PX of movement is left alone either way, so an ordinary tap
+// on a result row — or the very start of a genuine scroll — is never mistaken for the drag.
+//
+// Which direction is claimed depends on the state it is leaving, so scrolling never has to
+// fight the gesture: half-open, an upward drag is the one that means "make room for more"
+// and it expands, while a downward drag there has nothing above the top to scroll to and is
+// left to the browser's own bounce; full-open, a downward drag is the one that means "put it
+// back" and it collapses, while the upward drag is ordinary scrolling again.
 const DECIDE_PX = 10;
-let listPhase = null, listStartY = null, listMoved = 0;    // listPhase: null | "scroll" | "resize"
+let listPhase = null, listStartY = null, listMoved = 0;    // listPhase: null | "scroll" | "expand" | "collapse"
 
 sheetBody.addEventListener("touchstart", e => {
-  if(sheetView !== "results" || e.touches.length !== 1){ listPhase = "scroll"; return; }
+  if(sheetView !== "results" || e.touches.length !== 1 || !isMobileLayout()){ listPhase = "scroll"; return; }
   listPhase = sheetBody.scrollTop > 0 ? "scroll" : null;   // already below the top: never ours
   listStartY = e.touches[0].clientY;
   listMoved = 0;
@@ -751,11 +758,15 @@ sheetBody.addEventListener("touchstart", e => {
 sheetBody.addEventListener("touchmove", e => {
   if(listStartY === null || e.touches.length !== 1) return;
   const dy = e.touches[0].clientY - listStartY;
-  if(listPhase === null && Math.abs(dy) >= DECIDE_PX) listPhase = dy > 0 ? "resize" : "scroll";
-  if(listPhase === "resize"){ e.preventDefault(); listMoved = dy; }
+  if(listPhase === null && Math.abs(dy) >= DECIDE_PX){
+    if(document.body.dataset.expanded !== "1") listPhase = dy < 0 ? "expand" : "scroll";
+    else listPhase = dy > 0 ? "collapse" : "scroll";
+  }
+  if(listPhase === "expand" || listPhase === "collapse"){ e.preventDefault(); listMoved = dy; }
 }, {passive:false});
 sheetBody.addEventListener("touchend", () => {
-  if(listPhase === "resize" && listMoved >= EXPAND_PX) setExpanded(true);
+  if(listPhase === "expand" && listMoved <= -EXPAND_PX) setExpanded(true);
+  else if(listPhase === "collapse" && listMoved >= EXPAND_PX) setExpanded(false);
   listPhase = null; listStartY = null; listMoved = 0;
 });
 sheetBody.addEventListener("touchcancel", () => { listPhase = null; listStartY = null; listMoved = 0; });
