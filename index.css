@@ -273,9 +273,10 @@ body[data-stow="1"] .sheet[data-open="1"]{transform:translateX(-101%);box-shadow
    inside whichever frame is current.
 
    It opens at --sheet-half rather than the old flat 82vh: half the screen leaves half the
-   map showing underneath, and a swipe on the handle (see index.js) is what asks for the
-   rest — sheet.dataset.expanded is the flag that swipe sets, read here rather than on
-   body since it belongs to the sheet's own state, not the view currently loaded into it. */
+   map showing underneath, and a swipe on the handle or the list itself (see index.js) is
+   what asks for the rest. That flag lands on body as data-expanded, alongside data-sheet
+   and data-stow, rather than on .sheet itself — the zoom/locate rule further down has to
+   read it too, and body is the nearest ancestor it shares with those two buttons. */
 body[data-sheet="results"] .sheet{height:var(--sheet-half)}
 body[data-sheet="results"][data-expanded="1"] .sheet{height:82vh}
 .handle{

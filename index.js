@@ -693,7 +693,7 @@ function closeSheet(){
   delete document.body.dataset.sheet;
   setStow(false);
   sheetView = null;
-  sheet.dataset.expanded = "0";   // next open starts back at half height, not wherever this one ended
+  document.body.dataset.expanded = "0";   // next open starts back at half height, not wherever this one ended
   if(probeMark){ map.removeLayer(probeMark); probeMark = null; }
   if(probeRing){ map.removeLayer(probeRing); probeRing = null; }
   if(probeAccLayer) probeAccLayer.clearLayers();
@@ -710,7 +710,7 @@ const handleBtn = document.getElementById("handle");
 const EXPAND_PX = 44, TAP_PX = 8;
 let dragStartY = null, dragMoved = 0, dragActive = false;
 
-function setExpanded(on){ sheet.dataset.expanded = on ? "1" : "0"; }
+function setExpanded(on){ document.body.dataset.expanded = on ? "1" : "0"; }
 
 handleBtn.addEventListener("pointerdown", e => {
   dragStartY = e.clientY; dragMoved = 0; dragActive = true;

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="index.css">
+<style>*{transition:none!important;animation:none!important}</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="zoom" id="zoom"><button type="button"></button><button type="button"></button></div>
+<button class="locate" id="locate"></button>
+<div class="sheet" id="sheet" data-open="0">
+  <button class="handle" id="handle"><span></span></button>
+  <div class="sheet-body" id="sheetBody"></div>
+</div>
+<pre id="out"></pre>
+<script>
+function read(){
+  const g = el => getComputedStyle(el);
+  const sheet = document.getElementById("sheet");
+  return {
+    w: innerWidth, h: innerHeight,
+    sheetHeight: g(sheet).height,
+    sheetMaxHeight: g(sheet).maxHeight,
+    zoomBottom: g(document.getElementById("zoom")).bottom,
+    zoomRight: g(document.getElementById("zoom")).right,
+    locateBottom: g(document.getElementById("locate")).bottom,
+    locateRight: g(document.getElementById("locate")).right,
+    bodySheet: document.body.dataset.sheet || null,
+    bodyStow: document.body.dataset.stow || null,
+    bodyExpanded: document.body.dataset.expanded || null
+  };
+}
+const R = {};
+document.body.dataset.sheet = "results";
+document.body.dataset.stow = "0";
+document.getElementById("sheet").dataset.open = "1";
+R.half = read();
+document.body.dataset.expanded = "1";
+R.expanded = read();
+document.body.dataset.expanded = "0";
+document.body.dataset.stow = "1";
+R.stowed = read();
+document.body.dataset.stow = "0";
+document.getElementById("out").textContent = JSON.stringify(R, null, 2);
+</script>
+</body>
+</html>
