@@ -795,6 +795,37 @@ function syncSheetBox(){
   ro.observe(document.body);
 }
 
+/* ---------------- iOS visual-viewport pan (safe-area top) ----------------
+   The body is position:fixed and inset:0, so the label bar and the loading spinner are
+   laid out against the *layout* viewport. iOS pans the visual viewport inside the layout
+   viewport when you scroll a nested list or dismiss the keyboard (the Dynamic Island
+   regression, and the long-standing PWA-fixed-overlay one), and when it does the visual
+   top sits below the layout top — so a bar drawn just below the layout top is painted
+   behind the notch. How far the visual top sits below the layout top is
+   visualViewport.offsetTop, normally 0, and it drives --vp-shift (see --safe-t in
+   index.css). On any browser without the bug it stays 0 and nothing moves. Re-read after
+   the viewport pans, since iOS can finish panning after the events that started it. */
+const vvp = window.visualViewport;
+let vpShift = 0;
+function syncVpShift(){
+  const off = (vvp && vvp.offsetTop > 0) ? vvp.offsetTop : 0;
+  if(off !== vpShift){
+    vpShift = off;
+    document.body.style.setProperty("--vp-shift", vpShift + "px");
+  }
+}
+if(vvp){
+  vvp.addEventListener("scroll", syncVpShift, {passive:true});
+  vvp.addEventListener("resize", syncVpShift, {passive:true});
+}
+window.addEventListener("resize", syncVpShift);
+window.addEventListener("scroll", syncVpShift, {passive:true});
+window.addEventListener("orientationchange", syncVpShift);
+document.addEventListener("focusin", syncVpShift);
+document.addEventListener("focusout", syncVpShift);
+document.addEventListener("touchend", syncVpShift, {passive:true});
+syncVpShift();
+
 const stowBtn = document.getElementById("stow");
 function setStow(on){
   document.body.dataset.stow = on ? "1" : "0";
