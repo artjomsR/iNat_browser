@@ -487,6 +487,19 @@ label.check{
 .field-label-row button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
 .field-label-row button[hidden]{display:none}
 
+/* Quick groups can run to a couple dozen chips, so Clear/Fill sit beside the label to
+   set or clear the whole row in one tap rather than working through each chip by hand.
+   Text actions rather than the round icon button above, so the shared parts of
+   .field-label-row button (circle, border, fixed size) are overridden below — this rule
+   needs to follow that one to win the tie in specificity. */
+.iconic-actions{display:flex;align-items:baseline;gap:7px;flex:0 0 auto;color:var(--rule);font-size:10px}
+.iconic-actions button{
+  width:auto;height:auto;border:0;border-radius:0;background:none;padding:0;
+  font:inherit;font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--mark);cursor:pointer;
+}
+.iconic-actions button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+
 /* taxon autocomplete */
 .ac-wrap{position:relative}
 .ac{

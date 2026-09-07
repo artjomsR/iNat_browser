@@ -1229,7 +1229,14 @@ function filtersHtml(){
   </div>
 
   <div class="field">
-    <span class="field-label">Quick groups</span>
+    <div class="field-label-row">
+      <span class="field-label">Quick groups</span>
+      <div class="iconic-actions">
+        <button type="button" id="iconicClear">Clear</button>
+        <span aria-hidden="true">|</span>
+        <button type="button" id="iconicFill">Fill</button>
+      </div>
+    </div>
     <div class="chips wrap" id="iconicRow">${ICONIC.map(([v,l]) =>
       `<button type="button" data-v="${v}" aria-pressed="${state.iconic.includes(v)}">${l}</button>`).join("")}</div>
   </div>
@@ -1621,6 +1628,28 @@ function wireFilters(){
       : [...state.iconic, v];
     b.setAttribute("aria-pressed", state.iconic.includes(v));
     if(state.iconic.length && state.taxon){
+      state.taxon = null; state.tname = "";
+      $("taxonSel").hidden = true;
+      $("taxonSel").querySelector(".s-sci").textContent = "";
+    }
+    commit();
+    if(isTierMode()) syncTierExclude().then(commit);
+  });
+
+  // Clear/Fill work the whole row in one tap instead of the reader hitting every chip by
+  // hand — same mutual-exclusion with a chosen taxon as the per-chip toggle above, since
+  // both are ways of turning the quick-groups filter on.
+  $("iconicClear").addEventListener("click", () => {
+    state.iconic = [];
+    [...$("iconicRow").children].forEach(b => b.setAttribute("aria-pressed", "false"));
+    commit();
+    if(isTierMode()) syncTierExclude().then(commit);
+  });
+
+  $("iconicFill").addEventListener("click", () => {
+    state.iconic = ICONIC.map(([v]) => v);
+    [...$("iconicRow").children].forEach(b => b.setAttribute("aria-pressed", "true"));
+    if(state.taxon){
       state.taxon = null; state.tname = "";
       $("taxonSel").hidden = true;
       $("taxonSel").querySelector(".s-sci").textContent = "";
