@@ -12,17 +12,7 @@
   --lit:"Newsreader",Georgia,"Times New Roman",serif;
 
   --peek:0px;
-  /* --safe-t is the notch's height, read off the CSS safe-area on a full-bleed
-     viewport. iOS has a regression (and a long-standing PWA one) where it pans the
-     *visual* viewport inside the layout viewport after you scroll a nested list or
-     dismiss the keyboard. The body is position:fixed, so everything inside it is
-     anchored to the LAYOUT viewport and is drawn as if the layout top were the
-     visible top — so once the visual viewport shifts up, the fixed top bar rides up
-     behind the notch. --vp-shift is how far the visual viewport's top sits below the
-     layout viewport's top (visualViewport.offsetTop, normally 0, set in index.js),
-     and it is added back so the bar slides down to sit below the notch exactly where
-     it started. On any browser without the bug it stays 0 and nothing moves. */
-  --safe-t:calc(env(safe-area-inset-top,0px) + var(--vp-shift,0px));
+  --safe-t:env(safe-area-inset-top,0px);
   --safe-b:env(safe-area-inset-bottom,0px);
 
   /* The results panel's starting height on the narrow layout — half the screen, so

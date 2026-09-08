@@ -743,11 +743,12 @@ handleBtn.addEventListener("pointercancel", () => { dragActive = false; });
 //
 // Which direction is claimed depends on the state it is leaving, so scrolling never has to
 // fight the gesture: half-open, an upward drag is the one that means "make room for more"
-// and it expands, while a downward drag there has nothing above the top to scroll to and is
-// left to the browser's own bounce; full-open, a downward drag is the one that means "put it
-// back" and it collapses, while the upward drag is ordinary scrolling again.
+// and it expands, while a downward drag there has nothing above the top to scroll to and
+// nothing below it either — it isn't ours and it isn't a scroll, so it's swallowed outright
+// rather than left for the browser's own bounce; full-open, a downward drag is the one that
+// means "put it back" and it collapses, while the upward drag is ordinary scrolling again.
 const DECIDE_PX = 10;
-let listPhase = null, listStartY = null, listMoved = 0;    // listPhase: null | "scroll" | "expand" | "collapse"
+let listPhase = null, listStartY = null, listMoved = 0;    // listPhase: null | "scroll" | "expand" | "collapse" | "blocked"
 
 sheetBody.addEventListener("touchstart", e => {
   if(sheetView !== "results" || e.touches.length !== 1 || !isMobileLayout()){ listPhase = "scroll"; return; }
@@ -759,10 +760,10 @@ sheetBody.addEventListener("touchmove", e => {
   if(listStartY === null || e.touches.length !== 1) return;
   const dy = e.touches[0].clientY - listStartY;
   if(listPhase === null && Math.abs(dy) >= DECIDE_PX){
-    if(document.body.dataset.expanded !== "1") listPhase = dy < 0 ? "expand" : "scroll";
+    if(document.body.dataset.expanded !== "1") listPhase = dy < 0 ? "expand" : "blocked";
     else listPhase = dy > 0 ? "collapse" : "scroll";
   }
-  if(listPhase === "expand" || listPhase === "collapse"){ e.preventDefault(); listMoved = dy; }
+  if(listPhase === "expand" || listPhase === "collapse" || listPhase === "blocked"){ e.preventDefault(); listMoved = dy; }
 }, {passive:false});
 sheetBody.addEventListener("touchend", () => {
   if(listPhase === "expand" && listMoved <= -EXPAND_PX) setExpanded(true);
@@ -794,37 +795,6 @@ function syncSheetBox(){
   ro.observe(sheet);
   ro.observe(document.body);
 }
-
-/* ---------------- iOS visual-viewport pan (safe-area top) ----------------
-   The body is position:fixed and inset:0, so the label bar and the loading spinner are
-   laid out against the *layout* viewport. iOS pans the visual viewport inside the layout
-   viewport when you scroll a nested list or dismiss the keyboard (the Dynamic Island
-   regression, and the long-standing PWA-fixed-overlay one), and when it does the visual
-   top sits below the layout top — so a bar drawn just below the layout top is painted
-   behind the notch. How far the visual top sits below the layout top is
-   visualViewport.offsetTop, normally 0, and it drives --vp-shift (see --safe-t in
-   index.css). On any browser without the bug it stays 0 and nothing moves. Re-read after
-   the viewport pans, since iOS can finish panning after the events that started it. */
-const vvp = window.visualViewport;
-let vpShift = 0;
-function syncVpShift(){
-  const off = (vvp && vvp.offsetTop > 0) ? vvp.offsetTop : 0;
-  if(off !== vpShift){
-    vpShift = off;
-    document.body.style.setProperty("--vp-shift", vpShift + "px");
-  }
-}
-if(vvp){
-  vvp.addEventListener("scroll", syncVpShift, {passive:true});
-  vvp.addEventListener("resize", syncVpShift, {passive:true});
-}
-window.addEventListener("resize", syncVpShift);
-window.addEventListener("scroll", syncVpShift, {passive:true});
-window.addEventListener("orientationchange", syncVpShift);
-document.addEventListener("focusin", syncVpShift);
-document.addEventListener("focusout", syncVpShift);
-document.addEventListener("touchend", syncVpShift, {passive:true});
-syncVpShift();
 
 const stowBtn = document.getElementById("stow");
 function setStow(on){
