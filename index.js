@@ -832,6 +832,26 @@ function outAttrs(url){
   return `href="${esc(url)}"` + (STANDALONE ? "" : ` target="_blank" rel="noopener"`);
 }
 
+// Every hop through openOut/outAttrs above becomes a real navigation once STANDALONE
+// commits it, and nothing afterwards ever disturbs that history entry: writeHash always
+// replaces the current one rather than pushing past it (see writeHash), so the page we
+// left for -- iNat, GMaps, Easily Missed -- keeps sitting one "forward" away for as long
+// as the app stays open. A home-screen app has no way to turn off the browser's own
+// edge-swipe back/forward gesture, and a map that fills the screen edge to edge makes
+// that gesture easy to trigger by accident while simply panning -- which is what silently
+// resurrects the old page later: not a stale click replaying, but an ordinary forward
+// navigation landing on a "forward" entry that was never cleared.
+//
+// pageshow fires with persisted=true the moment a reader lands back on this page rather
+// than loading it fresh -- exactly when that stale entry is still sitting ahead of us.
+// Pushing a fresh entry for the address we're already on discards everything beyond it,
+// so there is nothing left for a later swipe to resurrect.
+if(STANDALONE){
+  window.addEventListener("pageshow", e => {
+    if(e.persisted) history.pushState(null, "", location.href);
+  });
+}
+
 // Marks a results-row action as a hop off the map — On iNat, Missed, GMaps — so the reader
 // knows before tapping that it leaves this page rather than opening one of the app's own
 // views (Species here stays plain). Drawn in currentColor so it always matches the link.
