@@ -375,6 +375,13 @@ function taxonAreaUrl(taxonId){
   return "https://www.inaturalist.org/observations?" + p.toString();
 }
 
+// One taxon's own page on iNat — where a row's photo and name now point, rather than at
+// its observations. `t.id` throughout, same as the row's other links, so a split row's
+// picture and name open the subspecies' own page rather than the species it was carved out of.
+function taxonPageUrl(taxonId){
+  return "https://www.inaturalist.org/taxa/" + taxonId;
+}
+
 // The whole area on iNat's own species view — the page this tab is modelled on.
 function areaSpeciesUrl(){
   const p = new URLSearchParams({ view: "species", verifiable: "any" });
@@ -1454,6 +1461,10 @@ function rowHtml(x, i, user, mark){
   // is now read one race at a time, so a green tick on a subspecies means this reader has
   // that subspecies and the link cannot come back empty under it.
   const photo = t.default_photo && (t.default_photo.medium_url || t.default_photo.square_url);
+  // The picture and the name open the taxon's own page on iNat, not its observations —
+  // `url` above still carries the observation links (the tick's own view, "View my",
+  // the count in the meta line), which are legitimately about what was recorded.
+  const page = taxonPageUrl(t.id);
   // Plenty of taxa have no English name; those lead with the binomial instead of
   // printing it twice, set in the same italic serif the second line would have used.
   const common = t.preferred_common_name || "";
@@ -1487,12 +1498,12 @@ function rowHtml(x, i, user, mark){
       data-taxo="${esc(taxoKey(t))}" data-taxon="${t.id}" data-seen="${mark ? 1 : 0}"
       data-standing="${esc(mark || "")}"${bird ? ` data-sci="${esc(sci)}"` : ""}>
     <span class="num">${i + 1}</span>
-    <a class="shot" href="${esc(url)}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">${
+    <a class="shot" href="${esc(page)}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">${
       photo ? `<img src="${esc(photo)}" alt="" loading="lazy">`
             : `<span class="nophoto">&#9673;</span>`}</a>
     <span class="strip" aria-hidden="true" hidden></span>
     <span class="body">
-      <span class="common${common ? "" : " as-sci"}"><a href="${esc(url)}" target="_blank" rel="noopener">${
+      <span class="common${common ? "" : " as-sci"}"><a href="${esc(page)}" target="_blank" rel="noopener">${
         esc(common || t.name || "Unnamed")}</a>${tick}${ebird}</span>
       ${common && t.name ? `<span class="sci">${esc(t.name)}</span>` : ""}
       <span class="meta"><a class="viewMy" href="${esc(url)}" target="_blank" rel="noopener">${x.count} observations</a>${viewMy}</span>
