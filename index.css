@@ -12,7 +12,20 @@
   --lit:"Newsreader",Georgia,"Times New Roman",serif;
 
   --peek:0px;
-  --safe-t:env(safe-area-inset-top,0px);
+  /* --safe-t is the notch's height, read off the CSS safe-area on a full-bleed viewport.
+     iOS has a regression (and a long-standing PWA one) where it pans the *visual* viewport
+     inside the layout viewport after you scroll a nested list, dismiss the keyboard, or come
+     back from another page. The body is position:fixed, so everything inside it is anchored
+     to the LAYOUT viewport and is drawn as if the layout top were the visible top — so once
+     the visual viewport shifts up, the fixed top bar rides up behind the notch. Two things
+     put it back (both driven from index.js):
+       --vp-shift   how far the visual viewport's top actually sits above the layout top,
+                    measured off a fixed probe (the ground truth for where a fixed element
+                    really renders) — normally 0, so nothing moves on a healthy browser.
+       --safe-t-base the highest safe-area top ever measured. iOS can float env() back down
+                    to 0 after navigating away and back, and max() lifts it back so the bar
+                    never rides up behind the notch; it only ever raises the value. */
+  --safe-t:calc(max(env(safe-area-inset-top,0px), var(--safe-t-base,0px)) + var(--vp-shift,0px));
   --safe-b:env(safe-area-inset-bottom,0px);
 
   /* The results panel's starting height on the narrow layout — half the screen, so

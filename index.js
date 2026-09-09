@@ -796,6 +796,82 @@ function syncSheetBox(){
   ro.observe(document.body);
 }
 
+/* ---------------- iOS visual-viewport pan (safe-area top) ----------------
+   The body is position:fixed and inset:0, so the label bar and the loading spinner are laid
+   out against the *layout* viewport. iOS pans the *visual* viewport inside the layout
+   viewport after you scroll a nested list, dismiss the keyboard, or come back from another
+   page (the Dynamic Island regression, and the long-standing PWA fixed-overlay one). When it
+   pans, the visible top sits below the layout top, so a bar drawn just below the layout top
+   is painted behind the notch.
+
+   The pan is measured with a fixed probe. getBoundingClientRect is the ground truth for where
+   a fixed element actually renders on the screen, where visualViewport.offsetTop can report a
+   mixed coordinate system — so read the probe, not offsetTop. The safe-area height itself can
+   also go stale (env() floats back to 0 after that navigation), so the highest env() value
+   ever measured is kept as --safe-t-base; max() means it can only ever hold the bar down, never
+   push it up past the real notch. On a healthy browser the probe sits at 0, env() is stable,
+   and nothing moves. Re-read after the viewport settles, since iOS can finish panning after
+   the events that started it. */
+{
+  const vpProbe = document.createElement("div");
+  vpProbe.style.cssText =
+    "position:fixed;top:0;left:0;width:0;height:0;margin:0;border:0;padding:0;visibility:hidden;pointer-events:none";
+  document.body.appendChild(vpProbe);
+  // The raw safe-area height, read off an element whose padding-top env() fills: a plain
+  // (content-box) zero-height box with that padding has offsetHeight equal to the inset.
+  const notch = document.createElement("div");
+  notch.style.cssText =
+    "position:absolute;top:0;left:0;width:0;height:0;margin:0;border:0;box-sizing:content-box;visibility:hidden;pointer-events:none";
+  notch.style.paddingTop = "env(safe-area-inset-top, 0px)";
+  document.body.appendChild(notch);
+
+  const KEY = "inat.map.safet";       // highest safe-area top ever measured
+  let base = 0;
+  try{ base = Number(localStorage.getItem(KEY)) || 0; }catch(e){}
+  let lastShift = 0;
+  const vvp = window.visualViewport;
+
+  function syncVpShift(){
+    // Pan: a fixed top:0 element sits at the visible top normally; if the viewport panned up
+    // it renders above the visible top, so its rect.top is negative. mobile WebKit reports
+    // offsetTop and the rect against mixed coordinate systems, so take whichever signal says
+    // the viewport is panned and shift the bar back down.
+    const pan = Math.max(0,
+      -vpProbe.getBoundingClientRect().top,
+      (vvp && vvp.offsetTop > 0) ? vvp.offsetTop : 0);
+    const envTop = notch.offsetHeight || 0;
+    if(envTop > base){
+      base = envTop;
+      try{ localStorage.setItem(KEY, String(base)); }catch(e){}
+      document.documentElement.style.setProperty("--safe-t-base", base + "px");
+    }
+    const shift = Number.isFinite(pan) ? pan : 0;
+    if(shift !== lastShift){
+      lastShift = shift;
+      document.body.style.setProperty("--vp-shift", shift + "px");
+    }
+  }
+
+  // iOS can finish settling the viewport after the events that started the change.
+  const vpSettle = () => { syncVpShift(); requestAnimationFrame(syncVpShift); };
+  if(vvp){
+    vvp.addEventListener("scroll", syncVpShift, {passive:true});
+    vvp.addEventListener("resize", syncVpShift, {passive:true});
+  }
+  window.addEventListener("resize", syncVpShift);
+  window.addEventListener("orientationchange", syncVpShift);
+  window.addEventListener("scroll", syncVpShift, {passive:true});
+  // Coming back from another page (species.html) or the app being re-shown is exactly when
+  // iOS settles the viewport — re-read then, and once more so it has a frame to finish in.
+  window.addEventListener("pageshow", vpSettle);
+  window.addEventListener("focus", vpSettle);
+  document.addEventListener("visibilitychange", vpSettle);
+  document.addEventListener("focusin", vpSettle);
+  document.addEventListener("focusout", vpSettle);
+  document.addEventListener("touchend", vpSettle, {passive:true});
+  syncVpShift();
+}
+
 const stowBtn = document.getElementById("stow");
 function setStow(on){
   document.body.dataset.stow = on ? "1" : "0";
