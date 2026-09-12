@@ -894,7 +894,23 @@ stowBtn.addEventListener("click", () => setStow(document.body.dataset.stow !== "
 const STANDALONE = window.navigator.standalone === true ||
   (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
 
+// A rolling breadcrumb, kept in localStorage rather than a variable so it survives however
+// long "for a while" turns out to mean and is still there after a real reload. If the old
+// redirect fires again, __navlog() from a console (a desktop tab on the same page, or
+// Safari's remote inspector) shows exactly what led up to it -- above all whether the
+// pageshow just before it reports navigation type "back_forward", which is the one fact
+// that actually confirms or rules out history replay instead of guessing again from outside.
+function logNav(tag, extra){
+  try{
+    const log = JSON.parse(localStorage.getItem("navlog") || "[]");
+    log.push(Object.assign({ t: Date.now(), tag }, extra));
+    localStorage.setItem("navlog", JSON.stringify(log.slice(-20)));
+  }catch(err){ /* storage unavailable in this context: nothing to fall back to */ }
+}
+window.__navlog = () => JSON.parse(localStorage.getItem("navlog") || "[]");
+
 function openOut(url){
+  logNav("openOut", { url, standalone: STANDALONE });
   if(STANDALONE){ location.href = url; return true; }
   return !!window.open(url, "_blank", "noopener");
 }
@@ -914,19 +930,24 @@ function outAttrs(url){
 // left for -- iNat, GMaps, Easily Missed -- keeps sitting one "forward" away for as long
 // as the app stays open. A home-screen app has no way to turn off the browser's own
 // edge-swipe back/forward gesture, and a map that fills the screen edge to edge makes
-// that gesture easy to trigger by accident while simply panning -- which is what silently
-// resurrects the old page later: not a stale click replaying, but an ordinary forward
-// navigation landing on a "forward" entry that was never cleared.
+// that gesture easy to trigger by accident while simply panning.
 //
-// pageshow fires with persisted=true the moment a reader lands back on this page rather
-// than loading it fresh -- exactly when that stale entry is still sitting ahead of us.
-// Pushing a fresh entry for the address we're already on discards everything beyond it,
-// so there is nothing left for a later swipe to resurrect.
-if(STANDALONE){
-  window.addEventListener("pageshow", e => {
-    if(e.persisted) history.pushState(null, "", location.href);
+// The first attempt at this only pushed a fresh history entry when pageshow reported
+// persisted=true -- a cached restore. That leaves a gap: if the return from iNat/GMaps is
+// a fresh reload rather than a cache restore, persisted is false, the old guard skipped the
+// push, and the stale "forward" entry survived untouched. pageshow fires either way, so the
+// push now runs unconditionally on it -- a harmless no-op beyond discarding whatever, if
+// anything, was still sitting ahead of us. The setTimeout defers it a tick past the event
+// itself, since a history mutation made synchronously inside pageshow has been unreliable
+// on some WebKit versions right after a cache restore.
+window.addEventListener("pageshow", e => {
+  logNav("pageshow", {
+    persisted: e.persisted,
+    navType: performance.getEntriesByType("navigation").at(-1)?.type,
+    referrer: document.referrer
   });
-}
+  if(STANDALONE) setTimeout(() => history.pushState(null, "", location.href), 0);
+});
 
 // Marks a results-row action as a hop off the map — On iNat, Missed, GMaps — so the reader
 // knows before tapping that it leaves this page rather than opening one of the app's own
@@ -1412,7 +1433,8 @@ function filtersHtml(){
     <span class="field-label">Base map</span>
     ${segHtml("baseRow", BASES, state.base)}
   </div>
-`;
+
+`;
 }
 
 function openFilters(){
