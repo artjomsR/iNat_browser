@@ -118,6 +118,12 @@ document.body.classList.toggle('byobs', byobs);
 // default (`Aves` on the birds shelf) needs to know a taxon is standing in for it already.
 var taxon = view === 'highlights' ? '' : (qs.get('taxon') || '').trim();
 var tname = view === 'highlights' ? '' : (qs.get('tname') || '').trim();
+// The rank the picked taxon sits at -- genus, species, whatever grain -- shown in brackets
+// beside its name in the chip, the same bracketed tag the species report floats in its own
+// taxon field. Carried in the address alongside taxon/tname so a shared link says the same
+// thing back; a link that arrives with a taxon but no rank (an older link, or one built by
+// hand) simply shows no tag until the parent lookup below fills it in.
+var trank = view === 'highlights' ? '' : (qs.get('trank') || '').trim();
 // Narrows the shelf to a set of iconic taxa; meaningless on the tagged shelf, so it is dropped
 // there. Starts however each shelf is already scoped: birds is Aves and nothing else, since
 // that's what iNaturalist was asked for; all has no scope of its own, so every group starts
@@ -164,7 +170,11 @@ var taxonInput     = document.getElementById('taxonInput');
 var taxonAc        = document.getElementById('taxonAc');
 var taxonSel       = document.getElementById('taxonSel');
 var taxonSelName   = document.getElementById('taxonSelName');
+var taxonRankTag   = document.getElementById('taxonRankTag');
+var taxonActions   = document.getElementById('taxonActions');
 var taxonParentBtn = document.getElementById('taxonParent');
+var taxonInatLink  = document.getElementById('taxonInat');
+var taxonWikiLink  = document.getElementById('taxonWiki');
 var taxonClear     = document.getElementById('taxonClear');
 var narrowRow = document.getElementById('narrow');
 var dateFromEl = document.getElementById('dateFrom');
@@ -184,7 +194,9 @@ var focusEl  = document.getElementById('focus');
 var lo       = document.getElementById('lo');
 var hi       = document.getElementById('hi');
 var counter  = document.getElementById('counter');
+var binomial = document.getElementById('binomial');
 var binomialName = document.getElementById('binomialName');
+var binomialSci = document.getElementById('binomialSci');
 var rgBadge = document.getElementById('rgBadge');
 var idCountNum = document.getElementById('idCountNum');
 var idCount = document.getElementById('idCount');
@@ -1008,9 +1020,16 @@ function buildTaxonSearch() {
   if (taxon) {
     taxonSel.hidden = false;
     taxonSelName.textContent = tname || ('Taxon ' + taxon);
+    setRankTag(trank);
     taxaFilter.hidden = true;
     loadTaxonParent();
   }
+}
+
+// The rank tag beside the chip's name, bracketed the same way the species report's own floats
+// in its taxon field -- empty (and so invisible; see the CSS) until a rank is actually known.
+function setRankTag(r) {
+  taxonRankTag.textContent = r ? '(' + r + ')' : '';
 }
 
 // The same quick groups as the species report's, built once — never hunted for in the data,
@@ -1113,7 +1132,7 @@ taxonInput.addEventListener('input', function () {
         taxonActive = -1;
         taxonAc.innerHTML = results.map(function (t) {
           var thumb = t.default_photo && t.default_photo.square_url;
-          return '<button type="button" data-id="' + t.id + '" data-name="' + esc(t.name) + '">' +
+          return '<button type="button" data-id="' + t.id + '" data-name="' + esc(t.name) + '" data-rank="' + esc(t.rank || '') + '">' +
             (thumb ? '<img src="' + esc(thumb) + '" alt="" loading="lazy">' : '<span class="ac-nophoto"></span>') +
             '<span class="ac-name">' +
               '<span class="ac-common">' + esc(t.preferred_common_name || t.name) + '</span>' +
@@ -1159,9 +1178,10 @@ document.addEventListener('click', function (e) {
 // picking a shelf takes, and for the same reason (see the doc comment up top). The quick
 // groups are dropped along with it: they'd otherwise carry over from whichever shelf this was
 // picked on, narrowing a set that's already down to one taxon.
-function pickTaxon(id, name) {
+function pickTaxon(id, name, rank) {
   qs.set('taxon', id);
   qs.set('tname', name);
+  if (rank) qs.set('trank', rank); else qs.delete('trank');
   qs.delete('iconic');
   flush();
   location.search = qs.toString();
@@ -1169,12 +1189,13 @@ function pickTaxon(id, name) {
 
 taxonAc.addEventListener('click', function (e) {
   var b = e.target.closest('button[data-id]');
-  if (b) pickTaxon(b.dataset.id, b.dataset.name);
+  if (b) pickTaxon(b.dataset.id, b.dataset.name, b.dataset.rank);
 });
 
 taxonClear.addEventListener('click', function () {
   qs.delete('taxon');
   qs.delete('tname');
+  qs.delete('trank');
   flush();
   location.search = qs.toString();
 });
@@ -1191,18 +1212,41 @@ taxonClear.addEventListener('click', function () {
    button, a session here only ever climbs one chip's worth of tree before the page reloads
    out from under it, so there is nothing to save an ask by keeping. */
 
-var taxonParent = null;   // {id, name} once the lookup lands; the button stays disabled til then
+var taxonParent = null;   // {id, name, rank} once the lookup lands; the button stays disabled til then
+
+// The other two actions beside the parent button -- open the same taxon on iNaturalist or
+// Wikipedia. iNat's own taxon pages resolve from the bare id, so that one needs no lookup and
+// is right immediately. A Wikipedia search on the name stands in the same way until the fetch
+// below lands, the same trade the chip's own name already makes showing `tname` before a
+// lookup has confirmed it live.
+function primeTaxonLinks() {
+  taxonInatLink.href = 'https://www.inaturalist.org/taxa/' + taxon;
+  taxonWikiLink.href = 'https://en.wikipedia.org/w/index.php?search=' +
+    encodeURIComponent(tname || taxon);
+}
 
 function loadTaxonParent() {
+  taxonActions.hidden = false;
   taxonParent = null;
   taxonParentBtn.disabled = true;
   taxonParentBtn.title = 'Set the taxon to its parent';
   taxonParentBtn.setAttribute('aria-label', taxonParentBtn.title);
+  primeTaxonLinks();
   fetch('https://api.inaturalist.org/v1/taxa/' + taxon)
     .then(function (res) { return res.ok ? res.json() : null; })
     .then(function (d) {
       var t = d && d.results && d.results[0];
       if (!t) return;
+      if (t.wikipedia_url) taxonWikiLink.href = t.wikipedia_url;
+      // The address may have arrived without a rank (an older link, or one built by hand) --
+      // this lookup already has it, so the bracketed tag gets filled in from it rather than
+      // staying blank for the rest of the visit.
+      if (!trank && t.rank) {
+        trank = t.rank;
+        setRankTag(trank);
+        qs.set('trank', trank);
+        addressNow();
+      }
       var anc = t.ancestors || [];
       var parent = anc.length ? anc[anc.length - 1] : null;
       if (!parent) {
@@ -1210,7 +1254,7 @@ function loadTaxonParent() {
         taxonParentBtn.setAttribute('aria-label', taxonParentBtn.title);
         return;
       }
-      taxonParent = { id: parent.id, name: parent.name };
+      taxonParent = { id: parent.id, name: parent.name, rank: parent.rank };
       taxonParentBtn.disabled = false;
       // Icon-only, so the title carries the actual destination -- and with it the accessible
       // name too, since there's no visible text left on the button to fall back on.
@@ -1218,14 +1262,15 @@ function loadTaxonParent() {
       taxonParentBtn.title = label;
       taxonParentBtn.setAttribute('aria-label', label);
     })
-    // A failed ask just leaves the button disabled -- the chip's own name and its clear
-    // button still work either way, so there is nothing else here to unwind.
+    // A failed ask just leaves the parent button disabled -- the iNat link is already right,
+    // the Wikipedia one stays a working search rather than the exact page, and the chip's own
+    // name and clear button still work either way, so there is nothing else here to unwind.
     .catch(function () {});
 }
 
 taxonParentBtn.addEventListener('click', function () {
   if (!taxonParent) return;
-  pickTaxon(taxonParent.id, taxonParent.name);
+  pickTaxon(taxonParent.id, taxonParent.name, taxonParent.rank);
 });
 
 /* ---------------- place search ----------------
@@ -1471,7 +1516,13 @@ function showPhoto(i) {
   hi.src = sized(photo.url, 'large');
 
   counter.textContent = (i + 1) + ' / ' + photos.length;
-  binomialName.textContent = photo.name || photo.common || 'Unidentified';
+  // Common name as the headline, scientific name underneath when there is one to spare — the
+  // same reading obsHead() gives a row in the by-observation view, so a photo looks like the
+  // same photo whether it's met one at a time here or lined up in that list.
+  binomial.classList.toggle('sci', !photo.common);
+  binomialName.textContent = photo.common || photo.name || 'Unidentified';
+  binomialSci.hidden = !(photo.common && photo.name);
+  binomialSci.textContent = photo.common && photo.name ? photo.name : '';
 
   rgBadge.hidden = photo.qualityGrade !== 'research';
   idCountNum.textContent = String(photo.idCount);
@@ -1479,7 +1530,6 @@ function showPhoto(i) {
 
   var obsUrl = 'https://www.inaturalist.org/observations/' + photo.obsId;
   var parts = [];
-  if (photo.common && photo.name) parts.push(esc(photo.common));
   if (photo.date) parts.push(prettyDate(photo.date));
   parts.push('<a href="' + obsUrl + '" target="_blank" rel="noopener">View on iNaturalist</a>');
   parts.push('<button type="button" class="copy" data-url="' + esc(shareLink()) + '">Copy Photo📋</button>');

@@ -165,12 +165,19 @@ body.loose-header header {
    of the answer already in hand. */
 
 .taxonSearch {
-  position: relative;
   max-width: var(--page);
   margin: 11px auto 0;
 }
 
 .taxonSearch[hidden] { display: none; }
+
+/* The field stands alone now, full width; the picked chip and the (hidden until a taxon is
+   set) row of actions beside it share a second flex row below it -- .pickedRow splitting the
+   chip (grown) from the actions (sized to their own content) the same way .taxonBar used to
+   split the field from them. */
+.taxonField { position: relative; }
+
+.pickedRow { display: flex; align-items: flex-start; gap: 7px; }
 
 .taxonSearch input {
   display: block;
@@ -190,7 +197,8 @@ body.loose-header header {
 
 /* The open list floats over whatever sits below it rather than pushing the page down — a row
    picked from here reloads the shelf regardless, so there is nothing under it worth keeping
-   in place while it's open. */
+   in place while it's open. Anchored to .taxonField rather than the row as a whole, so it
+   still matches the field's own width and leaves the actions beside it alone. */
 .ac {
   position: absolute;
   left: 0;
@@ -279,12 +287,15 @@ body.loose-header header {
 
 /* The picked taxon, sitting under the field it came from — the one chip naming what the
    shelf is now scoped to, and the one way back out of it. The field stays live above it
-   rather than being swapped out, so changing the pick is a fresh search, not a clear-then-type. */
+   rather than being swapped out, so changing the pick is a fresh search, not a clear-then-type.
+   Sits in .pickedRow alongside the three actions to its right; flex:1 1 auto so it takes
+   whatever room those leave rather than the row's width being split evenly. */
 .picked {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
   padding: 7px 10px;
   border: 1px solid var(--hair);
   border-radius: 4px;
@@ -295,23 +306,66 @@ body.loose-header header {
 }
 
 .picked[hidden] { display: none; }
+.pickedRow { margin-top: 8px; }
 
-/* The parent button and the clear button share the chip's right edge -- the auto margin
-   moves to whichever of the two is first in the row, so the pair stays flush right together
-   rather than the parent button sitting wherever the name's own length happens to end. */
-#taxonParent {
-  margin-left: auto;
+/* The rank the picked taxon sits at, bracketed beside its name -- genus, species, whatever
+   grain -- the same bracketed tag the species report floats inside its own taxon field.
+   Sitting inline in the chip here instead, since the chip (not the input) is where this
+   page already names the current pick. Empty and so invisible (see :not(:empty)) until a
+   rank is actually known. */
+.t-rank-tag {
+  font-family: var(--sans);
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--chrome-dim);
+  white-space: nowrap;
+}
+.t-rank-tag:empty { display: none; }
+
+/* The name's own clear sits flush right in the chip. */
+#taxonClear { margin-left: auto; }
+
+/* Three actions to the right of the picked chip -- climb to the parent, or open the same
+   taxon elsewhere -- styled as the species report styles its own .taxon-actions row: boxed
+   icon buttons rather than bare glyphs, so the two pages read as the same control wherever a
+   taxon turns up. A flex sibling of .picked in .pickedRow, sized to its own content so the
+   chip takes the rest of the row. */
+.taxon-actions {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.taxon-actions[hidden] { display: none; }
+
+/* All three are icon-only -- the parent button's actual destination (which taxon) rides in
+   its title/aria-label rather than on its face, updated live once the lookup resolves. Padding
+   is tuned so the box lines up with the chip's own height beside it. */
+.taxon-actions button, .taxon-actions a {
   display: flex;
   align-items: center;
-  border: 0;
-  background: transparent;
-  padding: 2px;
-  color: var(--chrome);
+  justify-content: center;
+  padding: 8px 10px;
   cursor: pointer;
+  text-decoration: none;
+  font: inherit;
+  color: var(--chrome);
+  background: var(--ink-deep);
+  border: 1px solid var(--hair);
+  border-radius: 4px;
 }
-#taxonParent svg { width: 14px; height: 14px; display: block; }
-#taxonParent:hover { color: var(--paper); }
-#taxonParent:disabled { color: var(--chrome-dim); cursor: default; }
+.taxon-actions button svg, .taxon-actions a svg { width: 14px; height: 14px; display: block; }
+.taxon-actions button:hover, .taxon-actions a:hover { color: var(--paper); border-color: var(--chrome); }
+.taxon-actions button:focus-visible, .taxon-actions a:focus-visible {
+  outline: 2px solid var(--chrome);
+  outline-offset: 2px;
+}
+/* The parent button has nowhere left to climb once the lookup lands on the root of the tree,
+   or before it has landed at all -- disabled rather than hidden, so the row never changes
+   width under the two links either side of it. */
+.taxon-actions button:disabled { opacity: .4; cursor: default; color: var(--chrome-dim); border-color: var(--hair); }
 
 #taxonClear {
   border: 0;
@@ -963,9 +1017,13 @@ body.focused .rail { display: none; }
   pointer-events: none;
 }
 
+/* A common name reads as a name, in the page's reading face; a scientific name standing in
+   for a missing common one takes the serif italics the rest of the page reserves for
+   science — the same split obs-name/obs-name.sci make in the by-observation row, so the two
+   readings agree on which face means which kind of name. */
 .binomial {
-  font-family: var(--serif);
-  font-style: italic;
+  font-family: var(--sans);
+  font-style: normal;
   font-size: 19px;
   line-height: 1.25;
   color: var(--paper);
@@ -973,6 +1031,24 @@ body.focused .rail { display: none; }
   align-items: center;
   gap: 8px;
 }
+
+.binomial.sci #binomialName {
+  font-family: var(--serif);
+  font-style: italic;
+}
+
+/* The scientific name, once a common one has already taken the headline above — same face
+   and voice as the by-observation row's own .obs-sci, sized up to sit under a 19px title
+   instead of a 13px one. Present only when there is a common name to sit under; a photo with
+   no common name puts its scientific name in the headline instead and never shows this. */
+.binomial-sci {
+  margin-top: 1px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--chrome);
+}
+.binomial-sci[hidden] { display: none; }
 
 /* iNaturalist's own Research Grade badge — the one grade worth borrowing their colour for,
    since it's the one a viewer already recognises on sight. Needs ID and Casual get no badge
