@@ -196,7 +196,6 @@ var hi       = document.getElementById('hi');
 var counter  = document.getElementById('counter');
 var binomial = document.getElementById('binomial');
 var binomialName = document.getElementById('binomialName');
-var binomialSci = document.getElementById('binomialSci');
 var rgBadge = document.getElementById('rgBadge');
 var idCountNum = document.getElementById('idCountNum');
 var idCount = document.getElementById('idCount');
@@ -1516,13 +1515,11 @@ function showPhoto(i) {
   hi.src = sized(photo.url, 'large');
 
   counter.textContent = (i + 1) + ' / ' + photos.length;
-  // Common name as the headline, scientific name underneath when there is one to spare — the
-  // same reading obsHead() gives a row in the by-observation view, so a photo looks like the
-  // same photo whether it's met one at a time here or lined up in that list.
+  // Common name as the headline, scientific name folded into the meta line below when there
+  // is one to spare — the same reading obsHead() gives a row in the by-observation view, so a
+  // photo looks like the same photo whether it's met one at a time here or lined up in that list.
   binomial.classList.toggle('sci', !photo.common);
   binomialName.textContent = photo.common || photo.name || 'Unidentified';
-  binomialSci.hidden = !(photo.common && photo.name);
-  binomialSci.textContent = photo.common && photo.name ? photo.name : '';
 
   rgBadge.hidden = photo.qualityGrade !== 'research';
   idCountNum.textContent = String(photo.idCount);
@@ -1530,6 +1527,7 @@ function showPhoto(i) {
 
   var obsUrl = 'https://www.inaturalist.org/observations/' + photo.obsId;
   var parts = [];
+  if (photo.common && photo.name) parts.push('<span class="sci">' + esc(photo.name) + '</span>');
   if (photo.date) parts.push(prettyDate(photo.date));
   parts.push('<a href="' + obsUrl + '" target="_blank" rel="noopener">View on iNaturalist</a>');
   parts.push('<button type="button" class="copy" data-url="' + esc(shareLink()) + '">Copy Photo📋</button>');

@@ -1037,19 +1037,6 @@ body.focused .rail { display: none; }
   font-style: italic;
 }
 
-/* The scientific name, once a common one has already taken the headline above — same face
-   and voice as the by-observation row's own .obs-sci, sized up to sit under a 19px title
-   instead of a 13px one. Present only when there is a common name to sit under; a photo with
-   no common name puts its scientific name in the headline instead and never shows this. */
-.binomial-sci {
-  margin-top: 1px;
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: 14px;
-  color: var(--chrome);
-}
-.binomial-sci[hidden] { display: none; }
-
 /* iNaturalist's own Research Grade badge — the one grade worth borrowing their colour for,
    since it's the one a viewer already recognises on sight. Needs ID and Casual get no badge
    of their own; the identification count beside it covers them without new iconography. */
@@ -1088,6 +1075,20 @@ body.focused .rail { display: none; }
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--chrome);
+}
+
+/* The scientific name, once a common one has already taken the headline above, rides in this
+   same line with the date and links rather than a line of its own — the one piece here that
+   isn't a plain fact, so it drops the line's own tracking and caps for the serif italics the
+   rest of the page reserves for science. Present only when there is a common name for it to
+   stand apart from; a photo with no common name puts its scientific name in the headline
+   instead and never shows this. */
+.meta .sci {
+  font-family: var(--serif);
+  font-style: italic;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 11px;
 }
 
 /* The label ignores taps so the halves underneath keep working; the link inside is the one
