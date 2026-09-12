@@ -744,11 +744,11 @@ handleBtn.addEventListener("pointercancel", () => { dragActive = false; });
 // Which direction is claimed depends on the state it is leaving, so scrolling never has to
 // fight the gesture: half-open, an upward drag is the one that means "make room for more"
 // and it expands, while a downward drag there has nothing above the top to scroll to and
-// nothing below it either — it isn't ours and it isn't a scroll, so it's swallowed outright
-// rather than left for the browser's own bounce; full-open, a downward drag is the one that
-// means "put it back" and it collapses, while the upward drag is ordinary scrolling again.
+// nothing below it either, so it's claimed instead for "put it away" and closes the sheet;
+// full-open, a downward drag is the one that means "put it back" and it collapses, while the
+// upward drag is ordinary scrolling again.
 const DECIDE_PX = 10;
-let listPhase = null, listStartY = null, listMoved = 0;    // listPhase: null | "scroll" | "expand" | "collapse" | "blocked"
+let listPhase = null, listStartY = null, listMoved = 0;    // listPhase: null | "scroll" | "expand" | "collapse" | "close"
 
 sheetBody.addEventListener("touchstart", e => {
   if(sheetView !== "results" || e.touches.length !== 1 || !isMobileLayout()){ listPhase = "scroll"; return; }
@@ -760,14 +760,15 @@ sheetBody.addEventListener("touchmove", e => {
   if(listStartY === null || e.touches.length !== 1) return;
   const dy = e.touches[0].clientY - listStartY;
   if(listPhase === null && Math.abs(dy) >= DECIDE_PX){
-    if(document.body.dataset.expanded !== "1") listPhase = dy < 0 ? "expand" : "blocked";
+    if(document.body.dataset.expanded !== "1") listPhase = dy < 0 ? "expand" : "close";
     else listPhase = dy > 0 ? "collapse" : "scroll";
   }
-  if(listPhase === "expand" || listPhase === "collapse" || listPhase === "blocked"){ e.preventDefault(); listMoved = dy; }
+  if(listPhase === "expand" || listPhase === "collapse" || listPhase === "close"){ e.preventDefault(); listMoved = dy; }
 }, {passive:false});
 sheetBody.addEventListener("touchend", () => {
   if(listPhase === "expand" && listMoved <= -EXPAND_PX) setExpanded(true);
   else if(listPhase === "collapse" && listMoved >= EXPAND_PX) setExpanded(false);
+  else if(listPhase === "close" && listMoved >= EXPAND_PX) closeSheet();
   listPhase = null; listStartY = null; listMoved = 0;
 });
 sheetBody.addEventListener("touchcancel", () => { listPhase = null; listStartY = null; listMoved = 0; });
