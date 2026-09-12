@@ -1652,7 +1652,7 @@ function wireFilters(){
   wireViews();
 
   $("reset").addEventListener("click", () => {
-    Object.assign(state, { taxon:null, tname:"", iconic:defaultIconic(), quality:defaultQuality(), d1:defaultD1(), d1auto:true, d2:"", months:defaultMonths(), unobs:"", precise:"precise", dmode:"unobserved", tierExclude:null, ssp:"" });
+    Object.assign(state, { taxon:null, tname:"", iconic:defaultIconic(), quality:defaultQuality(), d1:defaultD1(), d1auto:true, d2:"", months:defaultMonths(), precise:"precise", dmode:"unobserved", tierExclude:null, ssp:"" });
     commit();
     openFilters();
   });
