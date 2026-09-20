@@ -182,6 +182,7 @@ var dateToEl   = document.getElementById('dateTo');
 var placeEl    = document.getElementById('placeInput');
 var placeWrap  = document.getElementById('placeWrap');
 var placeAc    = document.getElementById('placeAc');
+var placeClear = document.getElementById('placeClear');
 var filters  = document.getElementById('filters');
 var forget   = document.getElementById('forget');
 var obsCheck = document.getElementById('byObs');
@@ -1060,6 +1061,7 @@ function buildNarrow() {
   dateToEl.value = dateTo;
   placeEl.value = place;
   syncPlaceLock();
+  syncPlaceClear();
 }
 
 function syncTaxaFilter() {
@@ -1305,6 +1307,12 @@ function syncPlaceLock() {
   placeEl.title = placeId ? 'Matched by iNaturalist place boundary, not by spelling' : '';
 }
 
+// Only worth showing once there's something to clear — same reasoning as the taxon
+// chip's own clear button, just living on the input instead of a picked chip beside it.
+function syncPlaceClear() {
+  placeClear.hidden = !placeEl.value;
+}
+
 // The one place place/placeId actually reach the wall and the address bar — called only once
 // the two already say what's meant, whether that's a pick, a commit, or a plain clear.
 function applyPlace() {
@@ -1354,6 +1362,7 @@ function placeSub(t) {
 
 placeEl.addEventListener('input', function () {
   var q = placeEl.value.trim();
+  syncPlaceClear();
   clearTimeout(placeAcTimer);
   // Emptying the field reads as "never mind", not as a letter more of a place name — the one
   // exception to typing not touching the wall (see the doc comment above).
@@ -1425,11 +1434,26 @@ placeAc.addEventListener('click', function (e) {
   var b = e.target.closest('button[data-id]');
   if (!b) return;
   placeEl.value = b.dataset.name;
+  syncPlaceClear();
   closePlaceAc();
   place = placeEl.value.trim();
   placeId = Number(b.dataset.id);
   placeName = place;
   applyPlace();
+  // A pick is already the finished thought a blur would otherwise be reading it as (see the
+  // doc comment above) — done deciding, so the field lets go of focus instead of sitting
+  // there as if there's more to type.
+  placeEl.blur();
+});
+
+// The field's own clear, sitting on top of it rather than beside it (see the CSS) — same
+// "empty reads as never mind" reasoning the input listener already gives an empty field,
+// just reachable without having to select and delete the text by hand.
+placeClear.addEventListener('click', function () {
+  placeEl.value = '';
+  syncPlaceClear();
+  closePlaceAc();
+  commitPlace();
   placeEl.focus();
 });
 
