@@ -747,11 +747,15 @@ handleBtn.addEventListener("pointercancel", () => { dragActive = false; });
 // nothing below it either, so it's claimed instead for "put it away" and closes the sheet;
 // full-open, a downward drag is the one that means "put it back" and it collapses, while the
 // upward drag is ordinary scrolling again.
+//
+// The filters sheet has no half/full state to move between (it sizes to its own content), so
+// there's nothing for it there to expand or collapse into — a downward drag at the top can only
+// mean "put it away", and an upward one is left as ordinary scrolling.
 const DECIDE_PX = 10;
 let listPhase = null, listStartY = null, listMoved = 0;    // listPhase: null | "scroll" | "expand" | "collapse" | "close"
 
 sheetBody.addEventListener("touchstart", e => {
-  if(sheetView !== "results" || e.touches.length !== 1 || !isMobileLayout()){ listPhase = "scroll"; return; }
+  if((sheetView !== "results" && sheetView !== "filters") || e.touches.length !== 1 || !isMobileLayout()){ listPhase = "scroll"; return; }
   listPhase = sheetBody.scrollTop > 0 ? "scroll" : null;   // already below the top: never ours
   listStartY = e.touches[0].clientY;
   listMoved = 0;
@@ -760,7 +764,8 @@ sheetBody.addEventListener("touchmove", e => {
   if(listStartY === null || e.touches.length !== 1) return;
   const dy = e.touches[0].clientY - listStartY;
   if(listPhase === null && Math.abs(dy) >= DECIDE_PX){
-    if(document.body.dataset.expanded !== "1") listPhase = dy < 0 ? "expand" : "close";
+    if(sheetView === "filters") listPhase = dy > 0 ? "close" : "scroll";
+    else if(document.body.dataset.expanded !== "1") listPhase = dy < 0 ? "expand" : "close";
     else listPhase = dy > 0 ? "collapse" : "scroll";
   }
   if(listPhase === "expand" || listPhase === "collapse" || listPhase === "close"){ e.preventDefault(); listMoved = dy; }
