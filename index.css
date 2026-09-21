@@ -565,10 +565,14 @@ label.check{
 .done:focus-visible{outline:2px solid var(--text);outline-offset:2px}
 
 /* ---------- results ---------- */
+/* A row is a link out to the observation on iNaturalist, so it is a real <a> — that is what
+   makes iOS hand the address to the native app instead of loading the web page here (see
+   outAttrs in index.js). Only the underline has to be turned off; the rest of the row was
+   already written for a button and needs nothing. */
 .result{
   display:flex;gap:11px;align-items:flex-start;width:100%;text-align:left;
   padding:11px 0;border:0;border-bottom:1px solid var(--rule);
-  background:none;color:var(--text);font:inherit;cursor:pointer;
+  background:none;color:var(--text);font:inherit;cursor:pointer;text-decoration:none;
 }
 .result:last-child{border-bottom:0}
 .result:focus-visible{outline:2px solid var(--mark);outline-offset:-2px}

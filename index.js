@@ -900,25 +900,24 @@ stowBtn.addEventListener("click", () => setStow(document.body.dataset.stow !== "
 const STANDALONE = window.navigator.standalone === true ||
   (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
 
-// A rolling breadcrumb, kept in localStorage rather than a variable so it survives however
-// long "for a while" turns out to mean and is still there after a real reload. If the old
-// redirect fires again, __navlog() from a console (a desktop tab on the same page, or
-// Safari's remote inspector) shows exactly what led up to it -- above all whether the
-// pageshow just before it reports navigation type "back_forward", which is the one fact
-// that actually confirms or rules out history replay instead of guessing again from outside.
-function logNav(tag, extra){
-  try{
-    const log = JSON.parse(localStorage.getItem("navlog") || "[]");
-    log.push(Object.assign({ t: Date.now(), tag }, extra));
-    localStorage.setItem("navlog", JSON.stringify(log.slice(-20)));
-  }catch(err){ /* storage unavailable in this context: nothing to fall back to */ }
-}
-window.__navlog = () => JSON.parse(localStorage.getItem("navlog") || "[]");
+// Every hop off the map leaves as a real link — see outAttrs — bar two, which have no link
+// to be: a tap that lands on a pin, which is a point on a canvas rather than an element, and
+// the tier button, whose address is built from whatever is in the username field at the
+// moment it is pressed. Both still have to reach iNaturalist as a link activation, because an
+// address set from script is a navigation like any other: iOS does not hand it to the native
+// app, the app's own view loads iNaturalist's web page instead, and that navigation stays in
+// the app's history one "forward" away — the entry an accidental edge-swipe lands on minutes
+// later, long after the tap that made it. A hidden anchor, tapped inside the same gesture,
+// is that link.
+const hopLink = document.createElement("a");
+hopLink.hidden = true;
+document.body.appendChild(hopLink);
 
 function openOut(url){
-  logNav("openOut", { url, standalone: STANDALONE });
-  if(STANDALONE){ location.href = url; return true; }
-  return !!window.open(url, "_blank", "noopener");
+  if(!STANDALONE) return !!window.open(url, "_blank", "noopener");
+  hopLink.href = url;
+  hopLink.click();
+  return true;
 }
 
 // The same two cases as openOut, decided in markup instead of in script — a real link, so
@@ -929,31 +928,6 @@ function openOut(url){
 function outAttrs(url){
   return `href="${esc(url)}"` + (STANDALONE ? "" : ` target="_blank" rel="noopener"`);
 }
-
-// Every hop through openOut/outAttrs above becomes a real navigation once STANDALONE
-// commits it, and nothing afterwards ever disturbs that history entry: writeHash always
-// replaces the current one rather than pushing past it (see writeHash), so the page we
-// left for -- iNat, GMaps, Easily Missed -- keeps sitting one "forward" away for as long
-// as the app stays open. A home-screen app has no way to turn off the browser's own
-// edge-swipe back/forward gesture, and a map that fills the screen edge to edge makes
-// that gesture easy to trigger by accident while simply panning.
-//
-// The first attempt at this only pushed a fresh history entry when pageshow reported
-// persisted=true -- a cached restore. That leaves a gap: if the return from iNat/GMaps is
-// a fresh reload rather than a cache restore, persisted is false, the old guard skipped the
-// push, and the stale "forward" entry survived untouched. pageshow fires either way, so the
-// push now runs unconditionally on it -- a harmless no-op beyond discarding whatever, if
-// anything, was still sitting ahead of us. The setTimeout defers it a tick past the event
-// itself, since a history mutation made synchronously inside pageshow has been unreliable
-// on some WebKit versions right after a cache restore.
-window.addEventListener("pageshow", e => {
-  logNav("pageshow", {
-    persisted: e.persisted,
-    navType: performance.getEntriesByType("navigation").at(-1)?.type,
-    referrer: document.referrer
-  });
-  if(STANDALONE) setTimeout(() => history.pushState(null, "", location.href), 0);
-});
 
 // Marks a results-row action as a hop off the map — On iNat, Missed, GMaps — so the reader
 // knows before tapping that it leaves this page rather than opening one of the app's own
@@ -1439,7 +1413,6 @@ function filtersHtml(){
     <span class="field-label">Base map</span>
     ${segHtml("baseRow", BASES, state.base)}
   </div>
-
 `;
 }
 
@@ -2067,7 +2040,7 @@ function easilyMissedUrl(latlng, km){
 function actionsHtml(latlng, km){
   return `<span class="eyebrow-actions">
     <button class="linkish" id="toHere" data-url="${esc(hereUrl(latlng, km))}">Species<br>here</button>
-    <button class="linkish" id="toSpecies" data-url="${esc(speciesUrl(latlng, km))}">On<br>iNat${extIcon()}</button>
+    <a class="linkish" ${outAttrs(speciesUrl(latlng, km))}>On<br>iNat${extIcon()}</a>
     <a class="linkish" ${outAttrs(easilyMissedUrl(latlng, km))}>Easily<br>Missed${extIcon()}</a>
     <a class="linkish" ${outAttrs(gmapsUrl(latlng))}>GMaps${extIcon()}</a>
   </span>`;
@@ -2102,7 +2075,7 @@ function resultsHtml(list, km, latlng){
     let badges = "";
     if(o.quality_grade === "research") badges += `<span class="badge badge-rg">Research</span>`;
     if(o.obscured) badges += `<span class="badge badge-ob">Obscured</span>`;
-    return `<button class="result" data-id="${o.id}">
+    return `<a class="result" ${outAttrs("https://www.inaturalist.org/observations/" + o.id)}>
       ${photo ? `<img class="result-photo" src="${esc(photo)}" alt="" loading="lazy">`
               : isAudioOnly(o)
                 ? `<span class="result-nophoto result-audio" title="Sound only">${speakerSvg("currentColor","currentColor")}</span>`
@@ -2112,7 +2085,7 @@ function resultsHtml(list, km, latlng){
         ${t.name ? `<span class="result-sci">${esc(t.name)}</span>` : ""}
         <span class="result-meta">${meta.join(" &middot; ")}${badges}</span>
       </span>
-    </button>`;
+    </a>`;
   }).join("");
   return `<div class="eyebrow"><span class="eyebrow-label"><span>${list.length} selected</span><span class="eyebrow-dist">${esc(fmtAcc(km * 1000))}</span></span>${actionsHtml(latlng, km)}</div>${rows}`;
 }
@@ -2222,26 +2195,11 @@ function wireResults(){
   const toF = document.getElementById("toFilters");
   if(toF) toF.addEventListener("click", openFilters);
   // Four ways out of a pin: this app's own species list, the same circle on iNat, the
-  // doughnut on Easily Missed, or the bare coordinates in Google Maps. The last two are
-  // already real links and need no wiring — see outAttrs.
-  ["toHere", "toSpecies"].forEach(id => {
-    const b = document.getElementById(id);
-    if(b) b.addEventListener("click", () => openOut(b.dataset.url));
-  });
-  sheetBody.querySelectorAll(".result").forEach(b => {
-    const go = () => openOut("https://www.inaturalist.org/observations/" + b.dataset.id);
-    b.addEventListener("click", go);
-    // These rows are buttons, not links, so a middle click gets none of the free new-tab
-    // handling a real <a> would get from the browser — auxclick is where it has to be
-    // wired by hand. mousedown's preventDefault stops the middle-click autoscroll icon
-    // from flashing up first, the same way it would over any ordinary page text.
-    b.addEventListener("mousedown", e => { if(e.button === 1) e.preventDefault(); });
-    b.addEventListener("auxclick", e => {
-      if(e.button !== 1) return;
-      e.preventDefault();
-      go();
-    });
-  });
+  // doughnut on Easily Missed, or the bare coordinates in Google Maps. Only the first stays
+  // inside the app; the other three leave it, and are written as real links so that a tap is
+  // a tap — see outAttrs — which leaves this function the one button to wire.
+  const toHere = document.getElementById("toHere");
+  if(toHere) toHere.addEventListener("click", () => openOut(toHere.dataset.url));
 }
 
 /* ---------------- locate ---------------- */
