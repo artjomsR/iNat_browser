@@ -1721,11 +1721,27 @@ function resetZoom() {
 var sx = 0, sy = 0, tracking = false;
 var pinch = null;   // set while two fingers are down
 var pan   = null;   // set while one finger drags an already-zoomed picture
+// Where and when a single-finger touch landed on an already-zoomed picture, kept apart from
+// `pan` itself since that gets nudged on every touchmove as the finger drags — a tap needs
+// the untouched starting point to measure against, not wherever the finger ended up.
+var tapStartX = 0, tapStartY = 0, tapStartT = 0;
+// Whether this gesture ever had two fingers down. Releasing a pinch lifts its fingers one at
+// a time, not both at once, so the last finger up briefly looks exactly like a fresh, still,
+// quickly-lifted single-finger touch — the same shape as a tap. Without this flag that
+// leftover moment gets read as one, and finishing a pinch-zoom randomly jumps to another
+// photo. Set on a pinch's touchstart, cleared only when an entirely new gesture begins (a
+// single-finger touchstart never fires mid-pinch, so it's the right place to clear it).
+var hadPinch = false;
 
 focusEl.addEventListener('touchstart', function (e) {
+  // #close sits inside this same element, so a tap on it bubbles up here too — and since
+  // it's usually in the top-right, the zoomed-picture tap zones below would otherwise
+  // read it as "next photo" instead of letting the close button's own click go through.
+  if (e.target.closest && e.target.closest('#close')) return;
   if (e.touches.length === 2) {
     tracking = false;
     pan = null;
+    hadPinch = true;
     var mid = touchMid(e.touches[0], e.touches[1]);
     pinch = {
       dist: touchDist(e.touches[0], e.touches[1]),
@@ -1739,9 +1755,13 @@ focusEl.addEventListener('touchstart', function (e) {
   }
   if (e.touches.length !== 1) { tracking = false; pan = null; return; }
   pinch = null;
+  hadPinch = false;
   if (zoomScale > 1.001) {
     tracking = false;
     pan = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    tapStartX = e.touches[0].clientX;
+    tapStartY = e.touches[0].clientY;
+    tapStartT = Date.now();
   } else {
     pan = null;
     sx = e.touches[0].clientX;
@@ -1775,16 +1795,23 @@ focusEl.addEventListener('touchmove', function (e) {
 }, { passive: false });
 
 focusEl.addEventListener('touchend', function (e) {
+  if (e.target.closest && e.target.closest('#close')) return;
   if (e.touches.length >= 1) {
     // A finger lifted out of a pinch, one still down: that finger takes over panning at
     // whatever size the pinch had already reached, rather than the gesture ending here.
     if (e.touches.length === 1) {
       pinch = null;
       pan = zoomScale > 1.001 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+      if (pan) {
+        tapStartX = e.touches[0].clientX;
+        tapStartY = e.touches[0].clientY;
+        tapStartT = Date.now();
+      }
     }
     return;
   }
 
+  var wasPanning = !!pan;
   pinch = null;
   pan = null;
 
@@ -1792,6 +1819,22 @@ focusEl.addEventListener('touchend', function (e) {
   // a hair off its true size.
   if (zoomScale <= 1.02) resetZoom();
   else applyZoom(true);
+
+  // The tap zones go dead once a picture is zoomed (see applyZoom), since a drag starting
+  // over them should pan rather than jump the reader to the next photograph. But a touch
+  // that lands, barely moves, and lifts again straight away isn't a drag — it's a tap, and
+  // on a zoomed picture there's no other way to ask for the next or previous one. So it's
+  // read the same way the (now-dead) zones would have: left third back, right third on.
+  if (wasPanning && zoomScale > 1.001 && !hadPinch) {
+    var tap = e.changedTouches[0];
+    var tapDx = tap.clientX - tapStartX;
+    var tapDy = tap.clientY - tapStartY;
+    if (Math.abs(tapDx) < 10 && Math.abs(tapDy) < 10 && Date.now() - tapStartT < 300) {
+      if (tap.clientX < innerWidth / 3) step(-1);
+      else if (tap.clientX > innerWidth * 2 / 3) step(1);
+      return;
+    }
+  }
 
   if (!tracking) return;
   tracking = false;
