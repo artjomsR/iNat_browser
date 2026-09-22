@@ -11,8 +11,12 @@
 
    `user` is the iNaturalist login. `u` and `user_id` are accepted as spellings of the same
    thing, because the species page uses one and iNaturalist's own addresses use the other.
-   With no username at all the page asks for one and writes the answer back here rather than
-   guessing at somebody.
+   Only the highlights shelf needs one — it's one person's tagged picks, so there's nobody to
+   show without a username, and the page asks for one and writes the answer back here rather
+   than guessing at somebody. The birds and all shelves are already a question with an answer
+   of their own (every bird, or every observation, iNaturalist has), so a missing username
+   there simply widens the shelf to every user's instead of narrowing it to one — no asking
+   needed.
 
    `tag` is the tier tag an observation must carry (default `s`), `grade` the quality grades
    to accept, and `show=all` turns the unseen filter off. The rest of the query is fixed:
@@ -365,7 +369,6 @@ function watch(tile, photo) {
 
 function endpoint(page) {
   var p = new URLSearchParams({
-    user_id: user,
     verifiable: 'true',
     photos: 'true',
     reviewed: 'any',
@@ -375,6 +378,11 @@ function endpoint(page) {
     per_page: String(PER_PAGE),
     page: String(page)
   });
+
+  // Highlights always has a username (see init, above) since it's one person's tagged picks.
+  // Birds and all can run without one — leaving user_id off widens the question to every
+  // user's observations instead of narrowing it to one.
+  if (user) p.set('user_id', user);
 
   // The three shelves differ by: a tag search, a whole class of animal, or nothing at all.
   // Newest first either way, so "most recent" needs nothing added. Birds is Aves the way
@@ -676,7 +684,8 @@ async function load() {
       // connection was fine, and shouldn't be reported as a dead one.
       if (all.length === 0) {
         say('Could not reach iNaturalist',
-            'The request failed &mdash; check the connection and reload. If it keeps failing, the username may be wrong.');
+            'The request failed &mdash; check the connection and reload.' +
+            (user ? ' If it keeps failing, the username may be wrong.' : ''));
       }
       return;
     }
@@ -700,14 +709,16 @@ async function load() {
     // it was picked on top of.
     else if (taxon)
       say('Nothing found', 'No photographed observations of <b>' +
-          esc(tname || ('taxon ' + taxon)) + '</b> found for <b>' + esc(user) + '</b>.');
-    // The tag is the highlights shelf's doing, so only that shelf explains itself by it.
+          esc(tname || ('taxon ' + taxon)) + '</b> found' +
+          (user ? ' for <b>' + esc(user) + '</b>.' : '.'));
+    // The tag is the highlights shelf's doing, so only that shelf explains itself by it (and
+    // the highlights shelf always has a username — see init, above).
     else if (view === 'birds')
-      say('No birds', 'No photographed bird observations found for <b>' + esc(user) + '</b>. ' +
-                      'The username may be wrong.');
+      say('No birds', 'No photographed bird observations found' +
+          (user ? ' for <b>' + esc(user) + '</b>. The username may be wrong.' : ' anywhere.'));
     else if (view === 'all')
-      say('No observations', 'No photographed observations found for <b>' + esc(user) + '</b>. ' +
-                      'The username may be wrong.');
+      say('No observations', 'No photographed observations found' +
+          (user ? ' for <b>' + esc(user) + '</b>. The username may be wrong.' : ' anywhere.'));
     else say('Nothing tagged “' + tag + '”',
              'No observations found for <b>' + esc(user) + '</b> with that tag. ' +
              'Change the username or tag in the address:<br><code>?user=' + esc(user) +
@@ -957,7 +968,8 @@ function nothingNew() {
   // already seen everything that does, and one "show all" can't fix.
   var denom = refinedCount(all);
   if (denom === 0) {
-    say('Nothing here', 'No photos matching that found for <b>' + esc(user) + '</b>.');
+    say('Nothing here', 'No photos matching that found' +
+        (user ? ' for <b>' + esc(user) + '</b>.' : '.'));
     return;
   }
   say('All caught up',
@@ -1501,7 +1513,8 @@ viewSel.addEventListener('change', function () {
 
 // The one way back out of a record that only this browser holds, so it asks first.
 forget.addEventListener('click', function () {
-  if (!confirm('Forget which of ' + user + '’s photos have been seen?')) return;
+  if (!confirm(user ? 'Forget which of ' + user + '’s photos have been seen?'
+                     : 'Forget which photos have been seen?')) return;
   if (pending) { clearTimeout(pending); pending = null; }
   seen = new Set();
   seenAtLoad = new Set();
@@ -1829,14 +1842,20 @@ function ask() {
   scrollTo(0, 0);
 
   // With no user the masthead keeps its placeholder space, so it holds its height while the
-  // page is asking who to show.
-  if (!user) {
+  // page is asking who to show. Only the highlights shelf needs an answer to that question —
+  // it's one person's tagged picks, so there's no one to show without a username. The other
+  // two shelves are already a question with an answer on their own (every bird, or every
+  // observation, iNaturalist has), so a missing username there just widens that answer to
+  // every user's instead of narrowing it to one.
+  if (!user && view === 'highlights') {
     ask();
     return;
   }
 
-  document.getElementById('who').textContent = user;
-  document.title = user + '\'s iNat gallery';
+  if (user) {
+    document.getElementById('who').textContent = user;
+    document.title = user + '\'s iNat gallery';
+  }
 
   viewSel.value = view;
   picker.hidden = false;
