@@ -2140,6 +2140,40 @@ function pinAt(pt){
   return hit;
 }
 
+// The results list takes the bottom half of the screen on the narrow layout, so a pin left
+// where the finger was would sit under the panel it just opened — the reader taps a spot and
+// the one thing they asked to look at is the one thing they can't see. So the view is nudged
+// until the tapped point sits in the middle of the map that is left, rather than the middle of
+// the map element, which from here on is mostly panel. Half the screen is not assumed: what is
+// hidden is asked of the panel itself, and an expanded list — 82vh — therefore centres the pin
+// in the strip actually showing.
+//
+// offsetHeight, so read the box the panel was *laid out* in rather than where it is being
+// drawn: the sheet is coming up from off the bottom of the screen as this runs, and a
+// transform doesn't touch the layout box — the same fact the stow button's corner rests on
+// (see syncSheetBox). The height it is read at is a definite one either way — the results rule
+// sets a fixed height where a moment before there was the content-sized one, and that change
+// is not interpolable, so no browser eases through it and this sees the panel it is about to
+// be, not the one it is leaving.
+//
+// The view moves by the same pixels the pin has to, so the new centre is the point that sits
+// that distance *behind* the old one — the one the pane carries onto the middle of the map
+// element as it goes. Not the point the old centre travels to: that is the same distance on
+// the wrong side, and it sends the pin the other way at twice the reach. Zoom is untouched.
+//
+// The whole nudge is skipped where the panel hides nothing — the wide layout floats it as a
+// card down the right-hand side, which is a media query of its own and not a band at all.
+function centreInVisibleBand(latlng){
+  if(!isMobileLayout() || sheet.dataset.open !== "1") return;
+  const size = map.getSize();
+  const covered = sheet.offsetHeight;
+  if(!(covered > 0) || covered >= size.y) return;              // nothing hidden, or nothing left
+  const at = map.latLngToContainerPoint(latlng);
+  const shift = L.point(size.x / 2, (size.y - covered) / 2).subtract(at);   // the pin's journey
+  if(Math.abs(shift.x) < 1 && Math.abs(shift.y) < 1) return;   // already there — no moveend to fire
+  map.panTo(map.containerPointToLatLng(L.point(size.x / 2, size.y / 2).subtract(shift)));
+}
+
 // `km` is only ever passed on restore — a fresh tap (the only other caller) always wants the
 // live cursor-precision radius, not whatever it happened to be last time. Restoring the exact
 // figure rather than recomputing it matters because the reader may have re-tapped since with a
@@ -2166,6 +2200,10 @@ async function probe(latlng, km){
   openSheet("results", `<div class="eyebrow"><span>Reading&hellip;</span>${actionsHtml(latlng, km)}</div>
     <div class="state"><div class="state-hint">Fetching observations.</div></div>`);
   wireResults();
+  // After the sheet, so the panel is up and its height is the one to centre against, and
+  // before the fetch, so the map is moving under the reader's finger as the list arrives
+  // rather than jumping once it has.
+  centreInVisibleBand(latlng);
 
   const p = obsParams();
   p.set("lat", latlng.lat.toFixed(6));

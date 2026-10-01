@@ -39,6 +39,19 @@ directly (or via `.claude/launch.json`'s static server) to run it.
     `prompt()`; rename and delete live behind the row's pencil, and delete arms before it
     fires, so it can never be the tap that was meant for the row above. See the saved-views
     block in `index.js` and the storage note under **Conventions**.
+  - A tap that opens the observation list also moves the map. On the narrow layout the panel
+    takes the bottom half of the screen, so a pin left where the finger was is a pin under the
+    list — the reader taps a spot and the one thing they asked to look at is the one thing they
+    can't see — so the view glides until the tapped point sits in the middle of the map still
+    showing rather than the middle of the map element, which by then is mostly panel. Half the
+    screen is not assumed: what is hidden is read off the panel's own laid-out height
+    (`offsetHeight`, which the slide-up transform does not touch), so a list dragged open to
+    82vh centres the pin in the strip that actually leaves, and the wide layout — where the
+    panel is a card down the right-hand side and hides no band at all — is left exactly as it
+    was, its pin where it was tapped. Only the viewport moves; the zoom is the reader's. The
+    nudge is part of the tap and not of the fetch, so restoring a pin from an address redoes it
+    the same way, and an address whose pin is already centred doesn't move at all. See
+    `centreInVisibleBand` in `index.js`.
 - **species.html / species.css / species.js** — the species report, reached from the map and
   returning to it by the "Back to Map" link. Two tabs over the same rows: `tier` (one user's
   species banded by tier tag) and `place` (every species in an area, ticked off against a
