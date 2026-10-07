@@ -70,7 +70,7 @@ const state = {
   // dmode: "unobserved" | "s" | "b" | "c" | "own". The mode row toggles, so pressing the
   // mode already set turns it off — "own" is that no-button-pressed state, and it asks the
   // opposite question: not what this user is missing but what they have already recorded.
-  dmode:"unobserved", tierExclude:null, cursor:"precise", ssp:""   // "" | "1" incl. | "only"
+  dmode:"unobserved", tierExclude:null, cursor:"precise", ssp:"1"   // "1" incl. (default) | "" off | "only"
 };
 
 let map, overlay, accLayer, probeAccLayer, probeMark, probeRing, meRing, meCone, sheetView = null;
@@ -523,7 +523,7 @@ function writeHash(){
   if(state.iconic.length) p.set("iconic", state.iconic.join(","));
   if(state.unobs)   p.set("unobs", state.unobs);
   if(state.dmode !== "unobserved") p.set("dmode", state.dmode);
-  if(state.ssp)     p.set("ssp", state.ssp);
+  if(state.ssp !== "1") p.set("ssp", state.ssp || "0");   // "1" is the default, so it stays out of the hash
   p.set("q", state.quality.join(","));
   p.set("precise", state.precise);
   // Only a date that was meant — see windowD1. Left out, readHash hands back the same empty
@@ -557,7 +557,7 @@ function readHash(){
   // "own" rides in the hash like any other mode — an empty value would read back as the
   // default and quietly put a filter on a shared link that was made without one.
   state.dmode   = DMODES.includes(p.get("dmode")) ? p.get("dmode") : "unobserved";
-  state.ssp     = ["1","only"].includes(p.get("ssp")) ? p.get("ssp") : "";
+  state.ssp     = p.get("ssp") === "only" ? "only" : p.get("ssp") === "0" ? "" : "1";
   state.quality = p.has("q") ? p.get("q").split(",").filter(Boolean) : defaultQuality();
   state.precise = p.has("precise") ? p.get("precise") : "precise";
   // A date in the address was asked for by somebody, whoever made the link; no date is the
@@ -646,7 +646,6 @@ function labelBits(){
     // The rank window only applies to the desired-species modes, so it is only named there.
     if(state.dmode !== "own"){
       if(state.ssp === "only") bits.push("subspecies only");
-      else if(state.ssp)       bits.push("incl. subspecies");
     }
   }
   if(!state.precise) bits.push("incl. obscured");
@@ -1630,7 +1629,7 @@ function wireFilters(){
   wireViews();
 
   $("reset").addEventListener("click", () => {
-    Object.assign(state, { taxon:null, tname:"", iconic:defaultIconic(), quality:defaultQuality(), d1:defaultD1(), d1auto:true, d2:"", months:defaultMonths(), precise:"precise", dmode:"unobserved", tierExclude:null, ssp:"" });
+    Object.assign(state, { taxon:null, tname:"", iconic:defaultIconic(), quality:defaultQuality(), d1:defaultD1(), d1auto:true, d2:"", months:defaultMonths(), precise:"precise", dmode:"unobserved", tierExclude:null, ssp:"1" });
     commit();
     openFilters();
   });
