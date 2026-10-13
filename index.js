@@ -1600,7 +1600,7 @@ async function refreshAccuracyLayer(){
       marker.obsId = o.id;                 // what pinAt opens when a tap lands on the icon
       if(!COARSE){
         marker.bindTooltip(
-          `${esc(t.preferred_common_name || t.name || "Unidentified")} — ${fmtAcc(known ? acc : null)}` +
+          `${esc(t.preferred_common_name || t.name || "Unknown")} — ${fmtAcc(known ? acc : null)}` +
           (rg ? " · Research Grade" : ""),
           { direction: "top", offset: [0,-4], opacity: .95 }
         );
@@ -2100,7 +2100,7 @@ function resultsHtml(list, km, latlng){
                 ? `<span class="result-nophoto result-audio" title="Sound only">${speakerSvg("currentColor","currentColor")}</span>`
                 : `<span class="result-nophoto">&#9673;</span>`}
       <span class="result-main">
-        <span class="result-common">${esc(t.preferred_common_name || t.name || "Unidentified")}</span>
+        <span class="result-common">${esc(t.preferred_common_name || t.name || "Unknown")}</span>
         ${t.name ? `<span class="result-sci">${esc(t.name)}</span>` : ""}
         <span class="result-meta">${meta.join(" &middot; ")}${badges}</span>
       </span>
