@@ -2200,6 +2200,8 @@ function centreInVisibleBand(latlng){
 // that quietly doesn't match the one they left.
 async function probe(latlng, km){
   resultsBehindFilters = null;
+  // A new pin reopens a hidden mobile list at its fresh-pin half height.
+  if(isMobileLayout() && document.body.dataset.stow === "1") setExpanded(false);
   if(km == null) km = probeRadiusKm(latlng.lat, map.getZoom());
 
   if(probeMark) map.removeLayer(probeMark);
