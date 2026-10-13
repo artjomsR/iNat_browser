@@ -2212,12 +2212,29 @@ async function probe(latlng, km){
   p.set("order_by", "observed_on");
   p.set("order", "desc");
 
+  // Match the accuracy pins: unknown observations cannot pass the main taxon filters.
+  const up = (state.dmode === "unobserved" && state.unobs) ? unknownParams() : null;
+  if(up){
+    for(const key of ["lat", "lng", "radius", "per_page", "order_by", "order"]){
+      up.set(key, p.get(key));
+    }
+  }
+
   try{
-    const d = await apiGet(`${API}/observations?${p.toString()}`);
+    const [d, ud] = await Promise.all([
+      apiGet(`${API}/observations?${p.toString()}`),
+      up ? apiGet(`${API}/observations?${up.toString()}`).catch(() => ({ results: [] }))
+         : Promise.resolve(null)
+    ]);
     if(sheetView !== "results") return;
-    openSheet("results", resultsHtml(d.results || [], km, latlng));
+    const results = ud
+      ? [...new Map([...(d.results || []), ...(ud.results || [])].map(o => [o.id, o])).values()]
+          .sort((a, b) => (b.observed_on || "").localeCompare(a.observed_on || "") || b.id - a.id)
+          .slice(0, 20)
+      : (d.results || []);
+    openSheet("results", resultsHtml(results, km, latlng));
     wireResults();
-    drawAccuracyCircles(d.results || []);
+    drawAccuracyCircles(results);
   }catch(err){
     openSheet("results", `<div class="eyebrow"><span>Not loaded</span>${actionsHtml(latlng, km)}</div>
       <div class="state">
