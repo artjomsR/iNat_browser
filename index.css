@@ -657,3 +657,11 @@ label.check{
   body[data-sheet]:not([data-stow="1"]) .locate{right:410px}
   body[data-sheet]:not([data-stow="1"]) .zoom{right:410px}
 }
+
+/* Non-modal location feedback; permission prompts themselves belong to the browser. */
+.location-status{
+  position:fixed;left:50%;top:80px;transform:translateX(-50%);z-index:1100;
+  max-width:min(360px, calc(100vw - 32px));padding:10px 14px;border-radius:8px;
+  background:var(--raise);color:var(--text);border:1px solid var(--rule);
+  font-size:14px;pointer-events:none;
+}

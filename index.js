@@ -2304,19 +2304,25 @@ function onOrient(e){
   paintCone();
 }
 
+let headingRequest = null, headingDenied = false;
+
 function wireHeading(){
-  if(headingWired || !window.DeviceOrientationEvent) return;
-  // iOS 13+ gates the sensor behind a prompt that only a user gesture may raise, so the
-  // boot-time attempt is rejected there — the flag is set on success only, letting the
-  // locate button (a real gesture) try again.
-  const req = DeviceOrientationEvent.requestPermission;
+  if(headingWired || headingRequest || headingDenied || !window.DeviceOrientationEvent) return;
   const listen = () => {
     headingWired = true;
     window.addEventListener("deviceorientationabsolute", onOrient, true);
     window.addEventListener("deviceorientation", onOrient, true);
   };
-  if(typeof req === "function") req.call(DeviceOrientationEvent).then(s => { if(s === "granted") listen(); }).catch(() => {});
-  else listen();
+  const req = window.DeviceOrientationEvent.requestPermission;
+  if(typeof req !== "function"){ listen(); return; }
+  // Invoke synchronously from the tap, before any GPS/permission-query await. Failure
+  // affects only the cone. Deduplicate quick taps and don't repeatedly prompt on denial.
+  try{
+    headingRequest = Promise.resolve(req.call(window.DeviceOrientationEvent))
+      .then(s => { if(s === "granted") listen(); else headingDenied = true; })
+      .catch(() => {})
+      .finally(() => { headingRequest = null; });
+  }catch(e){} // Unsupported sensor APIs must never interrupt the location button.
 }
 
 function paintCone(){
@@ -2353,50 +2359,149 @@ function showMe(ll){
   paintCone();
 }
 
-// One standing watch, shared by the locate button and the boot fix. A single reading per
-// tap left the dot wherever it was taken, which is no use to someone walking — this keeps
-// it under your feet. The map is deliberately not dragged along: the dot follows you, the
-// view stays where you put it until you ask to be centred again.
-//
-// `onNextFix` lets one caller ride the next update to recentre exactly once, so a tap on
-// locate reuses the fix already in flight instead of opening a second request beside it.
-let meWatch = null, meAt = null, onNextFix = null;
+// The map dot, boot centring and locate button share this one service. Nothing here
+// persists permission or coordinates: only the browser can retain a location grant.
+let meWatch = null, meAt = null, meTimestamp = 0, onNextFix = null;
+let locationWanted = false, locationEpoch = 0, locationRequest = null, meExpiry = null;
+let pageAway = false, locationTouched = false;
+const locateButton = document.getElementById("locate");
+
+function locationStatus(message = ""){
+  const status = document.getElementById("locationStatus");
+  status.textContent = message;
+  status.hidden = !message;
+}
 
 function fixArrived(ll){
   const f = onNextFix;
   onNextFix = null;
+  locateButton.dataset.busy = "0";
   if(f) f(ll);
 }
 
-function watchMe(){
-  if(meWatch !== null || !navigator.geolocation) return;
-  meWatch = navigator.geolocation.watchPosition(pos => {
-    meAt = [pos.coords.latitude, pos.coords.longitude];
-    showMe(meAt);
-    fixArrived(meAt);
-  }, err => {
-    // A refusal kills the watch for good, so drop the handle and let a later tap ask
-    // again. A timeout indoors leaves it alive and simply retrying, which is what we want.
-    if(err && err.code === 1){
-      navigator.geolocation.clearWatch(meWatch);
-      meWatch = null;
-    }
-    fixArrived(null);
-  }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
+function clearMe(){
+  clearTimeout(meExpiry);
+  meAt = null;
+  meTimestamp = 0;
+  if(meCone) map.removeLayer(meCone);
+  if(meRing) map.removeLayer(meRing);
+  meCone = meRing = null;
 }
 
-document.getElementById("locate").addEventListener("click", function(){
-  if(!navigator.geolocation) return;
-  wireHeading();
-  const jump = ll => {
-    this.dataset.busy = "0";
-    if(ll) map.setView(ll, Math.max(map.getZoom(), 14));
-  };
-  // Already tracking: centre on the fix in hand rather than making them wait for the next.
-  if(meAt){ jump(meAt); return; }
-  this.dataset.busy = "1";
+function freshMe(){
+  return meAt && Date.now() - meTimestamp >= 0 && Date.now() - meTimestamp < 30000;
+}
+
+function acceptPosition(pos){
+  const age = Date.now() - pos.timestamp;
+  if(!Number.isFinite(age) || age < 0 || age >= 30000) return;
+  if(meAt && pos.timestamp < meTimestamp) return;
+  meTimestamp = pos.timestamp;
+  meAt = [pos.coords.latitude, pos.coords.longitude];
+  showMe(meAt);
+  clearTimeout(meExpiry);
+  meExpiry = setTimeout(clearMe, 30000 - age);
+  locationStatus();
+  fixArrived(meAt);
+}
+
+function pauseLocation(){
+  locationEpoch++;
+  if(meWatch !== null) navigator.geolocation.clearWatch(meWatch);
+  meWatch = null;
+  headingDeg = null;
+  clearMe();
+  fixArrived(null);
+  // getCurrentPosition cannot be cancelled; keep its handle until it settles and
+  // ignore its callbacks via the epoch, including callbacks delivered after resuming.
+}
+
+function locationFailed(err){
+  if(err && err.code === 1){
+    locationWanted = false;
+    pauseLocation();
+    locationStatus("Location access is denied. Allow location in your browser or device settings, then tap again.");
+  }else{
+    clearMe();
+    fixArrived(null);
+    locationStatus(err && err.code === 3
+      ? "Location timed out. Try again outdoors."
+      : "Location is unavailable. Try again.");
+  }
+}
+
+function watchMe(){
+  if(meWatch !== null || !locationWanted || document.hidden || pageAway) return;
+  if(!navigator.geolocation){ locationFailed({code: 2}); return; }
+  const epoch = locationEpoch;
+  try{
+    meWatch = navigator.geolocation.watchPosition(
+      pos => { if(epoch === locationEpoch) acceptPosition(pos); },
+      err => { if(epoch === locationEpoch) locationFailed(err); },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+  }catch(e){ locationFailed({code: 2}); }
+}
+
+function locateMe(jump){
+  locationTouched = true;
+  locationWanted = true; // Explicit tap also allows retry after a previous denial.
   onNextFix = jump;
+  locateButton.dataset.busy = "1";
+  locationStatus();
   watchMe();
+  if(!navigator.geolocation || document.hidden || pageAway) { fixArrived(null); return; }
+  if(freshMe()){ fixArrived(meAt); return; }
+  clearMe();
+  if(locationRequest) return;
+  const request = { epoch: locationEpoch };
+  locationRequest = request;
+  const finish = (value, failed) => {
+    if(locationRequest === request) locationRequest = null;
+    if(request.epoch !== locationEpoch) return;
+    // A watch may have already supplied the fix while this one-shot was pending.
+    if(failed){ if(value.code === 1 || !freshMe()) locationFailed(value); }
+    else acceptPosition(value);
+  };
+  try{
+    navigator.geolocation.getCurrentPosition(pos => finish(pos, false), err => finish(err, true),
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: 15000 });
+  }catch(e){ finish({code: 2}, true); }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if(document.hidden) pauseLocation();
+  else watchMe();
+});
+window.addEventListener("pagehide", () => { pageAway = true; pauseLocation(); });
+window.addEventListener("pageshow", () => { pageAway = false; watchMe(); });
+
+// Inspection cannot grant permission. Unsupported/rejected queries simply leave boot
+// location to the button. Retain the PermissionStatus to observe revocation when supported.
+let locationPermission = null;
+async function bootLocation(jump){
+  if(!navigator.geolocation || !navigator.permissions || !navigator.permissions.query) return;
+  try{
+    locationPermission = await navigator.permissions.query({name: "geolocation"});
+    locationPermission.addEventListener("change", () => {
+      if(locationPermission.state !== "granted"){
+        locationWanted = false;
+        pauseLocation();
+        locationStatus("Location permission changed. Tap current location to try again.");
+      }
+    });
+    if(jump && !locationTouched && locationPermission.state === "granted"){
+      locationWanted = true;
+      onNextFix = jump;
+      watchMe();
+    }
+  }catch(e){} // Safari versions without this query still work from a location tap.
+}
+
+locateButton.addEventListener("click", function(){
+  wireHeading();
+  locateMe(ll => {
+    if(ll) map.setView(ll, Math.max(map.getZoom(), 14));
+  });
 });
 
 /* ---------------- boot ---------------- */
@@ -2464,21 +2569,21 @@ document.getElementById("locate").addEventListener("click", function(){
   // dropped the one thing the reader went to species.html to look up in the first place.
   if(v.droppedPin) probe(L.latLng(v.droppedPin.lat, v.droppedPin.lng), v.droppedPin.km);
 
-  // Fresh load with no coords in the hash: start tracking, staying on Lisbon if it is
-  // denied, unavailable, or slow. Only the first fix recentres — after that the dot keeps
+  // Fresh load with no coords: locate only if the browser reports an existing grant.
+  // Otherwise stay on Lisbon until a tap. Only the first fix recentres — after that the dot keeps
   // up on its own. moveend does the rest (hash + pin refresh).
   if(!v.pinned && navigator.geolocation){
-    wireHeading();      // no-op on iOS, which only grants the sensor from a gesture
     let moved = false;               // never yank the map out from under a user gesture
     map.on("dragstart", () => { moved = true; });
     map.on("zoomstart", () => { moved = true; });
-    onNextFix = ll => {
+    bootLocation(ll => {
       if(!ll || moved) return;
       // A real position is worth two extra levels; the Lisbon fallback stays wide.
       const z = v.zPinned ? map.getZoom() : ACC_MIN_ZOOM + 2;
       map.setView(ll, z);
-    };
-    watchMe();
+    });
+  }else{
+    bootLocation(null); // Observe revocation without locating over a shared/saved view.
   }
 
   // If a shared link lands in a level mode, resolve its exclude set then refresh.
