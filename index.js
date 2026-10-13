@@ -677,6 +677,7 @@ function renderLabel(){
 
 const sheet = document.getElementById("sheet");
 const sheetBody = document.getElementById("sheetBody");
+let resultsBehindFilters = null;
 
 function openSheet(view, html){
   sheetView = view;
@@ -688,6 +689,17 @@ function openSheet(view, html){
   sheetBody.scrollTop = 0;
 }
 function closeSheet(){
+  if(sheetView === "filters" && resultsBehindFilters){
+    const saved = resultsBehindFilters;
+    resultsBehindFilters = null;
+    openSheet("results", saved.html);
+    wireResults();
+    setExpanded(saved.expanded);
+    setStow(saved.stowed);
+    sheetBody.scrollTop = saved.scrollTop;
+    return;
+  }
+  resultsBehindFilters = null;
   sheet.dataset.open = "0";
   delete document.body.dataset.sheet;
   setStow(false);
@@ -1416,6 +1428,14 @@ function filtersHtml(){
 }
 
 function openFilters(){
+  if(sheetView === "results"){
+    resultsBehindFilters = {
+      html: sheetBody.innerHTML,
+      scrollTop: sheetBody.scrollTop,
+      expanded: document.body.dataset.expanded === "1",
+      stowed: document.body.dataset.stow === "1"
+    };
+  }
   openSheet("filters", filtersHtml());
   wireFilters();
 }
@@ -2179,6 +2199,7 @@ function centreInVisibleBand(latlng){
 // different cursor mode, or come back at a different zoom: recomputing would draw a circle
 // that quietly doesn't match the one they left.
 async function probe(latlng, km){
+  resultsBehindFilters = null;
   if(km == null) km = probeRadiusKm(latlng.lat, map.getZoom());
 
   if(probeMark) map.removeLayer(probeMark);
@@ -2191,6 +2212,16 @@ async function probe(latlng, km){
   probeMark = L.circleMarker(latlng, {
     radius: 4, color: MARK, weight: 2, fillColor: MARK, fillOpacity: 1, interactive: false
   }).addTo(map);
+  const requestMark = probeMark;
+  // A response may arrive while filters cover the list. Save it for their dismissal.
+  function showResults(html){
+    if(sheetView === "filters" && resultsBehindFilters){
+      resultsBehindFilters.html = html;
+    }else{
+      openSheet("results", html);
+      wireResults();
+    }
+  }
   // Down before the fetch, not after: hereUrl/tierReportUrl read the pin straight off this
   // hash the moment the results paint, and a reader tapping "Species here" before the request
   // lands should still get a link that knows where they tapped.
@@ -2226,22 +2257,21 @@ async function probe(latlng, km){
       up ? apiGet(`${API}/observations?${up.toString()}`).catch(() => ({ results: [] }))
          : Promise.resolve(null)
     ]);
-    if(sheetView !== "results") return;
+    if(probeMark !== requestMark) return;
     const results = ud
       ? [...new Map([...(d.results || []), ...(ud.results || [])].map(o => [o.id, o])).values()]
           .sort((a, b) => (b.observed_on || "").localeCompare(a.observed_on || "") || b.id - a.id)
           .slice(0, 20)
       : (d.results || []);
-    openSheet("results", resultsHtml(results, km, latlng));
-    wireResults();
+    showResults(resultsHtml(results, km, latlng));
     drawAccuracyCircles(results);
   }catch(err){
-    openSheet("results", `<div class="eyebrow"><span>Not loaded</span>${actionsHtml(latlng, km)}</div>
+    if(probeMark !== requestMark) return;
+    showResults(`<div class="eyebrow"><span>Not loaded</span>${actionsHtml(latlng, km)}</div>
       <div class="state">
         <div class="state-lede">The request didn't come back.</div>
         <div class="state-hint">Check the connection and tap the map again.</div>
       </div>`);
-    wireResults();
   }
 }
 
