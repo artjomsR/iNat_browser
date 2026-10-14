@@ -66,7 +66,7 @@ const state = {
   // Whether that d1 is still the app's own (empty) default or something asked for — see
   // windowD1.
   d1auto:true,
-  style:"accuracy", base:"light", unobs:"", precise:"precise",
+  style:"accuracy", base:"light", unobs:"", unobsEnabled:false, precise:"precise",
   // dmode: "unobserved" | "s" | "b" | "c" | "own". The mode row toggles, so pressing the
   // mode already set turns it off — "own" is that no-button-pressed state, and it asks the
   // opposite question: not what this user is missing but what they have already recorded.
@@ -100,7 +100,7 @@ function obsParams(){
   const p = new URLSearchParams();
   if(state.taxon)   p.set("taxon_id", state.taxon);
   if(state.iconic.length) p.set("iconic_taxa", state.iconic.join(","));
-  if(state.unobs){
+  if(state.unobsEnabled && state.unobs){
     if(state.dmode === "own"){
       // No mode pressed: the field stops asking what this user is missing and simply shows
       // what they have. Every other exclusion below belongs to the desired-species question
@@ -158,7 +158,7 @@ function obsParams(){
 function unknownParams(){
   const p = new URLSearchParams();
   p.set("identified", "false");
-  if(state.unobs) p.set("not_user_id", state.unobs);
+  if(state.unobsEnabled && state.unobs) p.set("not_user_id", state.unobs);
   if(state.quality.length) p.set("quality_grade", state.quality.join(","));
   if(state.precise){ p.set("geoprivacy", "open"); p.set("taxon_geoprivacy", "open"); }
   const d1 = windowD1();
@@ -243,8 +243,8 @@ async function taggedSpeciesIds(user, level, stale){
 // cache (no-op) for Unobserved and own-records mode, or when no user is set.
 let tierSeq = 0;
 async function syncTierExclude(){
-  if(!isTierMode() || !state.unobs){ state.tierExclude = null; return; }
   const mine = ++tierSeq;
+  if(!isTierMode() || !state.unobsEnabled || !state.unobs){ state.tierExclude = null; return; }
   const stale = () => mine !== tierSeq;       // a newer sync superseded this one
   try{
     const ids = await taggedSpeciesIds(state.unobs, state.dmode, stale);
@@ -521,7 +521,8 @@ function writeHash(){
   p.set("lng", c.lng.toFixed(5));
   if(state.taxon){ p.set("taxon", state.taxon); if(state.tname) p.set("tname", state.tname); }
   if(state.iconic.length) p.set("iconic", state.iconic.join(","));
-  if(state.unobs)   p.set("unobs", state.unobs);
+  if(state.unobs) p.set("unobs", state.unobs);
+  if(state.unobs && !state.unobsEnabled) p.set("unobsEnabled", "0");
   if(state.dmode !== "unobserved") p.set("dmode", state.dmode);
   if(state.ssp !== "1") p.set("ssp", state.ssp || "0");   // "1" is the default, so it stays out of the hash
   p.set("q", state.quality.join(","));
@@ -554,6 +555,7 @@ function readHash(){
   state.tname   = p.get("tname") || "";
   state.iconic  = p.has("iconic") ? p.get("iconic").split(",").filter(Boolean) : defaultIconic();
   state.unobs   = p.get("unobs") || "";
+  state.unobsEnabled = !!state.unobs && p.get("unobsEnabled") !== "0";
   // "own" rides in the hash like any other mode — an empty value would read back as the
   // default and quietly put a filter on a shared link that was made without one.
   state.dmode   = DMODES.includes(p.get("dmode")) ? p.get("dmode") : "unobserved";
@@ -639,7 +641,7 @@ function labelBits(){
     });
     bits.push(names.join(" + ") + " grade");
   }
-  if(state.unobs){
+  if(state.unobsEnabled && state.unobs){
     if(state.dmode === "own") bits.push("@" + esc(state.unobs) + "&#39;s own records");
     else if(state.dmode === "unobserved") bits.push("new for @" + esc(state.unobs));
     else bits.push("@" + esc(state.unobs) + " missing tier " + esc(state.dmode.toUpperCase()));
@@ -1352,8 +1354,13 @@ function filtersHtml(){
 
   <div class="field">
     <label for="unobsInput">Display species for</label>
+    <div class="username-row">
     <input class="input" id="unobsInput" type="text" autocapitalize="none" autocorrect="off"
-           spellcheck="false" placeholder="iNaturalist username" value="${esc(state.unobs)}">
+           spellcheck="false" placeholder="iNaturalist username" value="${esc(state.unobs)}"
+           ${state.unobs && !state.unobsEnabled ? "disabled" : ""}>
+    <label class="check"><input type="checkbox" id="unobsEnabled" aria-label="Enable username filter"
+           ${state.unobsEnabled ? "checked" : ""}></label>
+    </div>
     <div class="seg" id="unobsModeRow">
       <button type="button" data-mode="s" aria-pressed="${modeLit("s")}">S Tier</button>
       <button type="button" data-mode="b" aria-pressed="${modeLit("b")}">B Tier</button>
@@ -1545,7 +1552,7 @@ async function refreshAccuracyLayer(){
   // Unobserved mode only: fold in the taxon-blind unidentified query (see unknownParams)
   // alongside the usual one. Meaningless without a target user — "unobserved" is a question
   // about someone in particular.
-  const up = (state.dmode === "unobserved" && state.unobs) ? unknownParams() : null;
+  const up = (state.dmode === "unobserved" && state.unobsEnabled && state.unobs) ? unknownParams() : null;
   if(up){
     Object.entries(bbox).forEach(([k,v]) => up.set(k,v));
     up.set("per_page", "200");
@@ -1909,10 +1916,22 @@ function wireFilters(){
   $("unobsInput").addEventListener("keydown", e => {
     if(e.key === "Enter") $("tierListBtn").click();
   });
-  { let t = null;
-    $("unobsInput").addEventListener("input", () => {
+  {
+    let t = null;
+    const input = $("unobsInput"), toggle = $("unobsEnabled");
+    input.addEventListener("input", () => {
       clearTimeout(t);
-      t = setTimeout(() => { state.unobs = $("unobsInput").value.trim(); syncTierExclude().then(commit); }, 420);
+      state.unobs = input.value.trim();
+      state.unobsEnabled = !!state.unobs;
+      toggle.checked = state.unobsEnabled;
+      t = setTimeout(() => syncTierExclude().then(commit), 420);
+    });
+    toggle.addEventListener("change", () => {
+      clearTimeout(t);
+      state.unobs = input.value.trim();
+      state.unobsEnabled = toggle.checked;
+      input.disabled = !!state.unobs && !state.unobsEnabled;
+      syncTierExclude().then(commit);
     });
   }
 }
@@ -1994,7 +2013,7 @@ function hereUrl(latlng, km){
     // per species. `min=0` survives as "show everything" the same way a typed 0 would.
     min: "0"
   });
-  if(state.unobs) p.set("u", state.unobs);
+  if(state.unobsEnabled && state.unobs) p.set("u", state.unobs);
   if(state.taxon){
     p.set("taxon", state.taxon);
     if(state.tname) p.set("tname", state.tname);
@@ -2047,7 +2066,7 @@ function easilyMissedUrl(latlng, km){
     i_rad: rad(inner),
     o_rad: rad(Math.min(100, inner * 5))
   });
-  if(state.unobs) p.set("inat_username", state.unobs);
+  if(state.unobsEnabled && state.unobs) p.set("inat_username", state.unobs);
   if(state.taxon) p.set("taxon_id", state.taxon);
   if(state.iconic.length) p.set("iconic_taxa", state.iconic.join(","));
   return "https://simonrolph.github.io/easily_missed/?" + p.toString();
@@ -2246,7 +2265,7 @@ async function probe(latlng, km){
   p.set("order", "desc");
 
   // Match the accuracy pins: unknown observations cannot pass the main taxon filters.
-  const up = (state.dmode === "unobserved" && state.unobs) ? unknownParams() : null;
+  const up = (state.dmode === "unobserved" && state.unobsEnabled && state.unobs) ? unknownParams() : null;
   if(up){
     for(const key of ["lat", "lng", "radius", "per_page", "order_by", "order"]){
       up.set(key, p.get(key));
@@ -2587,5 +2606,5 @@ locateButton.addEventListener("click", function(){
   }
 
   // If a shared link lands in a level mode, resolve its exclude set then refresh.
-  if(isTierMode() && state.unobs) syncTierExclude().then(commit);
+  if(isTierMode() && state.unobsEnabled && state.unobs) syncTierExclude().then(commit);
 })();
