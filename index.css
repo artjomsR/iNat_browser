@@ -418,7 +418,8 @@ a.linkish{text-decoration:none}
 .username-row{display:flex;align-items:center;gap:10px}
 .username-row .input{flex:1;min-width:0}
 .username-row label.check,.date-row label.check{margin:0;padding:8px}
-.username-row .input:disabled,.date-row .input:disabled{color:var(--mute);opacity:.5;cursor:not-allowed}
+.username-row .input[data-inactive="true"],.date-row .input[data-inactive="true"]{color:var(--mute);opacity:.5}
+.check input:disabled{opacity:.5;cursor:default}
 .seg + .seg{margin-top:6px}
 .field-hint + .seg{margin-top:9px}
 /* The rank ticks belong to the desired-species question, so they go whole when no mode is

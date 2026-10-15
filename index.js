@@ -1360,7 +1360,7 @@ function filtersHtml(){
     <div class="username-row">
     <input class="input" id="unobsInput" type="text" autocapitalize="none" autocorrect="off"
            spellcheck="false" placeholder="iNaturalist username" value="${esc(state.unobs)}"
-           ${state.unobs && !state.unobsEnabled ? "disabled" : ""}>
+           data-inactive="${!!state.unobs && !state.unobsEnabled}">
     <label class="check"><input type="checkbox" id="unobsEnabled" aria-label="Enable username filter"
            ${state.unobsEnabled ? "checked" : ""}></label>
     </div>
@@ -1893,7 +1893,8 @@ function wireFilters(){
     const after = $("d1Input"), before = $("d2Input"), toggle = $("datesEnabled");
     const update = () => {
       toggle.checked = state.datesEnabled;
-      after.disabled = before.disabled = !!(state.d1 || state.d2) && !state.datesEnabled;
+      toggle.disabled = !(state.d1 || state.d2);
+      after.dataset.inactive = before.dataset.inactive = String(!!(state.d1 || state.d2) && !state.datesEnabled);
       $("monthHint").innerHTML = monthHint();
     };
     const readDates = () => {
@@ -1926,7 +1927,7 @@ function wireFilters(){
     toggle.addEventListener("change", () => {
       clearTimeout(t);
       t = null;
-      state.datesEnabled = toggle.checked;
+      state.datesEnabled = toggle.checked && !!(state.d1 || state.d2);
       update();
       commit();
     });
@@ -1940,18 +1941,24 @@ function wireFilters(){
   {
     let t = null;
     const input = $("unobsInput"), toggle = $("unobsEnabled");
+    const update = () => {
+      toggle.checked = state.unobsEnabled;
+      toggle.disabled = !state.unobs;
+      input.dataset.inactive = String(!!state.unobs && !state.unobsEnabled);
+    };
+    update();
     input.addEventListener("input", () => {
       clearTimeout(t);
       state.unobs = input.value.trim();
       state.unobsEnabled = !!state.unobs;
-      toggle.checked = state.unobsEnabled;
+      update();
       t = setTimeout(() => syncTierExclude().then(commit), 420);
     });
     toggle.addEventListener("change", () => {
       clearTimeout(t);
       state.unobs = input.value.trim();
-      state.unobsEnabled = toggle.checked;
-      input.disabled = !!state.unobs && !state.unobsEnabled;
+      state.unobsEnabled = toggle.checked && !!state.unobs;
+      update();
       syncTierExclude().then(commit);
     });
   }
