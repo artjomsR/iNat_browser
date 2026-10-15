@@ -724,7 +724,7 @@ function closeSheet(){
 // expands to the panel's old full size; down returns it to half.
 const handleBtn = document.getElementById("handle");
 const EXPAND_PX = 44, TAP_PX = 8;
-let dragStartY = null, dragMoved = 0, dragActive = false;
+let dragStartY = null, dragMoved = 0, dragActive = false, handleDragged = false;
 
 function setExpanded(on){ document.body.dataset.expanded = on ? "1" : "0"; }
 // The resize gesture is the narrow layout's own; on the wide layout the panel is a fixed
@@ -733,7 +733,9 @@ function setExpanded(on){ document.body.dataset.expanded = on ? "1" : "0"; }
 const isMobileLayout = () => matchMedia("(max-width:719.98px)").matches;
 
 handleBtn.addEventListener("pointerdown", e => {
+  if(!e.isPrimary || e.button !== 0) return;
   dragStartY = e.clientY; dragMoved = 0; dragActive = true;
+  handleDragged = false;
   handleBtn.setPointerCapture(e.pointerId);
 });
 handleBtn.addEventListener("pointermove", e => {
@@ -744,10 +746,17 @@ handleBtn.addEventListener("pointerup", () => {
   if(!dragActive) return;
   dragActive = false;
   const dist = Math.abs(dragMoved);
-  if(dist < TAP_PX){ closeSheet(); return; }
+  handleDragged = dist >= TAP_PX;
   if(isMobileLayout() && sheetView === "results" && dist >= EXPAND_PX) setExpanded(dragMoved < 0);
 });
-handleBtn.addEventListener("pointercancel", () => { dragActive = false; });
+handleBtn.addEventListener("pointercancel", () => { dragActive = false; handleDragged = true; });
+// Keep the panel under the finger until the browser dispatches the click. Closing on
+// pointerup can expose the map to the compatibility click from the very same tap.
+handleBtn.addEventListener("click", e => {
+  e.preventDefault();
+  e.stopPropagation();
+  if(e.detail === 0 || !handleDragged) closeSheet();  // detail 0 includes keyboard activation
+});
 
 // The list itself reads the same swipe, so reaching for the handle first is never required.
 // It only ever means something there when the list is already scrolled to its very top: at
