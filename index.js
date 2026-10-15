@@ -65,7 +65,7 @@ const state = {
   d1:defaultD1(), d2:"", months:defaultMonths(),
   // Whether that d1 is still the app's own (empty) default or something asked for — see
   // windowD1.
-  d1auto:true,
+  d1auto:true, datesEnabled:false,
   style:"accuracy", base:"light", unobs:"", unobsEnabled:false, precise:"precise",
   // dmode: "unobserved" | "s" | "b" | "c" | "own". The mode row toggles, so pressing the
   // mode already set turns it off — "own" is that no-button-pressed state, and it asks the
@@ -93,7 +93,7 @@ let map, overlay, accLayer, probeAccLayer, probeMark, probeRing, meRing, meCone,
    own (empty) default, readHash hands back the same empty default, and so the address carries
    a date only when a date was meant. */
 function windowD1(){
-  return state.months.length && state.d1auto ? "" : state.d1;
+  return !state.datesEnabled || (state.months.length && state.d1auto) ? "" : state.d1;
 }
 
 function obsParams(){
@@ -139,7 +139,7 @@ function obsParams(){
   if(state.precise){ p.set("geoprivacy", "open"); p.set("taxon_geoprivacy", "open"); }
   const d1 = windowD1();
   if(d1)            p.set("d1", d1);
-  if(state.d2)      p.set("d2", state.d2);
+  if(state.datesEnabled && state.d2) p.set("d2", state.d2);
   // Months of the year, matched on the observed date — a slice of the calendar rather than a
   // shorter stretch of it, so it narrows every year at once instead of the last one.
   if(state.months.length) p.set("month", state.months.join(","));
@@ -168,7 +168,7 @@ function unknownParams(){
   // separately: d2 is when it happened, created_d2 is when it landed on iNat. This tightens
   // each window's end but never loosens it.
   const stale = new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10);
-  p.set("d2", state.d2 && state.d2 < stale ? state.d2 : stale);
+  p.set("d2", state.datesEnabled && state.d2 && state.d2 < stale ? state.d2 : stale);
   p.set("created_d2", stale);
   if(state.months.length) p.set("month", state.months.join(","));
   return p;
@@ -531,6 +531,7 @@ function writeHash(){
   // default, which is what an untouched window has always meant.
   if(!state.d1auto) p.set("d1", state.d1);
   if(state.d2)      p.set("d2", state.d2);
+  if((state.d1 || state.d2) && !state.datesEnabled) p.set("datesEnabled", "0");
   if(state.months.length) p.set("m", state.months.join(","));
   if(state.style !== "accuracy") p.set("s", state.style);
   if(state.base !== "light")  p.set("b", state.base);
@@ -568,6 +569,7 @@ function readHash(){
   state.d1auto  = !p.has("d1");
   state.d1      = state.d1auto ? defaultD1() : p.get("d1");
   state.d2      = p.get("d2") || "";
+  state.datesEnabled = !!(state.d1 || state.d2) && p.get("datesEnabled") !== "0";
   state.months  = p.has("m") ? readMonths(p.get("m")) : defaultMonths();
   state.style   = p.get("s") || "accuracy";
   state.base    = p.get("b") || "light";
@@ -662,8 +664,9 @@ function labelBits(){
       esc(monthsLabel(state.months))}</span>`);
   }
   const d1 = windowD1();
-  if(d1 || state.d2){
-    bits.push(esc(fmtYear(d1) + " – " + (fmtYear(state.d2) || "now")));
+  const d2 = state.datesEnabled ? state.d2 : "";
+  if(d1 || d2){
+    bits.push(esc(fmtYear(d1) + " – " + (fmtYear(d2) || "now")));
   }
   return bits;
 }
@@ -1316,8 +1319,8 @@ function segHtml(id, opts, current){
 function monthHint(){
   if(!state.months.length) return "";
   const season = esc(monthsLabel(state.months));
-  return state.d1auto
-    ? `Any year &mdash; ${season} in every year there is. Type a date below to ask about
+  return !state.datesEnabled || !(state.d1 || state.d2)
+    ? `Any year &mdash; ${season} in every year there is. Type a date above to ask about
        ${season} inside a stretch of years.`
     : `${season}, within the dates above. Clear them to read ${season} in any year.`;
 }
@@ -1390,13 +1393,15 @@ function filtersHtml(){
 
   <div class="field">
     <span class="field-label">Observed between</span>
-    <div class="row2">
+    <div class="row2 date-row">
       <!-- Deliberately no value attribute: the date rides in as a property (see wireFilters).
            iOS's date-picker Clear button resets the field to its defaultValue — the attribute
            it was rendered with — so a restored date written here could never be cleared: the
            button would put it straight back. An empty attribute means Clear lands on empty. -->
       <input class="input" id="d1Input" type="date">
       <input class="input" id="d2Input" type="date">
+      <label class="check"><input type="checkbox" id="datesEnabled" aria-label="Enable date filters"
+             ${state.datesEnabled ? "checked" : ""}></label>
     </div>
     <!-- Months of the year, under the window they cut across rather than in a field of their
          own: the two are one question about time, and read together or not at all. -->
@@ -1656,7 +1661,7 @@ function wireFilters(){
   wireViews();
 
   $("reset").addEventListener("click", () => {
-    Object.assign(state, { taxon:null, tname:"", iconic:defaultIconic(), quality:defaultQuality(), d1:defaultD1(), d1auto:true, d2:"", months:defaultMonths(), precise:"precise", dmode:"unobserved", tierExclude:null, ssp:"1" });
+    Object.assign(state, { taxon:null, tname:"", iconic:defaultIconic(), quality:defaultQuality(), d1:defaultD1(), d1auto:true, datesEnabled:false, d2:"", months:defaultMonths(), precise:"precise", dmode:"unobserved", tierExclude:null, ssp:"1" });
     commit();
     openFilters();
   });
@@ -1883,34 +1888,50 @@ function wireFilters(){
   $("d1Input").value = state.d1;
   $("d2Input").value = state.d2;
 
-  const debounced = (el, key) => {
+  {
     let t = null;
+    const after = $("d1Input"), before = $("d2Input"), toggle = $("datesEnabled");
+    const update = () => {
+      toggle.checked = state.datesEnabled;
+      after.disabled = before.disabled = !!(state.d1 || state.d2) && !state.datesEnabled;
+      $("monthHint").innerHTML = monthHint();
+    };
+    const readDates = () => {
+      const d1 = after.value.trim(), d2 = before.value.trim();
+      if(d1 === state.d1 && d2 === state.d2) return false;
+      if(d1 !== state.d1) state.d1auto = false;
+      state.d1 = d1;
+      state.d2 = d2;
+      state.datesEnabled = !!(d1 || d2);
+      update();
+      return true;
+    };
     const settle = () => {
+      const changed = readDates();
+      if(!changed && t === null) return;
       clearTimeout(t);
       t = null;
-      const v = el.value.trim();
-      if(v === state[key]) return;
-      state[key] = v;
-      // Touched, so no longer the app's own window — including cleared, which is a
-      // deliberate "no lower bound" and not a request for the default back. From here it
-      // rides in the address and stands against a month filter (see windowD1), so the hint
-      // under the months has to be redrawn with it.
-      if(key === "d1") state.d1auto = false;
-      $("monthHint").innerHTML = monthHint();
       commit();
     };
-    el.addEventListener("input", () => {
+    for(const input of [after, before]){
+      input.addEventListener("input", () => {
+        if(!readDates()) return;
+        clearTimeout(t);
+        t = setTimeout(settle, 420);
+      });
+      // Include picker changes and iOS Clear, which may only be visible on blur.
+      input.addEventListener("change", settle);
+      input.addEventListener("focusout", settle);
+    }
+    toggle.addEventListener("change", () => {
       clearTimeout(t);
-      t = setTimeout(settle, 420);
+      t = null;
+      state.datesEnabled = toggle.checked;
+      update();
+      commit();
     });
-    // iOS's date picker can change the value without an input event — its Clear button
-    // famously fires nothing at all — so change and the field losing focus are read back
-    // too, through the same settle: the field is the last word either way.
-    el.addEventListener("change", settle);
-    el.addEventListener("focusout", settle);
-  };
-  debounced($("d1Input"), "d1");
-  debounced($("d2Input"), "d2");
+    update();
+  }
 
   // Desired-species username: also re-derive level exclusions when it changes.
   $("unobsInput").addEventListener("keydown", e => {
