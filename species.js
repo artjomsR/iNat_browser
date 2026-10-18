@@ -393,6 +393,16 @@ function areaSpeciesUrl(){
   return "https://www.inaturalist.org/observations?" + p.toString();
 }
 
+// Use the list's query scope; a place-tab username annotates rows, not their scope.
+// iNaturalist handles its own ordering and folds subspecies into species.
+function listSpeciesUrl(){
+  const scope = view.tab === "place" ? areaScope() : userScope(view.user);
+  const p = new URLSearchParams({
+    ...scope, ...sspOnly(), view: "species", verifiable: "true"
+  });
+  return "https://www.inaturalist.org/observations?" + p.toString();
+}
+
 // Where a tier heading points on iNat: the sound-only band opens this user's audio-only
 // records, every other band opens their observations carrying that tier tag.
 function tierUrl(tag, user){
@@ -1550,6 +1560,9 @@ function toolsRowHtml(){
       >${EXPORT_ICON}${EXPORT_LABEL}</button>
     <button type="button" class="downloadPage" title="${esc(DOWNLOAD_HINT)}"
       >${DOWNLOAD_ICON}${DOWNLOAD_LABEL}</button>
+    <a class="viewInat" href="${esc(listSpeciesUrl())}" target="_blank" rel="noopener"
+       title="View this scope on iNaturalist. Local sorting, hidden rows and tier grouping are not carried over; subspecies are grouped by species."
+       >View on iNat</a>
   </div>`;
 }
 

@@ -185,11 +185,12 @@ h1{display:flex;align-items:center;gap:10px;margin:0 0 10px;
    compress and wrap its own label rather than the row wrapping as a whole. */
 .heldbar>*{flex-shrink:0}
 .heldbar .hb-label{margin-right:4px}
-.heldbar button{padding:5px 11px;cursor:pointer;font:inherit;letter-spacing:.08em;
+.heldbar button,.heldbar .viewInat{padding:5px 11px;cursor:pointer;font:inherit;letter-spacing:.08em;text-decoration:none;
   color:var(--mute);background:var(--raise);border:1px solid var(--rule);border-radius:5px}
-.heldbar button:hover{color:var(--text);border-color:var(--mute)}
+.heldbar button:hover,.heldbar .viewInat:hover{color:var(--text);border-color:var(--mute)}
+.heldbar .viewInat{text-transform:none}
 .heldbar button[aria-pressed="true"]{color:var(--ink);background:var(--mark);border-color:var(--mark)}
-.heldbar button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+.heldbar button:focus-visible,.heldbar .viewInat:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
 /* the two save buttons, wearing this row's own button chrome rather than the sortbar's — only
    the icon and the gap are their own. Neither ever takes `aria-pressed`: there is no state to be
    in. Pushed to the right edge with the same `margin-left:auto` the threshold field uses in the
