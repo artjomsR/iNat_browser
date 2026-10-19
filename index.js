@@ -913,43 +913,26 @@ stowBtn.addEventListener("click", () => setStow(document.body.dataset.stow !== "
 
 /* ---------------- outbound links ---------------- */
 
-// Added to the home screen, this runs with no tab bar and no back button, and `_blank` has
-// nowhere to put a second view but on top of the first one — chromeless, and with no way
-// to dismiss it. When the address is one iNaturalist claims, iOS then hands off to their
-// native app and that borrowed view is simply abandoned: the white page you come back to.
-//
-// Navigating the view we already have avoids making one. A claimed link is intercepted
-// before it commits, so the native app opens and this app is left untouched behind it; an
-// unclaimed one loads in place, where the edge-swipe still goes back. Only the home-screen
-// case changes — in a real browser tab `_blank` behaves, so it keeps its new tab.
-const STANDALONE = window.navigator.standalone === true ||
-  (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
+// Direct links avoid an extra window in home-screen mode. The OS decides whether
+// iNaturalist opens or the URL loads as a web page; handoff is not guaranteed.
+const STANDALONE = window.inatNavigation.standalone;
 
-// Every hop off the map leaves as a real link — see outAttrs — bar two, which have no link
-// to be: a tap that lands on a pin, which is a point on a canvas rather than an element, and
-// the tier button, whose address is built from whatever is in the username field at the
-// moment it is pressed. Both still have to reach iNaturalist as a link activation, because an
-// address set from script is a navigation like any other: iOS does not hand it to the native
-// app, the app's own view loads iNaturalist's web page instead, and that navigation stays in
-// the app's history one "forward" away — the entry an accidental edge-swipe lands on minutes
-// later, long after the tap that made it. A hidden anchor, tapped inside the same gesture,
-// is that link.
+// Pins have no anchor of their own. Activate one synchronously within the gesture.
 const hopLink = document.createElement("a");
 hopLink.hidden = true;
 document.body.appendChild(hopLink);
 
 function openOut(url){
-  if(!STANDALONE) return !!window.open(url, "_blank", "noopener");
+  if(!STANDALONE){
+    inatNavigation.record("openOut", {destination: inatNavigation.destination(url)});
+    return !!window.open(url, "_blank", "noopener");
+  }
   hopLink.href = url;
   hopLink.click();
   return true;
 }
 
-// The same two cases as openOut, decided in markup instead of in script — a real link, so
-// that a tap is a tap. iOS only hands a claimed address to the native app when the reader
-// activates a link; an address set from script is a navigation like any other and Safari
-// keeps it, which is the difference between the app opening and a web page loading first.
-// Worth it wherever a claimed address is on the other end.
+// Ordinary links retain their browser behavior; home-screen links stay in this view.
 function outAttrs(url){
   return `href="${esc(url)}"` + (STANDALONE ? "" : ` target="_blank" rel="noopener"`);
 }

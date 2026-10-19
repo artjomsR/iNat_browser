@@ -263,6 +263,12 @@ worker there is no cache to route around, so it needs no query and no special ha
 
 ## Conventions
 
+- The map alone loads `navigation.js` for bounded local navigation diagnostics.
+  It observes link attempts and lifecycle events without changing targets, cancelling
+  clicks or modifying history. iOS decides whether to hand off to iNat; neither native
+  delivery nor browser-history replay should be assumed. See `tests/navigation.md`
+  for device checks and retrieving/clearing the diagnostic log.
+
 - CSS custom properties for the whole palette (`--ink`, `--raise`, `--rule`, `--text`,
   `--mute`, `--mark`, `--verified`) — reuse these rather than hardcoding colors. The gallery
   is deliberately a darker room and keeps its own set (`--ink`, `--ink-deep`, `--paper`,
