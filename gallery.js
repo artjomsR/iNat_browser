@@ -395,8 +395,7 @@ function endpoint(page) {
   if (user) p.set('user_id', user);
 
   // The three shelves differ by: a tag search, a whole class of animal, or nothing at all.
-  // Birds is Aves the way
-  // `iconic` starts as ['Aves'] on that shelf (see the doc comment up top) — a default the
+  // Birds is Aves. The way `iconic` starts as ['Aves'] on that shelf (see the doc comment up top) — a default the
   // reader can narrow away from, not a hard scope stacked underneath whatever they pick next.
   // A taxon search is the more deliberate of the two, so it replaces the default rather than
   // joining it: search a lizard while sitting on the birds shelf and the answer is that
