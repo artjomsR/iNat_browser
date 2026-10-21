@@ -20,7 +20,9 @@
 
    `tag` is the tier tag an observation must carry (default `s`), `grade` the quality grades
    to accept, and `show=all` turns the unseen filter off. The rest of the query is fixed:
-   verifiable observations with photos, newest first.
+   verifiable observations with photos, newest first by default. `asc=1` requests oldest
+   first instead. Changing direction reloads the shelf with that API order, keeping the same
+   paged fetching and lazy image loading rather than reversing only the pages already here.
 
    `obs=1` re-reads the same shelf rather than asking a new question: hang it observation by
    observation — each row carrying that observation's name and research grade on the left and
@@ -105,6 +107,7 @@ var mode  = qs.get('show') === 'all' ? 'all' : 'unseen';
 // so toggling it rehangs without refetching — the same deal the unseen filter's own toggle
 // makes, which is why it sits beside it.
 var byobs = qs.get('obs') === '1';
+var ascending = qs.get('asc') === '1';
 // Which shelf. Anything unrecognised falls back to the tagged one this page was built around.
 var view  = qs.get('view') === 'birds' ? 'birds' : qs.get('view') === 'all' ? 'all' : 'highlights';
 // Switching shelves is a reload (see the doc comment above viewSel's change handler), so this
@@ -190,6 +193,7 @@ var placeClear = document.getElementById('placeClear');
 var filters  = document.getElementById('filters');
 var forget   = document.getElementById('forget');
 var obsCheck = document.getElementById('byObs');
+var ascendingCheck = document.getElementById('ascending');
 var picker   = document.getElementById('picker');
 var viewSel  = document.getElementById('view');
 var loading  = document.getElementById('loading');
@@ -374,7 +378,7 @@ function endpoint(page) {
     reviewed: 'any',
     quality_grade: grade,
     order_by: 'observed_on',
-    order: 'desc',
+    order: ascending ? 'asc' : 'desc',
     per_page: String(PER_PAGE),
     page: String(page)
   });
@@ -385,7 +389,7 @@ function endpoint(page) {
   if (user) p.set('user_id', user);
 
   // The three shelves differ by: a tag search, a whole class of animal, or nothing at all.
-  // Newest first either way, so "most recent" needs nothing added. Birds is Aves the way
+  // Birds is Aves the way
   // `iconic` starts as ['Aves'] on that shelf (see the doc comment up top) — a default the
   // reader can narrow away from, not a hard scope stacked underneath whatever they pick next.
   // A taxon search is the more deliberate of the two, so it replaces the default rather than
@@ -781,6 +785,14 @@ function setByObs(on) {
 }
 
 obsCheck.addEventListener('change', function () { setByObs(obsCheck.checked); });
+
+// Fetch from the other end of the whole shelf, retaining the existing paged loader.
+ascendingCheck.addEventListener('change', function () {
+  if (ascendingCheck.checked) qs.set('asc', '1'); else qs.delete('asc');
+  qs.delete('photo');
+  flush();
+  location.search = qs.toString();
+});
 
 // Unhides the search field on both shelves the tagged one is skipped for — unlike the quick
 // groups, a taxon search reloads rather than filters (see the doc comment up top), so it can
@@ -1667,6 +1679,11 @@ function ask() {
   filters.hidden = false;
   forget.hidden = seenAtLoad.size === 0;
   obsCheck.checked = byobs;
+  ascendingCheck.checked = ascending;
+  if (ascending) {
+    viewSel.options[1].textContent = 'Birds - oldest observations';
+    viewSel.options[2].textContent = 'All - oldest observations';
+  }
   syncFilter();
   buildTaxaFilter();
   buildTaxonSearch();
