@@ -227,6 +227,12 @@ function prettyDate(iso) {
   return Number(bits[2]) + ' ' + (MONTHS[Number(bits[1]) - 1] || '') + ' ' + bits[0];
 }
 
+function observationWhen(photo) {
+  // Keep the recorded local clock time, matching the map's observation labels.
+  var time = /T(\d{2}:\d{2})/.exec(photo.timeObservedAt || '');
+  return [prettyDate(photo.date), time ? time[1] : ''].filter(Boolean).join(' ');
+}
+
 function sleep(ms) {
   return new Promise(function (r) { setTimeout(r, ms); });
 }
@@ -432,6 +438,7 @@ function collect(results) {
           obs.identifications.filter(function (id) { return id.current; }).length :
           (obs.identifications_count || 0),
         date: obs.observed_on || (obs.observed_on_details && obs.observed_on_details.date) || '',
+        timeObservedAt: obs.time_observed_at || '',
         place: obs.place_guess || '',
         // The boundaries iNaturalist itself has already worked out this observation falls
         // inside — arrives on every observation the same way place_guess does. A picked place
@@ -548,10 +555,10 @@ function obsHead(p) {
 
   // When and where the observation was made — the same two facts the full-screen label's
   // metaline carries, read here off the row instead of a click into a photo.
-  if (p.date || p.place) {
+  if (p.date || p.timeObservedAt || p.place) {
     var when = document.createElement('div');
     when.className = 'obs-when';
-    when.textContent = [p.date ? prettyDate(p.date) : '', p.place || ''].filter(Boolean).join(' · ');
+    when.textContent = [observationWhen(p), p.place || ''].filter(Boolean).join(' · ');
     head.appendChild(when);
   }
 
@@ -1341,7 +1348,8 @@ function showPhoto(i) {
   var obsUrl = 'https://www.inaturalist.org/observations/' + photo.obsId;
   var parts = [];
   if (photo.common && photo.name) parts.push('<span class="sci">' + esc(photo.name) + '</span>');
-  if (photo.date) parts.push(prettyDate(photo.date));
+  var when = observationWhen(photo);
+  if (when) parts.push(when);
   parts.push('<a href="' + obsUrl + '" target="_blank" rel="noopener">View on iNaturalist</a>');
   parts.push('<button type="button" class="copy" data-url="' + esc(shareLink()) + '">Copy Photo📋</button>');
   metaline.innerHTML = parts.join('<span class="sep">·</span>');
