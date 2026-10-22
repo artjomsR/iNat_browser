@@ -495,6 +495,7 @@ function matchesNarrow(photo) {
 // so the usual tile stays exactly as cheap as it always was.
 function tileFor(photo, index, big) {
   var tile = document.createElement('button');
+  tile.dataset.index = index;
   tile.className = 'tile' + (mode === 'all' && !seenAtLoad.has(photo.key) ? ' fresh' : '');
   tile.setAttribute('aria-label', photo.common || photo.name || 'Photo');
 
@@ -1391,6 +1392,14 @@ function closeFocus() {
   // the bar now is the wall, which is what is being looked at.
   qs.delete('photo');
   addressNow();
+
+  // Return to the last photograph viewed, including after stepping away from the one
+  // originally opened. Both gallery layouts use the same photo indices.
+  var tile = grid.querySelector('.tile[data-index="' + cursor + '"]');
+  if (tile) {
+    tile.focus({ preventScroll: true });
+    tile.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+  }
 }
 
 /* ---------------- a photograph asked for by name ----------------
