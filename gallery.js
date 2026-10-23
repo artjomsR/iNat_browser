@@ -1687,7 +1687,7 @@ function ask() {
 
   if (user) {
     document.getElementById('who').textContent = user;
-    document.title = user + '\'s iNat gallery';
+    document.title = user + '\'s gallery';
   }
 
   viewSel.value = view;
