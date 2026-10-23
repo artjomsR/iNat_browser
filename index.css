@@ -348,8 +348,11 @@ a.linkish{text-decoration:none}
    both are made with a thumb. The editor takes the whole row when it is open: a line to type
    on, and its actions on the line below as real buttons rather than links, since a link's worth
    of text is not a finger's worth of button. */
-.views{margin-bottom:18px}
-.views-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:7px}
+/* Keep an empty section compact; saved rows, the editor and feedback add their own space. */
+.views{margin-bottom:0}
+.views-divider{border:0;border-top:1px solid var(--rule);margin:8px 0 0}
+.views-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:0}
+.views:has(.view-row) .views-head{margin-bottom:7px}
 .views-head .field-label{margin-bottom:0}
 .views-head .linkish{
   flex:0 0 auto;

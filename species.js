@@ -1742,7 +1742,7 @@ function placeToolbarHtml(sortBy, counts){
     ${toolsRowHtml()}
     ${monthRowHtml()}
     <label class="onlySub" title="${esc(SSP_HINT)}">
-    <input type="checkbox"${view.ssp ? " checked" : ""}>Show only subspecies?</label>
+    <input type="checkbox"${view.ssp ? " checked" : ""}>Only show subspecies?</label>
     ${placeTallyHtml(counts)}`;
 }
 

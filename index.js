@@ -1148,10 +1148,11 @@ function viewsInner(){
   return `
   <div class="views-head">
     <span class="field-label">Saved views</span>
-    ${saving ? "" : `<button type="button" class="linkish" id="viewSave">Save this view</button>`}
+    ${saving ? "" : `<button type="button" class="linkish" id="viewSave">Save current view</button>`}
   </div>
   <ol class="view-list">${rows}${saving ? viewEditorHtml() : ""}</ol>
-  <p class="field-hint" id="viewHint" hidden></p>`;
+  <p class="field-hint" id="viewHint" hidden></p>
+  <hr class="views-divider">`;
 }
 
 function viewEditorHtml(){
@@ -1304,9 +1305,8 @@ function segHtml(id, opts, current){
 
 function filtersHtml(){
   return `
-  <div class="eyebrow"><span>Filters</span><button class="linkish" id="reset">Reset all</button></div>
-
   ${viewsHtml()}
+  <div class="eyebrow"><button class="linkish" id="reset">Reset all filters</button></div>
 
   <div class="field ac-wrap">
     <label for="taxonInput">Species or group</label>
@@ -1358,7 +1358,7 @@ function filtersHtml(){
         <input type="checkbox" id="sspBox" ${state.ssp === "1" ? "checked" : ""}>Include subspecies?
       </label>
       <label class="check">
-        <input type="checkbox" id="sspOnlyBox" ${state.ssp === "only" ? "checked" : ""}>Show only subspecies?
+        <input type="checkbox" id="sspOnlyBox" ${state.ssp === "only" ? "checked" : ""}>Only show subspecies?
       </label>
     </div>
     <div class="seg act" id="tierListRow">
