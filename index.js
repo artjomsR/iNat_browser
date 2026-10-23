@@ -330,12 +330,12 @@ const TAXON_ART = {
   Aves:           { limb: ["M3.6 15.4C6.2 8.6 9.8 9 12 14.2 14.2 9 17.8 8.6 20.4 15.4"], w: 2.4 },
   // head and two ears, drawn as one outline
   Mammalia:       { body: ["M12 19.4C8.3 19.4 5.9 16.7 5.9 13.2 5.9 11.8 6.1 10.5 6.5 9.4L5.3 4.3 10.2 6.9C10.8 6.7 11.4 6.6 12 6.6 12.6 6.6 13.2 6.7 13.8 6.9L18.7 4.3 17.5 9.4C17.9 10.5 18.1 11.8 18.1 13.2 18.1 16.7 15.7 19.4 12 19.4Z"] },
-  // a snake: one wriggling stroke, thickened to a head at the leading end. Legs were tried
-  // and abandoned — four of them on a 22px pin read as a stick figure, not a lizard.
-  Reptilia:       { limb: ["M3.4 20.2C7.2 20.2 6.6 14.2 10.4 14.2 14.2 14.2 13.6 8.2 17.2 8.2"],
-                    body: ["M16 8.2A2.6 2 0 1 0 21.2 8.2A2.6 2 0 1 0 16 8.2Z"],
-                    dot:  ["M18.9 7.2A0.75 0.75 0 1 0 20.4 7.2A0.75 0.75 0 1 0 18.9 7.2Z"],
-                    w: 2.3 },
+  // a lizard from above: broad torso, angular splayed feet and a tapering curved tail.
+  Reptilia:       { limb: ["M12.5 9L8 6.5 8.5 3.5M15 11L19.5 12 21 9.5",
+                           "M9 12L5 11 3.5 14M11.5 14L14 18 17 17.5"],
+                    body: ["M10.5 15C7.5 17 6.5 21 2.5 21 5.5 19.5 5.5 16 7.8 13.5C7.5 11 9.5 8.5 12.5 7.8L14 6C13.5 4.5 15 2.5 17 2.5L20.5 3.5 20 6C19.5 8 17.5 8.8 16 8L15 9.5C15.5 12.5 13 15.5 10.5 15Z"],
+                    dot:  ["M17.8 4.7A0.7 0.7 0 1 0 19.2 4.7A0.7 0.7 0 1 0 17.8 4.7Z"],
+                    w: 1.6 },
   // a frog head-on: dome plus two eyes
   Amphibia:       { body: ["M4.6 17.8C4.6 12.8 7.9 9.6 12 9.6 16.1 9.6 19.4 12.8 19.4 17.8Z",
                            "M5.5 9.4A2.9 2.9 0 1 0 11.3 9.4A2.9 2.9 0 1 0 5.5 9.4Z",
