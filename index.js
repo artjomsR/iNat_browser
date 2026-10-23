@@ -1428,6 +1428,11 @@ function filtersHtml(){
     <span class="field-label">Base map</span>
     ${segHtml("baseRow", BASES, state.base)}
   </div>
+
+  <div class="filter-footer">
+    <a class="filter-footer-button" href="#" target="_blank" rel="noopener noreferrer">Help</a>
+    <a href='https://ko-fi.com/L7I529CNMN' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
+  </div>
 `;
 }
 
@@ -1649,6 +1654,13 @@ function commit(){ applyStyle(); renderLabel(); writeHash(); }
 
 function wireFilters(){
   const $ = id => document.getElementById(id);
+
+  // Placeholder links must not clear the map state stored in the URL hash.
+  sheetBody.querySelectorAll(".filter-footer a").forEach(link => {
+    link.addEventListener("click", e => {
+      if(link.getAttribute("href") === "#") e.preventDefault();
+    });
+  });
 
   wireViews();
 

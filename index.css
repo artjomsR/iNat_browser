@@ -332,6 +332,16 @@ a.linkish{text-decoration:none}
 }
 .eyebrow-actions{display:flex;align-items:baseline;gap:14px;flex:0 0 auto}
 
+.filter-footer{display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid var(--rule);padding-top:14px}
+.filter-footer-button{
+  flex:1 1 auto;display:flex;align-items:center;justify-content:center;
+  min-height:44px;padding:10px 14px;border:1px solid var(--mute);border-radius:6px;
+  background:var(--raise);color:var(--text);font:600 14px var(--ui);
+  text-decoration:none;cursor:pointer;
+}
+.filter-footer-button:hover{color:var(--mark);border-color:var(--mark)}
+.filter-footer-button:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+
 /* ---------- saved views ----------
    The block at the top of the filter sheet. A row is a wide restore target with a small pencil
    beside it, and delete lives inside what the pencil opens rather than on the row — so the tap
