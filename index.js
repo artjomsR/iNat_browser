@@ -1151,9 +1151,6 @@ function viewsInner(){
     ${saving ? "" : `<button type="button" class="linkish" id="viewSave">Save this view</button>`}
   </div>
   <ol class="view-list">${rows}${saving ? viewEditorHtml() : ""}</ol>
-  ${list.length || saving ? "" :
-    `<p class="field-hint">Nothing saved yet &mdash; keep this map, filters and all, and come
-      back to it in a tap.</p>`}
   <p class="field-hint" id="viewHint" hidden></p>`;
 }
 
@@ -1305,18 +1302,6 @@ function segHtml(id, opts, current){
   ).join("") + `</div>`;
 }
 
-// What the month row is asking, since the season alone doesn't say whether it's read across
-// every year or narrowed to a stretch of them. Said here rather than left to the label, which
-// has to be read on the map behind a sheet that is covering it.
-function monthHint(){
-  if(!state.months.length) return "";
-  const season = esc(monthsLabel(state.months));
-  return !state.datesEnabled || !(state.d1 || state.d2)
-    ? `Any year &mdash; ${season} in every year there is. Type a date above to ask about
-       ${season} inside a stretch of years.`
-    : `${season}, within the dates above. Clear them to read ${season} in any year.`;
-}
-
 function filtersHtml(){
   return `
   <div class="eyebrow"><span>Filters</span><button class="linkish" id="reset">Reset all</button></div>
@@ -1403,7 +1388,6 @@ function filtersHtml(){
     </div>
     <div class="chips months" id="monthRow">${MONTH_NAMES.map((l, i) =>
       `<button type="button" data-v="${i+1}" aria-pressed="${state.months.includes(i+1)}">${l}</button>`).join("")}</div>
-    <p class="field-hint" id="monthHint" ${state.months.length ? "" : "hidden"}>${monthHint()}</p>
   </div>
 
   <div class="field">
@@ -1430,7 +1414,7 @@ function filtersHtml(){
   </div>
 
   <div class="filter-footer">
-    <a class="filter-footer-button" href="#" target="_blank" rel="noopener noreferrer">Help</a>
+    <a class="filter-footer-button" href="https://github.com/artjomsR/iNat_browser" target="_blank" rel="noopener noreferrer">Help</a>
     <a href='https://ko-fi.com/L7I529CNMN' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
   </div>
 `;
@@ -1815,9 +1799,6 @@ function wireFilters(){
       ? state.months.filter(x => x !== v)
       : [...state.months, v].sort((a, x) => a - x);
     b.setAttribute("aria-pressed", state.months.includes(v));
-    const hint = $("monthHint");
-    hint.innerHTML = monthHint();
-    hint.hidden = !state.months.length;
     $("monthClear").hidden = !state.months.length;
     commit();
   });
@@ -1825,7 +1806,6 @@ function wireFilters(){
   $("monthClear").addEventListener("click", () => {
     state.months = [];
     [...$("monthRow").children].forEach(b => b.setAttribute("aria-pressed", "false"));
-    $("monthHint").hidden = true;
     $("monthClear").hidden = true;
     commit();
   });
@@ -1899,7 +1879,6 @@ function wireFilters(){
       toggle.checked = state.datesEnabled;
       toggle.disabled = !(state.d1 || state.d2);
       after.dataset.inactive = before.dataset.inactive = String(!!(state.d1 || state.d2) && !state.datesEnabled);
-      $("monthHint").innerHTML = monthHint();
     };
     const readDates = () => {
       const d1 = after.value.trim(), d2 = before.value.trim();
